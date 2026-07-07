@@ -5,7 +5,7 @@
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Check from '$lib/components/icons/Check.svelte';
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
-	import { models, settings } from '$lib/stores';
+	import { models, settings, mobile } from '$lib/stores';
 	import { updateUserSettings } from '$lib/apis/users';
 	import {
 		ensureDefaultThinkingPreference,
@@ -70,7 +70,7 @@
 	$: resolvedThink = getResolvedThink($settings?.params);
 	$: thinkingEnabled = isThinkingEnabled(resolvedThink);
 	$: currentEffort = getThinkingEffort(resolvedThink);
-	$: effortSuffix = thinkingEnabled ? effortLabel(currentEffort) : '';
+	$: effortSuffix = thinkingEnabled && !$mobile ? effortLabel(currentEffort) : '';
 
 	const onModelChange = (event: CustomEvent<string>) => {
 		const id = event.detail;
@@ -116,7 +116,7 @@
 	}}
 />
 
-<div class="relative w-fit self-center shrink-0">
+<div class="relative self-center min-w-0 {$mobile ? 'shrink' : 'w-fit shrink-0'}">
 	<Selector
 		id="chat-composer"
 		{disabled}
@@ -124,10 +124,10 @@
 		on:change={onModelChange}
 		placeholder={$i18n.t('Select a model')}
 		className="w-[22rem]"
-		containerClassName="relative w-fit"
+		containerClassName="relative {$mobile ? 'w-full min-w-0' : 'w-fit'}"
 		triggerClassName="text-sm font-medium flex items-center gap-1 rounded-xl px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-850 transition"
 		openTriggerClassName="bg-gray-50 dark:bg-gray-850"
-		truncateTrigger={false}
+		truncateTrigger={$mobile}
 		suffix={effortSuffix}
 		placement="top"
 		{pinModelHandler}

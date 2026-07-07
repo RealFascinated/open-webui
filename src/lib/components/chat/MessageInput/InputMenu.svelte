@@ -2,7 +2,7 @@
 	import { getContext, onMount, tick } from 'svelte';
 	import { fly } from 'svelte/transition';
 
-	import { config, user, tools as _tools, mobile, knowledge } from '$lib/stores';
+	import { config, user, tools as _tools, mobile, knowledge, selectedTerminalId, settings, terminalServers } from '$lib/stores';
 	import { getKnowledgeBases } from '$lib/apis/knowledge';
 
 	import { createPicker } from '$lib/utils/google-drive-picker';
@@ -27,7 +27,10 @@
 	import Knowledge from './InputMenu/Knowledge.svelte';
 	import AttachWebpageModal from './AttachWebpageModal.svelte';
 	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
+	import Cloud from '$lib/components/icons/Cloud.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
+	import TerminalMenuPanel from './TerminalMenuPanel.svelte';
+	import IntegrationsMenuPanel from './IntegrationsMenuPanel.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -39,6 +42,33 @@
 	export let showWebSearchButton = false;
 	export let webSearchEnabled = false;
 	export let onWebSearchToggle: Function = () => {};
+
+	export let showTerminalButton = false;
+
+	export let showIntegrationsButton = false;
+	export let selectedToolIds: string[] = [];
+	export let selectedSkillIds: string[] = [];
+	export let toggleFilters: { id: string; name: string; description?: string; icon?: string }[] =
+		[];
+	export let selectedFilterIds: string[] = [];
+	export let showImageGenerationButton = false;
+	export let imageGenerationEnabled = false;
+	export let showCodeInterpreterButton = false;
+	export let codeInterpreterEnabled = false;
+	export let onShowValves: Function = () => {};
+
+	$: showExtrasSection = showIntegrationsButton || showTerminalButton || showWebSearchButton;
+
+	$: systemTerminals = ($terminalServers ?? []).filter((t) => t.id);
+	$: directTerminals = ($settings?.terminalServers ?? []).filter((s) => s.url);
+	$: selectedSystemTerminal = systemTerminals.find((t) => t.id === $selectedTerminalId);
+	$: selectedDirectTerminal = directTerminals.find((t) => t.url === $selectedTerminalId);
+	$: selectedTerminalLabel =
+		selectedSystemTerminal?.name ||
+		selectedSystemTerminal?.id ||
+		selectedDirectTerminal?.name ||
+		selectedDirectTerminal?.url?.replace(/^https?:\/\//, '') ||
+		'';
 
 	export let screenCaptureHandler: Function;
 	export let uploadFilesHandler: Function;
@@ -485,9 +515,54 @@
 						{/if}
 					{/if}
 
-					{#if showWebSearchButton}
+					{#if showExtrasSection}
 						<div class="my-1 mx-2 border-t border-gray-100 dark:border-gray-800" />
+					{/if}
 
+					{#if showIntegrationsButton}
+						<IntegrationsMenuPanel
+							bind:tab
+							rootOnly
+							active={show}
+							{selectedModels}
+							bind:selectedToolIds
+							bind:selectedSkillIds
+							{toggleFilters}
+							bind:selectedFilterIds
+							{showImageGenerationButton}
+							bind:imageGenerationEnabled
+							{showCodeInterpreterButton}
+							bind:codeInterpreterEnabled
+							{onShowValves}
+						/>
+					{/if}
+
+					{#if showTerminalButton}
+						<button
+							class="flex gap-2 w-full items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl"
+							type="button"
+							on:click={() => {
+								tab = 'terminal';
+							}}
+						>
+							<Cloud className="size-4" strokeWidth="2" />
+
+							<div class="flex items-center w-full justify-between min-w-0">
+								<div class="line-clamp-1">
+									{$i18n.t('Terminal')}
+									{#if $selectedTerminalId && selectedTerminalLabel}
+										<span class="text-gray-500"> · {selectedTerminalLabel}</span>
+									{/if}
+								</div>
+
+								<div class="text-gray-500 shrink-0">
+									<ChevronRight />
+								</div>
+							</div>
+						</button>
+					{/if}
+
+					{#if showWebSearchButton}
 						<Tooltip content={$i18n.t('Search the internet')} placement="top-start">
 							<button
 								class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
@@ -651,6 +726,48 @@
 							</div>
 						</button>
 					{/if}
+				</div>
+			{:else if tab === 'tools' || tab === 'skills'}
+				<div in:fly={{ x: 20, duration: 150 }}>
+					<IntegrationsMenuPanel
+						bind:tab
+						active={show}
+						selectedModels={selectedModels}
+						bind:selectedToolIds
+						bind:selectedSkillIds
+						{toggleFilters}
+						bind:selectedFilterIds
+						{showImageGenerationButton}
+						bind:imageGenerationEnabled
+						{showCodeInterpreterButton}
+						bind:codeInterpreterEnabled
+						{onShowValves}
+					/>
+				</div>
+			{:else if tab === 'terminal'}
+				<div in:fly={{ x: 20, duration: 150 }}>
+					<button
+						class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
+						type="button"
+						on:click={() => {
+							tab = '';
+						}}
+					>
+						<ChevronLeft />
+
+						<div class="flex items-center w-full justify-between">
+							<div>
+								{$i18n.t('Terminal')}
+							</div>
+						</div>
+					</button>
+
+					<TerminalMenuPanel
+						on:selected={() => {
+							show = false;
+							tab = '';
+						}}
+					/>
 				</div>
 			{/if}
 		</div>

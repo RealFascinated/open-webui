@@ -663,19 +663,13 @@
 		</div>
 
 		<div class="flex-auto w-0 pl-1 relative">
-			<Name>
-				<Tooltip content={model?.name ?? message.model} placement="top-start">
-					<span id="response-message-model-name" class="line-clamp-1 text-black dark:text-white">
-						{model?.name ?? message.model}
-					</span>
-				</Tooltip>
-
-				{#if message.timestamp}
+			{#if message.timestamp}
+				<Name>
 					<div
-						class="self-center text-xs font-medium first-letter:capitalize ml-0.5 translate-y-[1px] {($settings?.highContrastMode ??
+						class="self-center text-xs font-medium first-letter:capitalize translate-y-[1px] {($settings?.highContrastMode ??
 						false)
 							? 'dark:text-gray-100 text-gray-900'
-							: 'invisible group-hover:visible transition text-gray-400'}"
+							: 'text-gray-400'}"
 					>
 						<Tooltip content={dayjs(message.timestamp * 1000).format('LLLL')}>
 							<span class="line-clamp-1"
@@ -686,8 +680,8 @@
 							>
 						</Tooltip>
 					</div>
-				{/if}
-			</Name>
+				</Name>
+			{/if}
 
 			<div>
 				<div class="chat-{message.role} w-full min-w-full markdown-prose">
