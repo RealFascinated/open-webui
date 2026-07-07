@@ -1962,6 +1962,7 @@ DEFAULT_USER_PERMISSIONS = {
         # General features
         'api_keys': USER_PERMISSIONS_FEATURES_API_KEYS,
         'notes': USER_PERMISSIONS_FEATURES_NOTES,
+        'artifacts': True,
         'folders': USER_PERMISSIONS_FEATURES_FOLDERS,
         'channels': USER_PERMISSIONS_FEATURES_CHANNELS,
         'direct_tool_servers': USER_PERMISSIONS_FEATURES_DIRECT_TOOL_SERVERS,
@@ -1998,6 +1999,11 @@ AUTOMATION_MIN_INTERVAL = os.getenv('AUTOMATION_MIN_INTERVAL', '')
 AUTOMATION_AUTH_TOKEN_EXPIRES_IN = os.getenv('AUTOMATION_AUTH_TOKEN_EXPIRES_IN', '1h')
 
 ENABLE_NOTES = os.getenv('ENABLE_NOTES', 'True').lower() == 'true'
+
+ENABLE_ARTIFACTS = os.getenv('ENABLE_ARTIFACTS', 'True').lower() == 'true'
+ARTIFACT_STORAGE_MAX_BYTES = int(os.getenv('ARTIFACT_STORAGE_MAX_BYTES', str(20 * 1024 * 1024)))
+ARTIFACT_STORAGE_MAX_KEY_BYTES = int(os.getenv('ARTIFACT_STORAGE_MAX_KEY_BYTES', '200'))
+ARTIFACT_STORAGE_MAX_VALUE_BYTES = int(os.getenv('ARTIFACT_STORAGE_MAX_VALUE_BYTES', str(5 * 1024 * 1024)))
 
 ENABLE_USER_STATUS = os.getenv('ENABLE_USER_STATUS', 'True').lower() == 'true'
 
@@ -3027,6 +3033,10 @@ DEFAULT_CONFIG = {
     'automations.min_interval': AUTOMATION_MIN_INTERVAL,
     'automations.auth_token_expires_in': AUTOMATION_AUTH_TOKEN_EXPIRES_IN,
     'notes.enable': ENABLE_NOTES,
+    'artifacts.enable': ENABLE_ARTIFACTS,
+    'artifacts.storage.max_bytes': ARTIFACT_STORAGE_MAX_BYTES,
+    'artifacts.storage.max_key_bytes': ARTIFACT_STORAGE_MAX_KEY_BYTES,
+    'artifacts.storage.max_value_bytes': ARTIFACT_STORAGE_MAX_VALUE_BYTES,
     'users.enable_status': ENABLE_USER_STATUS,
     'evaluation.arena.enable': ENABLE_EVALUATION_ARENA_MODELS,
     'evaluation.arena.models': EVALUATION_ARENA_MODELS,

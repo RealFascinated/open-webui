@@ -26,6 +26,7 @@
 	export let tokens: Token[];
 	export let sourceIds = [];
 	export let onSourceClick: Function = () => {};
+	export let onPreview: Function = () => {};
 
 	/**
 	 * Check if a URL is a same-origin note link and return the note ID if so.
@@ -71,7 +72,7 @@
 	{#if token.type === 'escape'}
 		{unescapeHtml(token.text)}
 	{:else if token.type === 'html'}
-		<HtmlToken {id} {token} {onSourceClick} />
+		<HtmlToken {id} {token} {onSourceClick} {onPreview} />
 	{:else if token.type === 'link'}
 		{@const noteId = getNoteIdFromHref(token.href)}
 		{#if noteId}

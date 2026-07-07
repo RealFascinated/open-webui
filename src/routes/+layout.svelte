@@ -629,6 +629,13 @@
 			return;
 		}
 
+		if (type === 'request:location' && typeof cb === 'function') {
+			const { requestBrowserLocation } = await import('$lib/utils/geolocation');
+			const result = await requestBrowserLocation();
+			cb(result);
+			return;
+		}
+
 		if ((event.chat_id !== $chatId && !$temporaryChatEnabled) || isInBackground) {
 			if (type === 'chat:completion') {
 				const { done, content, output, title } = data;

@@ -40,7 +40,14 @@ from open_webui.models.groups import Groups
 from open_webui.models.models import Models
 from open_webui.models.users import UserModel
 from open_webui.utils.access_control import check_model_access, has_connection_access, has_permission
-from open_webui.utils.anthropic import get_anthropic_models, is_anthropic_url
+from open_webui.utils.anthropic import (
+    anthropic_stream_to_openai_stream,
+    apply_anthropic_request_headers,
+    convert_anthropic_message_to_openai,
+    convert_openai_to_anthropic_payload,
+    get_anthropic_models,
+    is_anthropic_url,
+)
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.headers import get_custom_headers, include_user_info_headers
 from open_webui.utils.misc import (
@@ -1321,6 +1328,8 @@ async def generate_chat_completion(
     headers, cookies = await get_headers_and_cookies(request, url, key, api_config, metadata, user=user)
 
     is_responses = api_config.get('api_type') == 'responses'
+    is_anthropic = is_anthropic_url(url)
+    request_metadata = metadata or getattr(request.state, 'metadata', None) or {}
 
     if api_config.get('azure') or api_config.get('provider') == 'azure':
         # Only set api-key header if not using Azure Entra ID authentication
@@ -1348,6 +1357,10 @@ async def generate_chat_completion(
                 request_url = f'{request_url}/responses?api-version={api_version}'
             else:
                 request_url = f'{request_url}/chat/completions?api-version={api_version}'
+    elif is_anthropic:
+        headers = apply_anthropic_request_headers(headers, key, request_metadata)
+        payload = convert_openai_to_anthropic_payload(payload, request_metadata)
+        request_url = f'{url.rstrip("/")}/messages'
     else:
         if is_responses:
             payload = convert_to_responses_payload(payload)
@@ -1357,7 +1370,7 @@ async def generate_chat_completion(
     requested_model = payload.get('model')
     # For Chat Completions, strip image parts from multimodal tool messages
     # (Chat Completions doesn't support images in tool content).
-    if not is_responses and 'messages' in payload:
+    if not is_responses and not is_anthropic and 'messages' in payload:
         for message in payload['messages']:
             if message.get('role') == 'tool' and isinstance(message.get('content'), list):
                 message['content'] = ''.join(
@@ -1425,8 +1438,13 @@ async def generate_chat_completion(
                     )
 
             streaming = True
+            stream_handler = (
+                anthropic_stream_to_openai_stream(r.content, model=requested_model)
+                if is_anthropic
+                else stream_wrapper(r, content_handler=stream_chunks_handler)
+            )
             return StreamingResponse(
-                stream_wrapper(r, content_handler=stream_chunks_handler),
+                stream_handler,
                 status_code=r.status,
                 headers=_clean_proxy_headers(r.headers),
             )
@@ -1456,6 +1474,8 @@ async def generate_chat_completion(
             # Convert Responses API result to simple format
             if is_responses and isinstance(response, dict):
                 response = convert_responses_result(response)
+            elif is_anthropic and isinstance(response, dict):
+                response = convert_anthropic_message_to_openai(response, model=requested_model)
 
             return response
     except Exception as e:

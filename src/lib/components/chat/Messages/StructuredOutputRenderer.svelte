@@ -14,6 +14,7 @@
 
 	export let id = '';
 	export let output: OutputItem[] = [];
+	export let content = '';
 	export let done = true;
 	export let model = null;
 	export let save = false;
@@ -32,7 +33,7 @@
 	const getDetailTitle = (detailToken: OutputDetailToken): any => detailToken.summary;
 	const getDetailAttributes = (detailToken: OutputDetailToken): any => detailToken.attributes;
 
-	$: displayItems = buildOutputDisplayItems(output) as OutputDisplayItem[];
+	$: displayItems = buildOutputDisplayItems(output, content) as OutputDisplayItem[];
 </script>
 
 {#each displayItems as displayItem (displayItem.id)}

@@ -23,6 +23,7 @@
 	import ConsecutiveDetailsGroup from './ConsecutiveDetailsGroup.svelte';
 
 	import HtmlToken from './HTMLToken.svelte';
+	import AntArtifactCard from './AntArtifactCard.svelte';
 	import Clipboard from '$lib/components/icons/Clipboard.svelte';
 	import ColonFenceBlock from './ColonFenceBlock.svelte';
 
@@ -150,6 +151,7 @@
 				{done}
 				{sourceIds}
 				{onSourceClick}
+				{onPreview}
 			/>
 		</svelte:element>
 	{:else if token.type === 'code'}
@@ -203,6 +205,7 @@
 												{done}
 												{sourceIds}
 												{onSourceClick}
+				{onPreview}
 											/>
 										</div>
 									</div>
@@ -229,6 +232,7 @@
 												{done}
 												{sourceIds}
 												{onSourceClick}
+				{onPreview}
 											/>
 										</div>
 									</td>
@@ -279,6 +283,7 @@
 					{onTaskClick}
 					{sourceIds}
 					{onSourceClick}
+				{onPreview}
 				/>
 			</blockquote>
 		{/if}
@@ -314,6 +319,7 @@
 							{onTaskClick}
 							{sourceIds}
 							{onSourceClick}
+				{onPreview}
 						/>
 					</li>
 				{/each}
@@ -349,6 +355,7 @@
 									{onTaskClick}
 									{sourceIds}
 									{onSourceClick}
+				{onPreview}
 								/>
 							</div>
 						{:else}
@@ -361,6 +368,7 @@
 								{onTaskClick}
 								{sourceIds}
 								{onSourceClick}
+				{onPreview}
 							/>
 						{/if}
 					</li>
@@ -406,6 +414,7 @@
 									{onTaskClick}
 									{sourceIds}
 									{onSourceClick}
+				{onPreview}
 								/>
 							</div>
 						</Collapsible>
@@ -454,6 +463,7 @@
 						{onTaskClick}
 						{sourceIds}
 						{onSourceClick}
+				{onPreview}
 					/>
 				</div>
 			</Collapsible>
@@ -468,8 +478,21 @@
 				dir="auto"
 			/>
 		{/if}
+	{:else if token.type === 'antArtifact'}
+		{#if token.artifactType}
+			<AntArtifactCard
+				artifact={{
+					identifier: token.identifier,
+					type: token.mimeType,
+					title: token.title,
+					content: token.content,
+					artifactType: token.artifactType
+				}}
+				{onPreview}
+			/>
+		{/if}
 	{:else if token.type === 'html'}
-		<HtmlToken {id} {token} {onSourceClick} />
+		<HtmlToken {id} {token} {onSourceClick} {onPreview} />
 	{:else if token.type === 'iframe'}
 		<iframe
 			src="{WEBUI_BASE_URL}/api/v1/files/{token.fileId}/content"
@@ -492,6 +515,7 @@
 					{done}
 					{sourceIds}
 					{onSourceClick}
+				{onPreview}
 				/>
 			</span>
 		{:else}
@@ -502,6 +526,7 @@
 					{done}
 					{sourceIds}
 					{onSourceClick}
+				{onPreview}
 				/>
 			</p>
 		{/if}
@@ -515,6 +540,7 @@
 						{done}
 						{sourceIds}
 						{onSourceClick}
+				{onPreview}
 					/>
 				{:else}
 					{unescapeHtml(token.text)}
@@ -527,6 +553,7 @@
 				{done}
 				{sourceIds}
 				{onSourceClick}
+				{onPreview}
 			/>
 		{:else}
 			{unescapeHtml(token.text)}

@@ -58,13 +58,19 @@
 	import { KokoroWorker } from '$lib/workers/KokoroWorker';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import FollowUps from './ResponseMessage/FollowUps.svelte';
+	import FollowupChips from './ResponseMessage/FollowupChips.svelte';
+	import WeatherCard from './ResponseMessage/WeatherCard.svelte';
+	import OptionsCard from './ResponseMessage/OptionsCard.svelte';
+	import CurrencyCard from './ResponseMessage/CurrencyCard.svelte';
+	import MapCard from './ResponseMessage/MapCard.svelte';
+	import SportsCard from './ResponseMessage/SportsCard.svelte';
 	import { fade } from 'svelte/transition';
 	import { flyAndScale } from '$lib/utils/transitions';
 	import RegenerateMenu from './ResponseMessage/RegenerateMenu.svelte';
 	import StatusHistory from './ResponseMessage/StatusHistory.svelte';
 	import FullHeightIframe from '$lib/components/common/FullHeightIframe.svelte';
 	import OutputEditView from './OutputEditView.svelte';
-	import { getOutputText, replaceOutputMessageText, type OutputItem } from './structuredOutput';
+	import { getOutputText, getAssistantText, replaceOutputMessageText, type OutputItem } from './structuredOutput';
 
 	interface MessageType {
 		id: string;
@@ -182,8 +188,7 @@
 		(model?.info?.meta?.capabilities?.status_updates ?? true) &&
 		statusEntries.length > 0 &&
 		!(statusEntries.at(-1)?.hidden ?? false);
-	$: visibleResponseContent =
-		getOutputText(message.output) || removeAllDetails(message.content ?? '');
+	$: visibleResponseContent = getAssistantText(message.output, message.content ?? '');
 	$: hasResponseContent = Boolean((message.content ?? '').trim() || message.output?.length);
 
 	let edit = false;
@@ -712,6 +717,26 @@
 									</div>
 								{/each}
 							</div>
+						{/if}
+
+						{#if message?.weather}
+							<WeatherCard weather={message.weather} />
+						{/if}
+
+						{#if message?.options}
+							<OptionsCard options={message.options} />
+						{/if}
+
+						{#if message?.currency}
+							<CurrencyCard currency={message.currency} />
+						{/if}
+
+						{#if message?.map}
+							<MapCard map={message.map} />
+						{/if}
+
+						{#if message?.sports}
+							<SportsCard sports={message.sports} />
 						{/if}
 
 						{#if message?.embeds && message.embeds.length > 0}
@@ -1479,6 +1504,10 @@
 								}}
 							/>
 						</div>
+					{/if}
+
+					{#if message.done && !readOnly && (message?.suggestedFollowups ?? []).length > 0}
+						<FollowupChips suggestions={message.suggestedFollowups} disabled={!isLastMessage} />
 					{/if}
 				{/if}
 			</div>

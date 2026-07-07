@@ -37,7 +37,13 @@
 		},
 		web_search: {
 			label: $i18n.t('Web Search'),
-			description: $i18n.t('Search the web and fetch URLs')
+			description: $i18n.t('Search the web, fetch URLs, and display inline image results')
+		},
+		utilities: {
+			label: $i18n.t('Utilities'),
+			description: $i18n.t(
+				'Weather, maps, currency conversion, sports scores, and interactive option chips'
+			)
 		},
 		image_generation: {
 			label: $i18n.t('Image Generation'),
@@ -62,6 +68,10 @@
 		skills: {
 			label: $i18n.t('Skills'),
 			description: $i18n.t('Search and load skill instructions')
+		},
+		artifacts: {
+			label: $i18n.t('Artifacts'),
+			description: $i18n.t('List, read, save, and update artifacts in the user library')
 		}
 	};
 

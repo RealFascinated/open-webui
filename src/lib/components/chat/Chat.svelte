@@ -50,10 +50,9 @@
 		showFileNavPath,
 		showFileNavDir,
 		chatRequestQueues,
-		desktopEvent
+		desktopEvent,
+		pendingSubmit
 	} from '$lib/stores';
-
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 	import {
 		convertMessagesToHistory,
@@ -65,12 +64,14 @@
 		processDetails,
 		removeAllDetails,
 		getCodeBlockContents,
+		parseAntArtifacts,
 		isYoutubeUrl,
 		displayFileHandler
 	} from '$lib/utils';
+	import { buildReactHtml } from '$lib/utils/react-artifact';
 	import { AudioQueue } from '$lib/utils/audio';
 	import { resolveThinkForRequest } from '$lib/utils/thinking';
-	import { getOutputText } from './Messages/structuredOutput';
+	import { getOutputText, getAssistantText } from './Messages/structuredOutput';
 
 	import {
 		archiveChatById,
@@ -692,6 +693,18 @@
 					if (autoScroll) {
 						scrollToBottom('smooth');
 					}
+				} else if (type === 'chat:message:weather') {
+					message.weather = data;
+				} else if (type === 'chat:message:options') {
+					message.options = data;
+				} else if (type === 'chat:message:currency') {
+					message.currency = data;
+				} else if (type === 'chat:message:map') {
+					message.map = data;
+				} else if (type === 'chat:message:sports') {
+					message.sports = data;
+				} else if (type === 'chat:message:followups') {
+					message.suggestedFollowups = data?.suggestions ?? data;
 				} else if (type === 'chat:outlet') {
 					// Outlet filter ran on backend — sync in-memory state
 					const outletMessages = data.messages ?? [];
@@ -948,6 +961,13 @@
 		$socket?.on('events', chatEventHandler);
 		$socket?.on('connect', handleSocketConnect);
 
+		const pendingSubmitUnsub = pendingSubmit.subscribe((value) => {
+			if (value) {
+				pendingSubmit.set(null);
+				submitPrompt(value, []);
+			}
+		});
+
 		$audioQueue?.destroy();
 
 		const audioQueueInstance = new AudioQueue(document.getElementById('audioElement'));
@@ -1065,6 +1085,7 @@
 				window.removeEventListener('message', onMessageHandler);
 				$socket?.off('events', chatEventHandler);
 				$socket?.off('connect', handleSocketConnect);
+				pendingSubmitUnsub();
 				dismissContextCompactionToast();
 				audioQueueInstance?.destroy();
 				audioQueue.set(null);
@@ -1285,7 +1306,7 @@
 		}
 
 		const messageContentParts = getMessageContentParts(
-			getOutputText(message?.output) || removeAllDetails(message?.content ?? ''),
+			getAssistantText(message?.output, message?.content ?? ''),
 			$config?.audio?.tts?.split_on ?? 'punctuation'
 		);
 		if (!final) {
@@ -1314,14 +1335,54 @@
 	const getContents = () => {
 		const messages = history ? createMessagesList(history, history.currentId) : [];
 		let contents = [];
+		// Track identifier → index for in-place updates (stable antArtifact revisions)
+		const identifierIndex = new Map<string, number>();
+
+		const upsert = (item) => {
+			if (item.identifier && identifierIndex.has(item.identifier)) {
+				// Update in-place — same identifier means a revision, not a new slot
+				contents[identifierIndex.get(item.identifier)] = item;
+			} else {
+				if (item.identifier) identifierIndex.set(item.identifier, contents.length);
+				contents = [...contents, item];
+			}
+		};
+
 		messages.forEach((message) => {
 			if (message?.role !== 'user') {
-				const messageContent =
-					getOutputText(message?.output) || removeAllDetails(message?.content ?? '');
+				const messageContent = getAssistantText(message?.output, message?.content ?? '');
 				if (!messageContent.trim()) {
 					return;
 				}
 
+			// ── <antArtifact> tags (stable identifiers, model-provided titles) ──
+			const antArtifacts = parseAntArtifacts(messageContent);
+			if (antArtifacts.length > 0) {
+				antArtifacts.forEach((a) => {
+					if (!a.artifactType) return; // skip code/mermaid/unsupported types
+					if (a.artifactType === 'react') {
+						upsert({
+							type: 'iframe',
+							content: buildReactHtml(a.content),
+							sourceCode: a.content,
+							title: a.title,
+							identifier: a.identifier,
+							mimeType: 'application/vnd.ant.react'
+						});
+					} else {
+						upsert({
+							type: a.artifactType,
+							content: a.content,
+							title: a.title,
+							identifier: a.identifier,
+							mimeType: a.type
+						});
+					}
+				});
+				return; // don't also parse code fences from the same message
+			}
+
+				// ── Legacy: code fence artifacts (```html, ```svg) ──
 				const { codeBlocks: codeBlocks, htmlGroups: htmlGroups } =
 					getCodeBlockContents(messageContent);
 
@@ -1350,13 +1411,15 @@
                         </body>
                         </html>
                     `;
-						contents = [...contents, { type: 'iframe', content: renderedContent }];
+						upsert({ type: 'iframe', content: renderedContent });
 					});
 				} else {
 					// Check for SVG content
 					for (const block of codeBlocks) {
 						if (block.lang === 'svg' || (block.lang === 'xml' && block.code.includes('<svg'))) {
-							contents = [...contents, { type: 'svg', content: block.code }];
+							upsert({ type: 'svg', content: block.code });
+						} else if (block.lang === 'html') {
+							upsert({ type: 'iframe', content: block.code });
 						}
 					}
 				}
@@ -1481,9 +1544,7 @@
 			}
 		}
 
-		if ($mobile) {
-			await showControls.set(false);
-		}
+		await showControls.set(false);
 		await showCallOverlay.set(false);
 		await showArtifacts.set(false);
 
@@ -1994,7 +2055,7 @@
 		// Store raw OR-aligned output items from backend
 		if (output) {
 			message.output = output;
-			message.content = getOutputText(output);
+			message.content = getAssistantText(output, message.content);
 			dispatchCallOverlayAudio(message);
 		}
 
@@ -2055,8 +2116,7 @@
 				taskIds = null;
 			}
 
-			const visibleContent =
-				getOutputText(message?.output) || removeAllDetails(message?.content ?? '');
+			const visibleContent = getAssistantText(message?.output, message?.content ?? '');
 
 			if ($settings.responseAutoCopy) {
 				copyToClipboard(visibleContent);

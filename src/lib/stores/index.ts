@@ -109,7 +109,25 @@ export const showFileNavDir: Writable<string | null> = writable(null);
 export const selectedTerminalId: Writable<string | null> = writable(null);
 
 export const artifactCode = writable(null);
-export const artifactContents = writable(null);
+
+export type ArtifactContent = {
+	type: 'iframe' | 'svg' | 'markdown';
+	content: string;
+	/** Human-readable title (from <antArtifact title="…"> or <title> tag). */
+	title?: string;
+	/** Stable identifier from <antArtifact identifier="…">. When present,
+	 *  revisions with the same identifier update this slot in-place. */
+	identifier?: string;
+	/** Set once the artifact has been published to the DB. */
+	artifactId?: string;
+	/** Original MIME type from <antArtifact type="…">. Used for labelling
+	 *  (e.g. 'application/vnd.ant.react' → show "React component"). */
+	mimeType?: string;
+	/** Raw source as authored by the model. For React artifacts this holds the
+	 *  original JSX; `content` holds the generated wrapper HTML for the iframe. */
+	sourceCode?: string;
+};
+export const artifactContents: Writable<ArtifactContent[] | null> = writable(null);
 
 export const embed = writable(null);
 
@@ -128,6 +146,9 @@ export const currentChatPage = writable(1);
 
 export const isLastActiveTab = writable(true);
 export const playingNotificationSound = writable(false);
+
+/** Pending prompt submitted via option chips or follow-up chips in assistant messages. */
+export const pendingSubmit: Writable<string | null> = writable(null);
 
 export type Model = OpenAIModel | OllamaModel;
 
@@ -183,7 +204,6 @@ type Settings = {
 	pinnedModels?: never[];
 	toolServers?: any[];
 	terminalServers?: any[];
-	detectArtifacts?: boolean;
 	showUpdateToast?: boolean;
 	showChangelog?: boolean;
 	showEmojiInCall?: boolean;

@@ -76,6 +76,8 @@ function detailsRenderer(token: any) {
   </details>`;
 }
 
+import antArtifactExtension from './ant-artifact-extension';
+
 // Extension wrapper function
 function detailsExtension() {
 	return {
@@ -89,6 +91,6 @@ function detailsExtension() {
 
 export default function (options = {}) {
 	return {
-		extensions: [detailsExtension(options)]
+		extensions: [detailsExtension(options), antArtifactExtension()]
 	};
 }

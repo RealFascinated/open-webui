@@ -4,17 +4,52 @@
 
 	import { WEBUI_BASE_URL } from '$lib/constants';
 	import { settings } from '$lib/stores';
+	import { parseAntArtifacts } from '$lib/utils';
+	import AntArtifactCard from './AntArtifactCard.svelte';
 
 	export let id: string;
 	export let token: Token;
+	export let onPreview: Function = () => {};
 
 	let html: string | null = null;
 
 	$: text = token.type === 'html' ? token?.text : null;
 	$: html = text ? DOMPurify.sanitize(text) : null;
+
+	// Fallback for legacy/partial html tokens that still contain antArtifact
+	$: antArtifacts = text ? parseAntArtifacts(text) : [];
+	$: isAntArtifact = antArtifacts.length > 0;
+
+	$: visualizationMatch = text?.match(/<visualization\s+([^>]*)>([\s\S]*?)<\/visualization>/i);
+	$: visualizationAttrs = visualizationMatch?.[1] ?? '';
+	$: visualizationContent = visualizationMatch?.[2]?.trim() ?? '';
+	$: visualizationType = visualizationAttrs.match(/type="([^"]+)"/i)?.[1] ?? 'svg';
+	$: visualizationHeight = visualizationAttrs.match(/height="(\d+)"/i)?.[1] ?? '300';
+	$: isVisualization = Boolean(visualizationMatch);
 </script>
 
-{#if token.type === 'html'}
+{#if token.type === 'html' && isAntArtifact}
+	{#each antArtifacts as artifact}
+		<AntArtifactCard {artifact} {onPreview} />
+	{/each}
+{:else if token.type === 'html' && isVisualization}
+	{#if visualizationType === 'html'}
+		<iframe
+			class="w-full my-2 rounded-xl border border-gray-100 dark:border-gray-800"
+			style="height: {visualizationHeight}px"
+			title="Visualization"
+			srcdoc={visualizationContent}
+			sandbox="allow-scripts allow-downloads{($settings?.iframeSandboxAllowForms ?? false)
+				? ' allow-forms'
+				: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false) ? ' allow-same-origin' : ''}"
+			referrerpolicy="strict-origin-when-cross-origin"
+		></iframe>
+	{:else}
+		<div class="my-2 w-full overflow-x-auto">
+			{@html DOMPurify.sanitize(visualizationContent, { USE_PROFILES: { svg: true, svgFilters: true } })}
+		</div>
+	{/if}
+{:else if token.type === 'html'}
 	{#if html && html.includes('<video')}
 		{@const video = html.match(/<video[^>]*>([\s\S]*?)<\/video>/)}
 		{@const videoSrc = video && video[1]}

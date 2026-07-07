@@ -52,7 +52,9 @@ from open_webui.tools.builtin import (
     create_calendar_event,
     create_folder,
     create_tasks,
+    currency_convert,
     delete_automation,
+    delete_artifact,
     delete_calendar_event,
     delete_memory,
     delete_note,
@@ -61,16 +63,22 @@ from open_webui.tools.builtin import (
     fetch_url,
     generate_image,
     get_current_timestamp,
+    image_search,
     kb_exec,
     list_automations,
+    list_artifacts,
     list_calendars,
     list_folders,
     list_memories,
     list_memory_paths,
+    tool_search,
     move_chat_to_folder,
+    map_display,
+    present_options,
     query_knowledge_bases,
     query_knowledge_files,
     read_memory_path,
+    read_artifact,
     replace_memory_content,
     replace_note_content,
     search_calendar_events,
@@ -83,8 +91,12 @@ from open_webui.tools.builtin import (
     search_skills,
     search_files,
     search_web,
+    save_artifact,
+    sports_scores,
+    suggest_followups,
     toggle_automation,
     update_automation,
+    update_artifact,
     update_calendar_event,
     update_chat,
     update_memory,
@@ -97,6 +109,7 @@ from open_webui.tools.builtin import (
     view_note,
     view_note_lines,
     view_skill,
+    weather_fetch,
     write_note,
 )
 from open_webui.utils.access_control import has_access, has_connection_access, has_permission
@@ -595,7 +608,7 @@ async def get_builtin_tools(
         and features.get('web_search')
         and await has_user_permission('web_search')
     ):
-        builtin_functions.extend([search_web, fetch_url])
+        builtin_functions.extend([search_web, fetch_url, image_search])
 
     # Add image generation/edit tools if builtin category enabled AND enabled globally AND model has image_generation capability
     if (
@@ -681,6 +694,39 @@ async def get_builtin_tools(
                 delete_calendar_event,
             ]
         )
+
+    # Utility tools — weather, maps, currency, sports, interactive options
+    if is_builtin_tool_enabled('utilities'):
+        builtin_functions.extend(
+            [
+                weather_fetch,
+                currency_convert,
+                map_display,
+                sports_scores,
+                present_options,
+                suggest_followups,
+            ]
+        )
+
+    # Artifact library tools — list, read, save, update saved artifacts
+    if (
+        is_builtin_tool_enabled('artifacts')
+        and config.get('artifacts.enable')
+        and await has_user_permission('artifacts')
+    ):
+        builtin_functions.extend(
+            [
+                list_artifacts,
+                read_artifact,
+                save_artifact,
+                update_artifact,
+                delete_artifact,
+            ]
+        )
+
+    # Meta tool — always available to discover session tools
+    if tool_search not in builtin_functions:
+        builtin_functions.append(tool_search)
 
     for func in builtin_functions:
         callable = await get_async_tool_function_and_apply_extra_params(

@@ -14,7 +14,8 @@
 		showEmbeds
 	} from '$lib/stores';
 	import FloatingButtons from '../ContentRenderer/FloatingButtons.svelte';
-	import { createMessagesList, replaceOutsideCode } from '$lib/utils';
+	import { hasCompleteAntArtifact, replaceOutsideCode } from '$lib/utils';
+	import { getAssistantText } from './structuredOutput';
 
 	/**
 	 * Extracts all top-level <details>...</details> blocks from content,
@@ -129,16 +130,27 @@
 				)
 			: messageContent;
 
+	// Open the artifact panel when a complete <antArtifact> tag is detected in the stream.
+	let _lastAntArtifactSeen = false;
+	$: assistantText = getAssistantText(output, content);
+	$: if ($chatId && assistantText) {
+		const has = hasCompleteAntArtifact(assistantText);
+		if (has && !_lastAntArtifactSeen) {
+			_lastAntArtifactSeen = true;
+			tick().then(() => {
+				showArtifacts.set(true);
+				showControls.set(true);
+			});
+		} else if (!has) {
+			_lastAntArtifactSeen = false;
+		}
+	}
+
 	const markdownUpdateHandler = /** @type {any} */ (
 		async (/** @type {{ lang?: string; text?: string }} */ token) => {
 			const { lang = '', text: code = '' } = token;
 
-			if (
-				($settings?.detectArtifacts ?? true) &&
-				(['html', 'svg'].includes(lang) || (lang === 'xml' && code.includes('svg'))) &&
-				!$mobile &&
-				$chatId
-			) {
+		if ((['html', 'svg'].includes(lang) || (lang === 'xml' && code.includes('svg'))) && $chatId) {
 				await tick();
 				showArtifacts.set(true);
 				showControls.set(true);
@@ -148,7 +160,6 @@
 
 	const previewHandler = /** @type {any} */ (
 		async (/** @type {string} */ value) => {
-			console.log('Preview', value);
 			await artifactCode.set(/** @type {any} */ (value));
 			await showControls.set(true);
 			await showArtifacts.set(true);
@@ -267,6 +278,7 @@
 		<StructuredOutputRenderer
 			{id}
 			{output}
+			{content}
 			{model}
 			{save}
 			{preview}

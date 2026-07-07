@@ -110,6 +110,12 @@ from open_webui.utils.misc import (
     set_last_user_message_content,
     strip_empty_content_blocks,
 )
+from open_webui.utils.deferred_tools import (
+    build_active_tools_payload,
+    build_tools_payload_for_provider,
+    init_deferred_loading,
+    uses_anthropic_native_deferred,
+)
 from open_webui.utils.payload import apply_system_prompt_to_body, resolve_system_prompt
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.response import augment_provider_usage, merge_usage, normalize_usage
@@ -2877,10 +2883,14 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             metadata['tools'] = tools_dict
 
             if metadata.get('params', {}).get('function_calling') != 'legacy':
+                init_deferred_loading(
+                    tools_dict,
+                    metadata,
+                    model,
+                    native_anthropic=uses_anthropic_native_deferred(model),
+                )
                 # If the function calling is native, then call the tools function calling handler
-                form_data['tools'] = [
-                    {'type': 'function', 'function': tool.get('spec', {})} for tool in tools_dict.values()
-                ]
+                form_data['tools'] = build_tools_payload_for_provider(tools_dict, metadata, model)
                 if inlet_filter_tools:
                     form_data['tools'].extend(inlet_filter_tools)
             else:
@@ -4821,6 +4831,23 @@ async def streaming_chat_response_handler(response, ctx):
                         tool_type = None
                         direct_tool = False
 
+                        if tool_function_name in (
+                            'tool_search_tool_bm25',
+                            'tool_search_tool_regex',
+                        ):
+                            results.append(
+                                {
+                                    'tool_call_id': tool_call_id,
+                                    'content': json.dumps(
+                                        {
+                                            'status': 'success',
+                                            'message': 'Tool search is handled by the Anthropic API.',
+                                        }
+                                    ),
+                                }
+                            )
+                            continue
+
                         if tool_function_name in tools:
                             tool = tools[tool_function_name]
                             spec = tool.get('spec', {})
@@ -5046,6 +5073,18 @@ async def streaming_chat_response_handler(response, ctx):
                     )
 
                     try:
+                        if metadata.get('deferred_loading') and metadata.get('deferred_loading_mode') == 'client':
+                            form_data['tools'] = build_active_tools_payload(
+                                metadata.get('tools', {}),
+                                metadata,
+                            )
+                        elif metadata.get('deferred_loading') and metadata.get('deferred_loading_mode') == 'anthropic':
+                            form_data['tools'] = build_tools_payload_for_provider(
+                                metadata.get('tools', {}),
+                                metadata,
+                                model,
+                            )
+
                         new_form_data = {
                             **form_data,
                             'model': model_id,

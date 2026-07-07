@@ -44,7 +44,6 @@
 
 	let highContrastMode = false;
 
-	let detectArtifacts = true;
 	let displayMultiModelResponsesInTabs = false;
 
 	let richTextInput = true;
@@ -206,7 +205,6 @@
 
 		highContrastMode = $settings?.highContrastMode ?? false;
 
-		detectArtifacts = $settings?.detectArtifacts ?? true;
 		responseAutoCopy = $settings?.responseAutoCopy ?? false;
 
 		showUsername = $settings?.showUsername ?? false;
@@ -1282,28 +1280,7 @@
 				</div>
 			</div>
 
-			<div class=" my-2 text-sm font-medium">{$i18n.t('Artifacts')}</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div id="detect-artifacts-label" class=" self-center text-xs">
-						{$i18n.t('Detect Artifacts Automatically')}
-					</div>
-
-					<div class="flex items-center gap-2 p-1">
-						<Switch
-							ariaLabelledbyId="detect-artifacts-label"
-							tooltip={true}
-							bind:state={detectArtifacts}
-							on:change={() => {
-								saveSettings({ detectArtifacts });
-							}}
-						/>
-					</div>
-				</div>
-			</div>
-
-			<div>
+		<div>
 				<div class=" py-0.5 flex w-full justify-between">
 					<div id="iframe-sandbox-allow-same-origin-label" class=" self-center text-xs">
 						{$i18n.t('iframe Sandbox Allow Same Origin')}

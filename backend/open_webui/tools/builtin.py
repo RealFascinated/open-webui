@@ -3980,3 +3980,905 @@ async def delete_calendar_event(
     except Exception as e:
         log.exception(f'delete_calendar_event error: {e}')
         return json.dumps({'error': str(e)})
+
+
+# =============================================================================
+# WEATHER, MAPS, CURRENCY, SPORTS & INTERACTIVE TOOLS
+# =============================================================================
+
+_WMO_WEATHER_DESCRIPTIONS = {
+    0: 'Clear sky',
+    1: 'Mainly clear',
+    2: 'Partly cloudy',
+    3: 'Overcast',
+    45: 'Fog',
+    48: 'Depositing rime fog',
+    51: 'Light drizzle',
+    53: 'Moderate drizzle',
+    55: 'Dense drizzle',
+    56: 'Light freezing drizzle',
+    57: 'Dense freezing drizzle',
+    61: 'Slight rain',
+    63: 'Moderate rain',
+    65: 'Heavy rain',
+    66: 'Light freezing rain',
+    67: 'Heavy freezing rain',
+    71: 'Slight snow',
+    73: 'Moderate snow',
+    75: 'Heavy snow',
+    77: 'Snow grains',
+    80: 'Slight rain showers',
+    81: 'Moderate rain showers',
+    82: 'Violent rain showers',
+    85: 'Slight snow showers',
+    86: 'Heavy snow showers',
+    95: 'Thunderstorm',
+    96: 'Thunderstorm with slight hail',
+    99: 'Thunderstorm with heavy hail',
+}
+
+
+def _wmo_description(code: int | None) -> str:
+    if code is None:
+        return 'Unknown'
+    return _WMO_WEATHER_DESCRIPTIONS.get(int(code), 'Unknown')
+
+
+async def _http_get_json(url: str, headers: dict | None = None, params: dict | None = None) -> dict | list:
+    from open_webui.utils.session_pool import get_session
+
+    session = await get_session()
+    async with session.get(url, headers=headers or {}, params=params or {}) as response:
+        response.raise_for_status()
+        return await response.json()
+
+
+async def _geocode_open_meteo(location: str) -> dict | None:
+    payload = await _http_get_json(
+        'https://geocoding-api.open-meteo.com/v1/search',
+        params={'name': location, 'count': 1, 'language': 'en', 'format': 'json'},
+    )
+    results = payload.get('results') or []
+    return results[0] if results else None
+
+
+async def _reverse_geocode_open_meteo(latitude: float, longitude: float) -> str:
+    try:
+        payload = await _http_get_json(
+            'https://geocoding-api.open-meteo.com/v1/reverse',
+            params={'latitude': latitude, 'longitude': longitude, 'language': 'en'},
+        )
+        results = payload.get('results') or []
+        if results:
+            place = results[0]
+            parts = [place.get('name'), place.get('admin1'), place.get('country')]
+            return ', '.join(p for p in parts if p)
+    except Exception:
+        pass
+    return f'{latitude:.4f}, {longitude:.4f}'
+
+
+async def weather_fetch(
+    location: Optional[str] = None,
+    __event_call__: callable = None,
+    __event_emitter__: callable = None,
+    __metadata__: dict = None,
+) -> str:
+    """
+    Fetch current weather for a location. If no location is given, requests the user's
+    browser coordinates via geolocation.
+
+    :param location: City or place name (optional — uses browser location if omitted)
+    :return: JSON summary of current weather conditions
+    """
+    try:
+        latitude = None
+        longitude = None
+        location_name = location
+
+        if not location or not str(location).strip():
+            if __event_call__ is None:
+                return json.dumps({'error': 'Location required. Please specify a city or enable location access.'})
+
+            coords = await __event_call__({'type': 'request:location', 'data': {}})
+            if not isinstance(coords, dict) or coords.get('error'):
+                return json.dumps(
+                    {
+                        'error': 'Location access denied or unavailable. Please specify a city name instead.',
+                    }
+                )
+
+            latitude = float(coords['latitude'])
+            longitude = float(coords['longitude'])
+            location_name = await _reverse_geocode_open_meteo(latitude, longitude)
+        else:
+            geo = await _geocode_open_meteo(str(location).strip())
+            if not geo:
+                return json.dumps({'error': f'Could not find location: {location}'})
+            latitude = float(geo['latitude'])
+            longitude = float(geo['longitude'])
+            location_name = ', '.join(
+                p for p in [geo.get('name'), geo.get('admin1'), geo.get('country')] if p
+            )
+
+        forecast = await _http_get_json(
+            'https://api.open-meteo.com/v1/forecast',
+            params={
+                'latitude': latitude,
+                'longitude': longitude,
+                'current': 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m',
+                'timezone': 'auto',
+            },
+        )
+        current = forecast.get('current') or {}
+        weather_code = current.get('weather_code')
+        description = _wmo_description(weather_code)
+
+        weather_data = {
+            'location': location_name,
+            'latitude': latitude,
+            'longitude': longitude,
+            'temperature': current.get('temperature_2m'),
+            'temperature_unit': (forecast.get('current_units') or {}).get('temperature_2m', '°C'),
+            'feels_like': current.get('apparent_temperature'),
+            'humidity': current.get('relative_humidity_2m'),
+            'wind_speed': current.get('wind_speed_10m'),
+            'wind_speed_unit': (forecast.get('current_units') or {}).get('wind_speed_10m', 'km/h'),
+            'weather_code': weather_code,
+            'description': description,
+            'time': current.get('time'),
+        }
+
+        if __event_emitter__:
+            await __event_emitter__({'type': 'chat:message:weather', 'data': weather_data})
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'message': 'Weather card displayed to the user.',
+                'weather': weather_data,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'weather_fetch error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def image_search(
+    query: str,
+    count: Optional[int] = 8,
+    __request__: Request = None,
+    __user__: dict = None,
+    __event_emitter__: callable = None,
+    __chat_id__: str = None,
+    __message_id__: str = None,
+) -> str:
+    """
+    Search the web for images matching a query and display them inline in the chat.
+
+    :param query: The image search query
+    :param count: Number of images to return (default 8, max 12)
+    :return: Confirmation that images are displayed
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    try:
+        count = max(1, min(int(count or 8), 12))
+        engine = await Config.get('web.search.engine')
+        image_urls: list[str] = []
+
+        if engine == 'searxng':
+            from open_webui.retrieval.web.searxng import search_searxng
+
+            query_url = await Config.get('web.search.searxng_query_url')
+            if not query_url:
+                return json.dumps({'error': 'SearXNG is not configured for image search.'})
+
+            filter_list = await Config.get('web.search.domain_filter_list')
+            language = await Config.get('web.search.searxng_language')
+            results = await search_searxng(
+                query_url,
+                query,
+                count,
+                filter_list,
+                categories=['images'],
+                language=language or 'all',
+            )
+            image_urls = [r.link for r in results if r.link]
+        elif engine == 'brave':
+            from open_webui.utils.session_pool import get_session
+
+            api_key = await Config.get('web.search.brave_search_api_key')
+            if not api_key:
+                return json.dumps({'error': 'Brave Search API key is not configured.'})
+
+            session = await get_session()
+            async with session.get(
+                'https://api.search.brave.com/res/v1/images/search',
+                headers={
+                    'Accept': 'application/json',
+                    'Accept-Encoding': 'gzip',
+                    'X-Subscription-Token': api_key,
+                },
+                params={'q': query, 'count': count},
+            ) as response:
+                response.raise_for_status()
+                payload = await response.json()
+
+            for item in (payload.get('results') or [])[:count]:
+                url = item.get('thumbnail', {}).get('src') or item.get('url')
+                if url:
+                    image_urls.append(url)
+        else:
+            return json.dumps(
+                {
+                    'error': 'Image search requires SearXNG or Brave as the configured web search engine.',
+                }
+            )
+
+        if not image_urls:
+            return json.dumps({'error': f'No images found for query: {query}'})
+
+        image_files = [{'type': 'image', 'url': url} for url in image_urls[:count]]
+
+        if __chat_id__ and __message_id__ and image_files:
+            db_files = await Chats.add_message_files_by_id_and_message_id(
+                __chat_id__,
+                __message_id__,
+                image_files,
+            )
+            if db_files is not None:
+                image_files = db_files
+
+        if __event_emitter__ and image_files:
+            await __event_emitter__(
+                {
+                    'type': 'chat:message:files',
+                    'data': {'files': image_files},
+                }
+            )
+            return json.dumps(
+                {
+                    'status': 'success',
+                    'message': (
+                        'Images have been displayed inline in the chat. '
+                        'Do not embed or link them again — acknowledge they are visible.'
+                    ),
+                    'count': len(image_files),
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps({'status': 'success', 'count': len(image_files)}, ensure_ascii=False)
+    except Exception as e:
+        log.exception(f'image_search error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def present_options(
+    question: str,
+    options: list[str],
+    __event_emitter__: callable = None,
+) -> str:
+    """
+    Present the user with 2–4 tappable option buttons. Their selection arrives as their next message.
+
+    :param question: The question to present
+    :param options: List of 2–4 short option labels
+    :return: Confirmation that options were displayed
+    """
+    try:
+        labels = [str(o).strip() for o in (options or []) if str(o).strip()]
+        if len(labels) < 2:
+            return json.dumps({'error': 'Provide at least 2 options.'})
+        if len(labels) > 4:
+            labels = labels[:4]
+
+        payload = {'question': question, 'options': labels}
+
+        if __event_emitter__:
+            await __event_emitter__({'type': 'chat:message:options', 'data': payload})
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'message': 'Options displayed. Wait for the user to select one.',
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'present_options error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def currency_convert(
+    amount: float,
+    from_currency: str,
+    to_currency: str,
+    __event_emitter__: callable = None,
+) -> str:
+    """
+    Convert an amount between currencies using live exchange rates.
+
+    :param amount: The amount to convert
+    :param from_currency: Source currency code (e.g. USD)
+    :param to_currency: Target currency code (e.g. EUR)
+    :return: JSON with conversion result and rate
+    """
+    try:
+        from_code = str(from_currency).strip().upper()
+        to_code = str(to_currency).strip().upper()
+        if not from_code or not to_code:
+            return json.dumps({'error': 'Both from_currency and to_currency are required.'})
+
+        payload = await _http_get_json(f'https://open.er-api.com/v6/latest/{from_code}')
+        rates = payload.get('rates') or {}
+        if to_code not in rates:
+            return json.dumps({'error': f'Unknown currency code: {to_code}'})
+
+        rate = float(rates[to_code])
+        inverse_rate = round(1 / rate, 6) if rate else None
+        result_amount = round(float(amount) * rate, 4)
+        currency_data = {
+            'from': from_code,
+            'to': to_code,
+            'amount': float(amount),
+            'result': result_amount,
+            'rate': rate,
+            'inverse_rate': round(inverse_rate, 6),
+            'updated': payload.get('time_last_update_utc'),
+        }
+
+        if __event_emitter__:
+            await __event_emitter__({'type': 'chat:message:currency', 'data': currency_data})
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'message': 'Currency card displayed to the user.',
+                'conversion': currency_data,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'currency_convert error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def _geocode_nominatim(query: str) -> dict | None:
+    payload = await _http_get_json(
+        'https://nominatim.openstreetmap.org/search',
+        headers={'User-Agent': 'Open WebUI (https://github.com/open-webui/open-webui)'},
+        params={'q': query, 'format': 'json', 'limit': 1},
+    )
+    if isinstance(payload, list) and payload:
+        item = payload[0]
+        return {
+            'lat': float(item['lat']),
+            'lng': float(item['lon']),
+            'label': item.get('display_name', query),
+        }
+    return None
+
+
+async def map_display(
+    location: str | dict,
+    zoom: Optional[int] = 13,
+    markers: Optional[list[dict]] = None,
+    __event_emitter__: callable = None,
+) -> str:
+    """
+    Display an interactive map with one or more location markers.
+
+    :param location: Place name or dict with lat/lng keys
+    :param zoom: Map zoom level (default 13)
+    :param markers: Optional list of {lat, lng, label} marker dicts
+    :return: Confirmation that the map was displayed
+    """
+    try:
+        lat = None
+        lng = None
+        label = None
+
+        if isinstance(location, dict):
+            lat = location.get('lat', location.get('latitude'))
+            lng = location.get('lng', location.get('longitude'))
+            label = location.get('label') or location.get('name')
+        else:
+            geo = await _geocode_nominatim(str(location).strip())
+            if not geo:
+                return json.dumps({'error': f'Could not find location: {location}'})
+            lat = geo['lat']
+            lng = geo['lng']
+            label = geo['label']
+
+        if lat is None or lng is None:
+            return json.dumps({'error': 'Valid location with lat/lng is required.'})
+
+        marker_list = []
+        for marker in markers or []:
+            if isinstance(marker, dict):
+                m_lat = marker.get('lat', marker.get('latitude'))
+                m_lng = marker.get('lng', marker.get('longitude'))
+                if m_lat is not None and m_lng is not None:
+                    marker_list.append(
+                        {
+                            'lat': float(m_lat),
+                            'lng': float(m_lng),
+                            'label': marker.get('label') or marker.get('name') or '',
+                        }
+                    )
+
+        if not marker_list:
+            marker_list = [{'lat': float(lat), 'lng': float(lng), 'label': label or str(location)}]
+
+        map_data = {
+            'lat': float(lat),
+            'lng': float(lng),
+            'zoom': int(zoom or 13),
+            'label': label or str(location),
+            'markers': marker_list,
+        }
+
+        if __event_emitter__:
+            await __event_emitter__({'type': 'chat:message:map', 'data': map_data})
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'message': 'Map displayed to the user.',
+                'map': map_data,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'map_display error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def sports_scores(
+    team_name: str,
+    __event_emitter__: callable = None,
+) -> str:
+    """
+    Fetch recent results and upcoming fixtures for a sports team.
+
+    :param team_name: The team name to look up
+    :return: JSON summary of recent and upcoming matches
+    """
+    try:
+        search_payload = await _http_get_json(
+            'https://www.thesportsdb.com/api/v1/json/3/searchteams.php',
+            params={'t': team_name},
+        )
+        teams = search_payload.get('teams') or []
+        if not teams:
+            return json.dumps({'error': f'No team found matching: {team_name}'})
+
+        team = teams[0]
+        team_id = team.get('idTeam')
+        team_label = team.get('strTeam', team_name)
+        league = team.get('strLeague', '')
+
+        last_payload = await _http_get_json(
+            'https://www.thesportsdb.com/api/v1/json/3/eventslast.php',
+            params={'id': team_id},
+        )
+        next_payload = await _http_get_json(
+            'https://www.thesportsdb.com/api/v1/json/3/eventsnext.php',
+            params={'id': team_id},
+        )
+
+        def _format_event(event: dict, team_label: str) -> dict:
+            home = event.get('strHomeTeam', '')
+            away = event.get('strAwayTeam', '')
+            is_home = home.lower() == team_label.lower()
+            opponent = away if is_home else home
+            score = None
+            if event.get('intHomeScore') is not None and event.get('intAwayScore') is not None:
+                score = f"{event.get('intHomeScore')}-{event.get('intAwayScore')}"
+            return {
+                'opponent': opponent,
+                'home': home,
+                'away': away,
+                'score': score,
+                'date': event.get('dateEvent') or event.get('strTimestamp'),
+                'competition': event.get('strLeague') or league,
+                'venue': event.get('strVenue'),
+            }
+
+        recent = [_format_event(e, team_label) for e in (last_payload.get('results') or [])[:5]]
+        upcoming = [_format_event(e, team_label) for e in (next_payload.get('events') or [])[:5]]
+
+        sports_data = {
+            'team': team_label,
+            'league': league,
+            'badge': team.get('strBadge') or team.get('strTeamBadge'),
+            'recent': recent,
+            'upcoming': upcoming,
+        }
+
+        if __event_emitter__:
+            await __event_emitter__({'type': 'chat:message:sports', 'data': sports_data})
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'message': 'Sports scores card displayed to the user.',
+                'sports': sports_data,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'sports_scores error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def suggest_followups(
+    suggestions: list[str],
+    __event_emitter__: callable = None,
+) -> str:
+    """
+    Show 2–3 suggested follow-up prompts as tappable chips at the end of a response.
+
+    :param suggestions: List of 2–3 short follow-up prompt strings
+    :return: Confirmation that follow-up chips were displayed
+    """
+    try:
+        items = [str(s).strip() for s in (suggestions or []) if str(s).strip()]
+        if len(items) < 2:
+            return json.dumps({'error': 'Provide at least 2 follow-up suggestions.'})
+        if len(items) > 3:
+            items = items[:3]
+
+        if __event_emitter__:
+            await __event_emitter__(
+                {
+                    'type': 'chat:message:followups',
+                    'data': {'suggestions': items},
+                }
+            )
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'message': 'Follow-up chips displayed. Do not repeat them in prose.',
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'suggest_followups error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+# =============================================================================
+# ARTIFACT TOOLS (saved library)
+# =============================================================================
+
+
+def _parse_artifact_meta(meta: Optional[str]) -> dict:
+    if not meta:
+        return {}
+    try:
+        parsed = json.loads(meta)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+def _prepare_artifact_storage(content: str, artifact_type: str) -> tuple[str, str, Optional[str]]:
+    normalized = (artifact_type or 'iframe').lower().strip()
+    if normalized == 'react':
+        from open_webui.utils.react_artifact import build_react_html
+
+        meta = json.dumps(
+            {
+                'mime_type': 'application/vnd.ant.react',
+                'react_source': content,
+            },
+            ensure_ascii=False,
+        )
+        return 'iframe', build_react_html(content), meta
+    if normalized == 'svg':
+        return 'svg', content, None
+    return 'iframe', content, None
+
+
+def _editable_artifact_content(artifact) -> tuple[str, str]:
+    meta = _parse_artifact_meta(artifact.meta)
+    if meta.get('react_source'):
+        return 'react', meta['react_source']
+    if artifact.type == 'svg':
+        return 'svg', artifact.code
+    return 'iframe', artifact.code
+
+
+async def _artifacts_access_error(__request__: Request = None, __user__: dict = None) -> Optional[str]:
+    if __request__ is None:
+        return 'Request context not available'
+    if not __user__:
+        return 'User context not available'
+    if not await Config.get('artifacts.enable'):
+        return 'Artifacts feature is disabled'
+    if __user__.get('role') == 'admin':
+        return None
+    from open_webui.utils.access_control import has_permission
+
+    if not await has_permission(
+        __user__.get('id'),
+        'features.artifacts',
+        await Config.get('user.permissions'),
+    ):
+        return 'Access denied — artifacts permission required'
+    return None
+
+
+async def list_artifacts(
+    count: int = 50,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    List the user's saved artifacts from the artifact library.
+
+    :param count: Maximum number of artifacts to return (default: 50)
+    :return: JSON list with id, title, type, artifact_type, updated_at
+    """
+    if err := await _artifacts_access_error(__request__, __user__):
+        return json.dumps({'error': err})
+
+    try:
+        from open_webui.models.artifacts import Artifacts
+
+        user_id = __user__.get('id')
+        count = max(1, min(int(count or 50), 50))
+        artifacts = await Artifacts.get_artifacts_by_user_id(user_id, skip=0, limit=count)
+
+        results = []
+        for artifact in artifacts:
+            artifact_type, _ = _editable_artifact_content(artifact)
+            results.append(
+                {
+                    'id': artifact.id,
+                    'title': artifact.title,
+                    'type': artifact.type,
+                    'artifact_type': artifact_type,
+                    'chat_id': artifact.chat_id,
+                    'updated_at': artifact.updated_at,
+                }
+            )
+
+        return json.dumps(results, ensure_ascii=False)
+    except Exception as e:
+        log.exception(f'list_artifacts error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def read_artifact(
+    artifact_id: str,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Read the full editable source of a saved artifact by ID.
+
+    :param artifact_id: The artifact ID from list_artifacts
+    :return: JSON with id, title, type, artifact_type, and content (editable source)
+    """
+    if err := await _artifacts_access_error(__request__, __user__):
+        return json.dumps({'error': err})
+
+    try:
+        from open_webui.models.artifacts import Artifacts
+
+        artifact = await Artifacts.get_artifact_by_id(artifact_id)
+        if not artifact:
+            return json.dumps({'error': 'Artifact not found'})
+
+        user_id = __user__.get('id')
+        if artifact.user_id != user_id and __user__.get('role') != 'admin':
+            return json.dumps({'error': 'Access denied'})
+
+        artifact_type, content = _editable_artifact_content(artifact)
+
+        return json.dumps(
+            {
+                'id': artifact.id,
+                'title': artifact.title,
+                'type': artifact.type,
+                'artifact_type': artifact_type,
+                'content': content,
+                'chat_id': artifact.chat_id,
+                'updated_at': artifact.updated_at,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'read_artifact error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def save_artifact(
+    title: str,
+    content: str,
+    artifact_type: str = 'iframe',
+    __request__: Request = None,
+    __user__: dict = None,
+    __chat_id__: str = None,
+) -> str:
+    """
+    Save an artifact to the user's library. Only call when the user explicitly asks to save or publish.
+
+    :param title: Human-readable title for the artifact
+    :param content: Full source — HTML page, SVG, or React JSX (with export default)
+    :param artifact_type: "iframe" for HTML, "svg" for SVG, "react" for React/JSX components
+    :return: JSON with id, title, and status
+    """
+    if err := await _artifacts_access_error(__request__, __user__):
+        return json.dumps({'error': err})
+
+    if not content or not str(content).strip():
+        return json.dumps({'error': 'Content is required'})
+
+    try:
+        from open_webui.models.artifacts import ArtifactPublishForm, Artifacts
+
+        db_type, code, meta = _prepare_artifact_storage(str(content), artifact_type)
+        form = ArtifactPublishForm(
+            chat_id=__chat_id__,
+            title=(title or 'Untitled Artifact').strip(),
+            type=db_type,
+            code=code,
+            meta=meta,
+        )
+        artifact = await Artifacts.publish_artifact(__user__.get('id'), form)
+        if not artifact:
+            return json.dumps({'error': 'Failed to save artifact'})
+
+        saved_type, _ = _editable_artifact_content(artifact)
+        return json.dumps(
+            {
+                'status': 'success',
+                'id': artifact.id,
+                'title': artifact.title,
+                'type': artifact.type,
+                'artifact_type': saved_type,
+                'message': 'Artifact saved to library.',
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'save_artifact error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def update_artifact(
+    artifact_id: str,
+    content: str,
+    title: Optional[str] = None,
+    artifact_type: Optional[str] = None,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Replace a saved artifact's full source. Call read_artifact first. Also output an <antArtifact> tag after updating.
+
+    :param artifact_id: The artifact ID to update
+    :param content: Complete replacement source (not a diff)
+    :param title: Optional new title
+    :param artifact_type: Optional type override: iframe, svg, or react
+    :return: JSON with updated artifact metadata
+    """
+    if err := await _artifacts_access_error(__request__, __user__):
+        return json.dumps({'error': err})
+
+    if not content or not str(content).strip():
+        return json.dumps({'error': 'Content is required'})
+
+    try:
+        from open_webui.models.artifacts import ArtifactUpdateForm, Artifacts
+
+        existing = await Artifacts.get_artifact_by_id(artifact_id)
+        if not existing:
+            return json.dumps({'error': 'Artifact not found'})
+
+        user_id = __user__.get('id')
+        if existing.user_id != user_id and __user__.get('role') != 'admin':
+            return json.dumps({'error': 'Access denied'})
+
+        resolved_type = artifact_type
+        if not resolved_type:
+            resolved_type, _ = _editable_artifact_content(existing)
+
+        db_type, code, meta = _prepare_artifact_storage(str(content), resolved_type)
+        form = ArtifactUpdateForm(
+            title=title.strip() if title else None,
+            code=code,
+            meta=meta,
+        )
+        updated = await Artifacts.update_artifact_by_id(artifact_id, form)
+        if not updated:
+            return json.dumps({'error': 'Failed to update artifact'})
+
+        saved_type, editable = _editable_artifact_content(updated)
+        return json.dumps(
+            {
+                'status': 'success',
+                'id': updated.id,
+                'title': updated.title,
+                'type': updated.type,
+                'artifact_type': saved_type,
+                'content': editable,
+                'message': 'Artifact updated. Output an <antArtifact> tag to refresh the panel.',
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'update_artifact error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def delete_artifact(
+    artifact_id: str,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Delete (unpublish) a saved artifact from the user's library.
+
+    :param artifact_id: The artifact ID to delete
+    :return: JSON with deletion status
+    """
+    if err := await _artifacts_access_error(__request__, __user__):
+        return json.dumps({'error': err})
+
+    try:
+        from open_webui.models.artifacts import Artifacts
+
+        existing = await Artifacts.get_artifact_by_id(artifact_id)
+        if not existing:
+            return json.dumps({'error': 'Artifact not found'})
+
+        user_id = __user__.get('id')
+        if existing.user_id != user_id and __user__.get('role') != 'admin':
+            return json.dumps({'error': 'Access denied'})
+
+        await Artifacts.delete_artifact_by_id(artifact_id)
+        return json.dumps(
+            {'status': 'success', 'id': artifact_id, 'deleted': True},
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'delete_artifact error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+# =============================================================================
+# TOOL DISCOVERY
+# =============================================================================
+
+
+async def tool_search(
+    query: str,
+    __metadata__: dict = None,
+) -> str:
+    """
+    Search the tool catalog and load matching tools into context.
+    Use when you need a capability that is not among your currently loaded tools.
+
+    :param query: Natural language or keyword query describing the needed capability
+    :return: JSON with tool_reference matches and confirmation of loaded tools
+    """
+    try:
+        if not query or not str(query).strip():
+            return json.dumps({'error': 'A search query is required.'})
+
+        from open_webui.utils.deferred_tools import run_tool_search
+
+        result = run_tool_search(__metadata__ or {}, str(query).strip())
+        return json.dumps(result, ensure_ascii=False)
+    except Exception as e:
+        log.exception(f'tool_search error: {e}')
+        return json.dumps({'error': str(e)})

@@ -145,6 +145,7 @@ from open_webui.routers import (
     chats,
     configs,
     evaluations,
+    artifacts,
     files,
     folders,
     functions,
@@ -748,6 +749,7 @@ app.include_router(users.router, prefix='/api/v1/users', tags=['users'])
 app.include_router(channels.router, prefix='/api/v1/channels', tags=['channels'])
 app.include_router(chats.router, prefix='/api/v1/chats', tags=['chats'])
 app.include_router(notes.router, prefix='/api/v1/notes', tags=['notes'])
+app.include_router(artifacts.router, prefix='/api/v1/artifacts', tags=['artifacts'])
 
 
 app.include_router(models.router, prefix='/api/v1/models', tags=['models'])
@@ -1706,6 +1708,14 @@ async def generate_messages(
     # Convert Anthropic payload to OpenAI format
     requested_model = form_data.get('model', '')
 
+    incoming_tools = form_data.get('tools') or []
+    if any(isinstance(tool, dict) and tool.get('defer_loading') for tool in incoming_tools):
+        request.state.metadata = {
+            **(getattr(request.state, 'metadata', None) or {}),
+            'deferred_loading': True,
+            'deferred_loading_mode': 'anthropic',
+        }
+
     openai_payload = convert_anthropic_to_openai_payload(form_data)
 
     # Route through the existing chat_completion handler
@@ -1865,6 +1875,7 @@ async def get_app_config(request: Request):
         'calendar.enable',
         'automations.enable',
         'notes.enable',
+        'artifacts.enable',
         'web.search.enable',
         'web.search.confirmation.enable',
         'web.search.confirmation.content',
@@ -1933,6 +1944,7 @@ async def get_app_config(request: Request):
                     'enable_calendar': config.get('calendar.enable'),
                     'enable_automations': config.get('automations.enable'),
                     'enable_notes': config.get('notes.enable'),
+                    'enable_artifacts': config.get('artifacts.enable'),
                     'enable_web_search': config.get('web.search.enable'),
                     'enable_web_search_confirmation': config.get('web.search.confirmation.enable'),
                     'web_search_confirmation_content': config.get('web.search.confirmation.content'),

@@ -41,6 +41,13 @@ export type OutputDetailToken = {
 	};
 };
 
+import {
+	mergeAssistantArtifactText,
+	parseAntArtifacts,
+	serializeAntArtifact
+} from '$lib/utils/ant-artifact';
+import { removeAllDetails } from '$lib/utils';
+
 export type OutputDisplayItem =
 	| {
 			type: 'message';
@@ -249,7 +256,48 @@ function buildDetailToken(
 	return null;
 }
 
-export function buildOutputDisplayItems(output: OutputItem[] = []): OutputDisplayItem[] {
+/**
+ * Text from structured output message items, merged with any <antArtifact>
+ * blocks that only exist on message.content.
+ */
+export function getAssistantText(
+	output?: OutputItem[] | null,
+	content?: string | null
+): string {
+	const outputText = getOutputText(output);
+	const cleanedContent = removeAllDetails(content ?? '');
+	return mergeAssistantArtifactText(outputText, cleanedContent);
+}
+
+/**
+ * <antArtifact> blocks present on message.content but absent from output
+ * message items. Rendered after structured output blocks.
+ */
+export function getOrphanArtifactContent(
+	output?: OutputItem[] | null,
+	content?: string | null
+): string {
+	if (!output?.length) return '';
+
+	const outputText = getOutputText(output);
+	const cleanedContent = removeAllDetails(content ?? '').trim();
+	if (!cleanedContent) return '';
+
+	const missing = parseAntArtifacts(cleanedContent).filter((artifact) => {
+		if (outputText.includes(`identifier="${artifact.identifier}"`)) {
+			return false;
+		}
+		const snippet = artifact.content.slice(0, 120);
+		return !(snippet && outputText.includes(snippet));
+	});
+
+	return missing.map(serializeAntArtifact).join('\n\n');
+}
+
+export function buildOutputDisplayItems(
+	output: OutputItem[] = [],
+	content?: string | null
+): OutputDisplayItem[] {
 	const displayItems: OutputDisplayItem[] = [];
 	const currentDetailTokens: OutputDetailToken[] = [];
 	const toolOutputByCallId: Record<string, OutputItem> = {};
@@ -315,6 +363,16 @@ export function buildOutputDisplayItems(output: OutputItem[] = []): OutputDispla
 	});
 
 	flushDetails();
+
+	const orphanArtifacts = getOrphanArtifactContent(output, content);
+	if (orphanArtifacts.trim()) {
+		displayItems.push({
+			type: 'message',
+			id: 'orphan-artifacts',
+			text: orphanArtifacts
+		});
+	}
+
 	return displayItems;
 }
 

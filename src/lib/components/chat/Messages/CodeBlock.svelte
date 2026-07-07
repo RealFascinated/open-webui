@@ -2,7 +2,7 @@
 	import hljs from 'highlight.js';
 	import { toast } from 'svelte-sonner';
 	import { getContext, onMount, tick, onDestroy } from 'svelte';
-	import { config, pyodideWorker as pyodideWorkerStore } from '$lib/stores';
+	import { config, mobile, settings, pyodideWorker as pyodideWorkerStore } from '$lib/stores';
 
 	import { createPyodideWorker } from '$lib/pyodide/createPyodideWorker';
 	import { executeCode } from '$lib/apis/utils';
@@ -75,6 +75,25 @@
 
 	let copied = false;
 	let saved = false;
+
+	// ── Inline artifact preview ───────────────────────────────────────
+	// When lang is html/svg and detectArtifacts is on, we replace the raw
+	// code block with a clickable reference card (matching Claude's UX).
+	// The code view is accessed via the Preview/Code toggle in the side panel.
+
+	$: isArtifactLang =
+		lang === 'html' || lang === 'svg' || (lang === 'xml' && code.includes('<svg'));
+
+	$: showInlinePreview = isArtifactLang;
+
+	/** Extract <title> from HTML, fall back to 'HTML Artifact' / 'SVG Artifact'. */
+	const getArtifactTitle = (src: string, language: string): string => {
+		const m = src.match(/<title[^>]*>([^<]+)<\/title>/i);
+		if (m) return m[1].trim();
+		return language === 'svg' ? 'SVG' : 'HTML';
+	};
+
+	$: artifactTitle = getArtifactTitle(code, lang);
 
 	const collapseCodeBlock = () => {
 		collapsed = !collapsed;
@@ -434,7 +453,7 @@
 
 <div>
 	<div
-		class="relative {className} flex flex-col rounded-2xl border border-gray-100/30 dark:border-gray-850/30 my-0.5"
+		class="relative {className} flex flex-col {showInlinePreview ? '' : 'rounded-2xl border border-gray-100/30 dark:border-gray-850/30 my-0.5'}"
 		dir="ltr"
 	>
 		{#if ['mermaid', 'vega', 'vega-lite'].includes(lang)}
@@ -456,17 +475,46 @@
 					<pre>{code}</pre>
 				</div>
 			{/if}
-		{:else}
-			<div
-				class="sticky {stickyButtonsClassName} left-0 right-0 py-1.5 px-3.5 gap-2 flex items-center justify-end w-full z-10 text-xs text-black dark:text-white bg-white dark:bg-black rounded-t-2xl"
-			>
-				<div class="flex-1 truncate">
-					<Tooltip content={lang} placement="top-start">
-						<span class=" truncate text-ellipsis">
-							{lang}
-						</span>
-					</Tooltip>
+	{:else if showInlinePreview}
+		<!-- ── Inline artifact reference card (Claude-style) ─────────── -->
+		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+		<div
+			class="group w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850 transition-colors cursor-pointer my-1"
+			on:click={() => onPreview(code)}
+		>
+			<!-- Icon -->
+			<div class="shrink-0 flex items-center justify-center size-8 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
+				<Cube className="size-4" />
+			</div>
+
+			<!-- Title + type -->
+			<div class="flex-1 min-w-0">
+				<div class="text-sm font-medium text-gray-800 dark:text-gray-100 truncate leading-snug">
+					{artifactTitle}
 				</div>
+				<div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-none">
+					{lang === 'svg' ? 'SVG image' : 'HTML page'}
+				</div>
+			</div>
+
+			<!-- Chevron -->
+			<div class="shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors">
+				<svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+				</svg>
+			</div>
+		</div>
+	{:else}
+		<div
+			class="sticky {stickyButtonsClassName} left-0 right-0 py-1.5 px-3.5 gap-2 flex items-center justify-end w-full z-10 text-xs text-black dark:text-white bg-white dark:bg-black rounded-t-2xl"
+		>
+			<div class="flex-1 truncate">
+				<Tooltip content={lang} placement="top-start">
+					<span class=" truncate text-ellipsis">
+						{lang}
+					</span>
+				</Tooltip>
+			</div>
 
 				<div class="flex items-center gap-0.5 shrink-0">
 					<button

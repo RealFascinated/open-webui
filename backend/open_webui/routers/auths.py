@@ -107,6 +107,7 @@ ADMIN_CONFIG_KEYS = {
     'ENABLE_MEMORIES': 'memories.enable',
     'ENABLE_MEMORY_SYSTEM_CONTEXT': 'memories.system_context.enable',
     'ENABLE_NOTES': 'notes.enable',
+    'ENABLE_ARTIFACTS': 'artifacts.enable',
     'ENABLE_USER_WEBHOOKS': 'ui.enable_user_webhooks',
     'ENABLE_USER_STATUS': 'users.enable_status',
     'PENDING_USER_OVERLAY_TITLE': 'ui.pending_user_overlay_title',

@@ -2028,6 +2028,15 @@ export const renderVegaVisualization = async (spec: string, lang: string = '', i
 	return svg;
 };
 
+export type { AntArtifact } from './ant-artifact';
+export {
+	parseAntArtifacts,
+	serializeAntArtifact,
+	hasCompleteAntArtifact,
+	mergeAssistantArtifactText,
+	mapMimeToArtifactType
+} from './ant-artifact';
+
 export const getCodeBlockContents = (content: string): object => {
 	// Strip thinking/reasoning and other detail blocks before extracting code
 	// to prevent code inside <details type="reasoning"> from being treated as artifacts
