@@ -1,4 +1,5 @@
 import json
+import logging
 from numbers import Number
 from uuid import uuid4
 
@@ -7,9 +8,37 @@ from open_webui.utils.misc import (
     openai_chat_completion_message_template,
 )
 
+log = logging.getLogger(__name__)
+
 
 # An honest ledger is worth more than a flattering one.
 # Let every cost here be counted true.
+def augment_provider_usage(data: dict, raw_usage: dict | None = None) -> dict:
+    """Merge provider-specific usage metadata from a streaming chunk."""
+    result = dict(raw_usage or {})
+    result.update(data.get('timings', {}) or {})
+
+    generation_settings = data.get('generation_settings')
+    if isinstance(generation_settings, dict):
+        n_ctx = generation_settings.get('n_ctx')
+        if isinstance(n_ctx, (int, float)) and n_ctx > 0:
+            result['n_ctx'] = int(n_ctx)
+        log.debug(
+            'augment_provider_usage generation_settings keys=%s n_ctx=%s',
+            list(generation_settings.keys()),
+            generation_settings.get('n_ctx'),
+        )
+    else:
+        for key in ('n_ctx', 'num_ctx', 'context_length'):
+            value = data.get(key)
+            if isinstance(value, (int, float)) and value > 0:
+                result[key] = int(value)
+                log.debug('augment_provider_usage root %s=%s', key, value)
+                break
+
+    return result
+
+
 def normalize_usage(usage: dict) -> dict:
     """
     Normalize usage statistics to standard format.

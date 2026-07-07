@@ -196,6 +196,8 @@ async def get_all_models(request, refresh: bool = False, user: UserModel = None)
                 **({'pipe': pipe} if pipe is not None else {}),
                 **({'provider': base_model.get('provider')} if base_model and base_model.get('provider') else {}),
                 **({'loaded': base_model.get('loaded')} if base_model and base_model.get('loaded') is not None else {}),
+                **({'urlIdx': base_model.get('urlIdx')} if base_model and base_model.get('urlIdx') is not None else {}),
+                **({'openai': base_model.get('openai')} if base_model and base_model.get('openai') else {}),
             }
 
             info = custom_model.model_dump()

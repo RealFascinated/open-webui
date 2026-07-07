@@ -41,6 +41,7 @@
 		skills,
 		toolServers,
 		terminalServers,
+		terminalServersLoaded,
 		functions,
 		selectedFolder,
 		pinnedChats,
@@ -68,6 +69,7 @@
 		displayFileHandler
 	} from '$lib/utils';
 	import { AudioQueue } from '$lib/utils/audio';
+	import { resolveThinkForRequest } from '$lib/utils/thinking';
 	import { getOutputText } from './Messages/structuredOutput';
 
 	import {
@@ -503,7 +505,7 @@
 				// Set Default Terminal — only if the referenced terminal actually exists
 				if (model?.info?.meta?.terminalId) {
 					const tid = model.info.meta.terminalId;
-					if (isTerminalAvailable(tid)) {
+					if (!$terminalServersLoaded || isTerminalAvailable(tid)) {
 						selectedTerminalId.set(tid);
 					}
 				}
@@ -933,18 +935,19 @@
 
 		// Restore direct terminal enabled states based on persisted selectedTerminalId
 		if ($settings?.terminalServers?.length) {
-			settings.set({
-				...$settings,
-				terminalServers: ($settings.terminalServers ?? []).map((s) => ({
-					...s,
-					enabled: $selectedTerminalId !== null && s.url === $selectedTerminalId
-				}))
-			});
-		}
+			const enabledDirectTerminal = ($settings.terminalServers ?? []).find((s) => s.enabled);
 
-		// Clear stale selectedTerminalId if the referenced terminal no longer exists
-		if ($selectedTerminalId && !isTerminalAvailable($selectedTerminalId)) {
-			selectedTerminalId.set(null);
+			if (!$selectedTerminalId && enabledDirectTerminal?.url) {
+				selectedTerminalId.set(enabledDirectTerminal.url);
+			} else if ($selectedTerminalId) {
+				settings.set({
+					...$settings,
+					terminalServers: ($settings.terminalServers ?? []).map((s) => ({
+						...s,
+						enabled: s.url === $selectedTerminalId
+					}))
+				});
+			}
 		}
 
 		const pageSubscribe = page.subscribe(async (p) => {
@@ -1050,6 +1053,14 @@
 			}
 		};
 	});
+
+	$: if (
+		$terminalServersLoaded &&
+		$selectedTerminalId &&
+		!isTerminalAvailable($selectedTerminalId)
+	) {
+		selectedTerminalId.set(null);
+	}
 
 	// File upload functions
 
@@ -2017,6 +2028,11 @@
 
 		if (done) {
 			message.done = true;
+
+			if (message.id === history.currentId) {
+				taskIds = null;
+			}
+
 			const visibleContent =
 				getOutputText(message?.output) || removeAllDetails(message?.content ?? '');
 
@@ -2545,6 +2561,8 @@
 		// Only send terminal_id if the model has terminal capability enabled
 		const terminalEnabled = model.info?.meta?.capabilities?.terminal ?? true;
 
+		const { think: _chatThink, ...chatParams } = params ?? {};
+
 		const res = await generateOpenAIChatCompletion(
 			localStorage.token,
 			{
@@ -2553,7 +2571,8 @@
 				...(messages.length > 0 ? { messages } : {}),
 				params: {
 					...$settings?.params,
-					...params,
+					...chatParams,
+					think: resolveThinkForRequest($settings?.params),
 					stop: getStopTokens()
 				},
 
@@ -2719,7 +2738,10 @@
 	};
 
 	const stopResponse = async (processQueue = true) => {
-		if (taskIds) {
+		const currentMessage = history.currentId ? history.messages[history.currentId] : null;
+		const responseInProgress = currentMessage?.role === 'assistant' && currentMessage?.done != true;
+
+		if (taskIds && responseInProgress) {
 			if ($chatId) {
 				await stopTasksByChatId(localStorage.token, $chatId).catch((error) => {
 					toast.error(`${error}`);
@@ -2749,6 +2771,8 @@
 			if (autoScroll) {
 				scrollToBottom();
 			}
+		} else if (taskIds) {
+			taskIds = null;
 		}
 
 		if (generating) {

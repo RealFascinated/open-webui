@@ -112,7 +112,7 @@ from open_webui.utils.misc import (
 )
 from open_webui.utils.payload import apply_system_prompt_to_body, resolve_system_prompt
 from open_webui.utils.plugin import load_function_module_by_id
-from open_webui.utils.response import merge_usage, normalize_usage
+from open_webui.utils.response import augment_provider_usage, merge_usage, normalize_usage
 from open_webui.utils.sanitize import sanitize_code
 from open_webui.utils.task import (
     get_task_model_id,
@@ -1901,9 +1901,32 @@ def apply_params_to_form_data(form_data, model):
         params = deep_update(params, custom_params)
 
     if model.get('owned_by') == 'ollama':
-        # Ollama specific parameters
-        form_data['options'] = params
+        # Ollama root-level parameters must not be nested under options.
+        options = {}
+        for key, value in params.items():
+            if key == 'think':
+                if value is not None or value is False:
+                    form_data['think'] = value
+            elif key in ('format', 'keep_alive'):
+                if value is not None:
+                    form_data[key] = value
+            elif value is not None:
+                options[key] = value
+        form_data['options'] = options
     else:
+        think = params.pop('think', '__missing__')
+        if think != '__missing__':
+            if think is False:
+                chat_template_kwargs = dict(form_data.get('chat_template_kwargs') or {})
+                chat_template_kwargs['enable_thinking'] = False
+                form_data['chat_template_kwargs'] = chat_template_kwargs
+            elif think is True or isinstance(think, str):
+                chat_template_kwargs = dict(form_data.get('chat_template_kwargs') or {})
+                chat_template_kwargs['enable_thinking'] = True
+                form_data['chat_template_kwargs'] = chat_template_kwargs
+                if isinstance(think, str):
+                    form_data['reasoning_effort'] = think
+
         if isinstance(params, dict):
             for key, value in params.items():
                 if value is not None:
@@ -2197,6 +2220,12 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             model = selected_model
             form_data['model'] = selected_model_id
             metadata['selected_model_id'] = selected_model_id
+
+    # Capture the model's default system prompt before apply_params_to_form_data
+    # pops 'params'. The provider layer applies it fresh from model_info.params,
+    # but the native tool-call loop runs with bypass_system_prompt=True and relies
+    # on metadata['system_prompt'] (built below) to carry it forward instead.
+    model_system_prompt = (form_data.get('params') or {}).get('system')
 
     form_data = apply_params_to_form_data(form_data, model)
     log.debug(f'form_data: {form_data}')
@@ -2792,13 +2821,17 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # than a snapshot that already has the RAG template baked in.
     system_message = get_system_message(form_data['messages'])
     system_content = get_content_from_message(system_message) if system_message else ''
-    model_system_prompt = await resolve_system_prompt(
-        (form_data.get('params') or {}).get('system'),
+    resolved_model_system_prompt = await resolve_system_prompt(
+        model_system_prompt,
         metadata,
         user,
     )
-    if model_system_prompt:
-        system_content = f'{model_system_prompt}\n{system_content}' if system_content else model_system_prompt
+    if resolved_model_system_prompt:
+        system_content = (
+            f'{resolved_model_system_prompt}\n{system_content}'
+            if system_content
+            else resolved_model_system_prompt
+        )
     metadata['system_prompt'] = system_content or None
     metadata['user_prompt'] = get_last_user_message(form_data['messages'])
     metadata['sources'] = sources[:] if sources else []
@@ -2956,8 +2989,7 @@ def update_assistant_message_from_stream(assistant_message, raw):
                 assistant_message['usage'] = merge_usage(assistant_message.get('usage'), meta['usage'])
             continue
 
-        raw_usage = data.get('usage', {}) or {}
-        raw_usage.update(data.get('timings', {}))
+        raw_usage = augment_provider_usage(data, data.get('usage', {}) or {})
         if raw_usage:
             assistant_message['usage'] = merge_usage(assistant_message.get('usage'), raw_usage)
 
@@ -4148,8 +4180,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     choices = data.get('choices', [])
 
                                     # Normalize usage data to standard format
-                                    raw_usage = data.get('usage', {}) or {}
-                                    raw_usage.update(data.get('timings', {}))  # llama.cpp
+                                    raw_usage = augment_provider_usage(data, data.get('usage', {}) or {})
                                     if raw_usage:
                                         usage = merge_usage(usage, raw_usage)
                                         await event_emitter(

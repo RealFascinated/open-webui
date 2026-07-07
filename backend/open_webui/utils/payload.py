@@ -315,31 +315,41 @@ def convert_payload_openai_to_ollama(openai_payload: dict) -> dict:
         ollama_payload['num_predict'] = openai_payload['max_tokens']
         del openai_payload['max_tokens']
 
+    def parse_json(value: str) -> dict:
+        """
+        Parses a JSON string into a dictionary, handling potential JSONDecodeError.
+        """
+        try:
+            return json.loads(value)
+        except Exception as e:
+            return value
+
+    ollama_root_params = {
+        'format': lambda x: parse_json(x),
+        'keep_alive': lambda x: parse_json(x),
+        'think': lambda x: x,
+    }
+
+    # Copy root-level Ollama parameters set by apply_params_to_form_data.
+    for key, cast in ollama_root_params.items():
+        if key not in openai_payload:
+            continue
+        value = openai_payload[key]
+        if value is not None or (key == 'think' and value is False):
+            ollama_payload[key] = cast(value)
+
     # If there are advanced parameters in the payload, format them in Ollama's options field
     if openai_payload.get('options'):
         ollama_payload['options'] = openai_payload['options']
         ollama_options = openai_payload['options']
 
-        def parse_json(value: str) -> dict:
-            """
-            Parses a JSON string into a dictionary, handling potential JSONDecodeError.
-            """
-            try:
-                return json.loads(value)
-            except Exception as e:
-                return value
-
-        ollama_root_params = {
-            'format': lambda x: parse_json(x),
-            'keep_alive': lambda x: parse_json(x),
-            'think': lambda x: x,
-        }
-
         # Ollama's options field can contain parameters that should be at the root level.
-        for key, value in ollama_root_params.items():
-            if (param := ollama_options.get(key, None)) is not None:
-                # Copy the parameter to new name then delete it, to prevent Ollama warning of invalid option provided
-                ollama_payload[key] = value(param)
+        for key, cast in ollama_root_params.items():
+            if key not in ollama_options:
+                continue
+            param = ollama_options[key]
+            if param is not None or (key == 'think' and param is False):
+                ollama_payload[key] = cast(param)
                 del ollama_options[key]
 
         # Re-Mapping OpenAI's `max_tokens` -> Ollama's `num_predict`

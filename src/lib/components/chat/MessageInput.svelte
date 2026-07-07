@@ -104,6 +104,9 @@
 	import Expand from '../icons/Expand.svelte';
 	import QueuedMessageItem from './MessageInput/QueuedMessageItem.svelte';
 	import TaskList from './Messages/ResponseMessage/TaskList.svelte';
+	import UsageMenu from './MessageInput/UsageMenu.svelte';
+	import ThinkingMenu from './MessageInput/ThinkingMenu.svelte';
+	import { getLatestConversationUsage, resolveUsageModel } from '$lib/utils/usage';
 
 	const i18n = getContext('i18n');
 
@@ -124,13 +127,23 @@
 	let selectedModelIds = [];
 	$: selectedModelIds = atSelectedModel !== undefined ? [atSelectedModel.id] : selectedModels;
 
+	$: currentModel = atSelectedModel ?? $models.find((model) => model.id === selectedModelIds[0]);
+	$: latestUsageInfo = getLatestConversationUsage(history?.messages);
+	$: conversationUsage = latestUsageInfo?.usage ?? null;
+	$: usageModel = resolveUsageModel(
+		(latestUsageInfo?.modelId
+			? $models.find((model) => model.id === latestUsageInfo.modelId)
+			: null) ?? currentModel,
+		$models
+	);
+
 	export let history;
 	export let taskIds = null;
 
+	$: currentMessage = history?.currentId ? history.messages[history.currentId] : null;
 	$: isActive =
-		(taskIds && taskIds.length > 0) ||
-		(history.currentId && history.messages[history.currentId]?.done != true) ||
-		generating;
+		generating ||
+		(currentMessage?.role === 'assistant' && currentMessage?.done != true);
 
 	export let prompt = '';
 	export let files = [];
@@ -2051,6 +2064,14 @@
 												($_user?.permissions?.features?.direct_tool_servers ?? true)}
 											{#if terminalCapableModels.length > 0 && (($terminalServers ?? []).some((t) => t.id) || (hasDirectToolServerAccess && (($terminalServers ?? []).some((t) => !t.id) || ($settings?.terminalServers ?? []).some((s) => s.url))))}
 												<TerminalMenu bind:show={showTerminalMenu} />
+											{/if}
+
+											{#if conversationUsage}
+												<UsageMenu usage={conversationUsage} model={usageModel} />
+											{/if}
+
+											{#if currentModel}
+												<ThinkingMenu />
 											{/if}
 
 											{#if $_user?.role === 'admin' || ($_user?.permissions?.chat?.stt ?? true)}

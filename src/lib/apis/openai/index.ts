@@ -288,3 +288,47 @@ export const synthesizeOpenAISpeech = async (
 
 	return res;
 };
+
+export const getConnectionContext = async (
+	token: string = '',
+	urlIdx: number,
+	options: { modelId?: string; llamacpp?: boolean } = {}
+) => {
+	let error = null;
+
+	const params = new URLSearchParams();
+	if (options.modelId) {
+		params.set('model_id', options.modelId);
+	}
+	if (options.llamacpp) {
+		params.set('llamacpp', 'true');
+	}
+
+	const res = await fetch(`${OPENAI_API_BASE_URL}/context/${urlIdx}?${params.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			if ('detail' in err) {
+				error = err.detail;
+			} else {
+				error = 'Server connection failed';
+			}
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res as { n_ctx?: number | null; context_length?: number | null; source?: string | null };
+};

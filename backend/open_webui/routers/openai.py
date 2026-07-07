@@ -708,6 +708,124 @@ async def get_models(request: Request, url_idx: int | None = None, user=Depends(
     return models
 
 
+def _normalize_llamacpp_base(url: str) -> str:
+    normalized = (url or '').strip().rstrip('/')
+    for suffix in ('/openai/v1', '/v1'):
+        if normalized.endswith(suffix):
+            normalized = normalized[: -len(suffix)]
+    return normalized.rstrip('/')
+
+
+def _n_ctx_from_props(data: dict | None) -> int | None:
+    if not isinstance(data, dict):
+        return None
+    n_ctx = data.get('n_ctx')
+    if isinstance(n_ctx, (int, float)) and n_ctx > 0:
+        return int(n_ctx)
+    gen = data.get('default_generation_settings')
+    if isinstance(gen, dict):
+        gen_n_ctx = gen.get('n_ctx')
+        if isinstance(gen_n_ctx, (int, float)) and gen_n_ctx > 0:
+            return int(gen_n_ctx)
+    return None
+
+
+def _context_from_model_entry(entry: dict | None) -> int | None:
+    if not isinstance(entry, dict):
+        return None
+    for key in ('context_length', 'max_context', 'max_model_len', 'num_ctx', 'n_ctx'):
+        value = entry.get(key)
+        if isinstance(value, (int, float)) and value > 0:
+            return int(value)
+    top_provider = entry.get('top_provider')
+    if isinstance(top_provider, dict):
+        value = top_provider.get('context_length')
+        if isinstance(value, (int, float)) and value > 0:
+            return int(value)
+    return None
+
+
+@router.get('/context/{url_idx}')
+async def get_connection_context(
+    request: Request,
+    url_idx: int,
+    model_id: str | None = None,
+    llamacpp: bool = False,
+    user=Depends(get_verified_user),
+):
+    if not await Config.get('openai.enable'):
+        raise HTTPException(status_code=503, detail='OpenAI API is disabled')
+
+    url, key, api_config = await get_openai_connection(url_idx)
+
+    if llamacpp:
+        props_url = f'{_normalize_llamacpp_base(url)}/props'
+        data = await send_get_request(request, props_url, key, user=user, config=api_config)
+        n_ctx = _n_ctx_from_props(data)
+        return {'n_ctx': n_ctx, 'source': 'props' if n_ctx else None}
+
+    if not model_id:
+        raise HTTPException(status_code=400, detail='model_id is required when llamacpp is false')
+
+    headers, cookies = await get_headers_and_cookies(request, url, key, api_config, user=user)
+    timeout = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST)
+    candidates = [model_id]
+    bare = model_id.split('/')[-1]
+    if bare and bare not in candidates:
+        candidates.append(bare)
+
+    async with aiohttp.ClientSession(trust_env=True, timeout=timeout) as session:
+        for mid in candidates:
+            model_url = f'{url.rstrip("/")}/models/{quote(mid, safe="")}'
+            try:
+                async with session.get(
+                    model_url,
+                    headers=headers,
+                    cookies=cookies,
+                    ssl=AIOHTTP_CLIENT_SESSION_SSL,
+                ) as response:
+                    if response.status != 200:
+                        continue
+                    data = await response.json()
+            except Exception:
+                continue
+
+            payload = data
+            if isinstance(data, dict):
+                nested = data.get('data')
+                if isinstance(nested, dict):
+                    payload = nested
+                elif isinstance(nested, list) and nested and isinstance(nested[0], dict):
+                    payload = nested[0]
+
+            context_length = _context_from_model_entry(payload if isinstance(payload, dict) else None)
+            if context_length is not None:
+                return {'context_length': context_length, 'source': 'models_api'}
+
+        try:
+            async with session.get(
+                f'{url.rstrip("/")}/models',
+                headers=headers,
+                cookies=cookies,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    rows = data.get('data') if isinstance(data, dict) else None
+                    if isinstance(rows, list):
+                        for row in rows:
+                            if not isinstance(row, dict):
+                                continue
+                            if row.get('id') in candidates:
+                                context_length = _context_from_model_entry(row)
+                                if context_length is not None:
+                                    return {'context_length': context_length, 'source': 'models_list'}
+        except Exception:
+            pass
+
+    return {'context_length': None, 'source': None}
+
+
 class ConnectionVerificationForm(BaseModel):
     url: str
     key: str
