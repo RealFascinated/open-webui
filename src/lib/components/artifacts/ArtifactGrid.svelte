@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { getContext, onMount } from 'svelte';
+	import type { Writable } from 'svelte/store';
+	import type { i18n as i18nType } from 'i18next';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 
@@ -13,7 +15,7 @@
 	import Cube from '$lib/components/icons/Cube.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 
-	const i18n = getContext('i18n');
+	const i18n = getContext<Writable<i18nType>>('i18n');
 
 	let artifacts: ArtifactItem[] = [];
 	let loaded = false;

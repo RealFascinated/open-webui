@@ -234,6 +234,16 @@ async def search_web(
 
     try:
         engine = await Config.get('web.search.engine')
+        if not engine:
+            return json.dumps(
+                {
+                    'error': (
+                        'Web search engine is not configured on this server '
+                        '(Admin → Settings → Web Search). Do not invent web-sourced facts.'
+                    )
+                }
+            )
+
         user = UserModel(**__user__) if __user__ else None
 
         configured = await Config.get('web.search.result_count')
@@ -245,13 +255,45 @@ async def search_web(
         # Limit results
         results = results[:count] if results else []
 
+        if not results:
+            extra = ''
+            if engine == 'searxng':
+                extra = (
+                    ' If using SearXNG, upstream engines may be rate-limited — check SearXNG logs '
+                    'or wait before retrying.'
+                )
+            return json.dumps(
+                {
+                    'error': (
+                        f'Web search returned no results for "{query}" (engine: {engine}).'
+                        f'{extra} '
+                        'Tell the user search failed or returned nothing. '
+                        'Do not invent facts or answer "what is X?" from memory — say you could not verify.'
+                    ),
+                    'query': query,
+                    'results': [],
+                },
+                ensure_ascii=False,
+            )
+
         return json.dumps(
             [{'title': r.title, 'link': r.link, 'snippet': r.snippet} for r in results],
             ensure_ascii=False,
         )
     except Exception as e:
         log.exception(f'search_web error: {e}')
-        return json.dumps({'error': str(e)})
+        err = str(e)
+        guidance = (
+            'Tell the user web search failed. Do not invent an answer or guess what the thing might be — '
+            'especially for "what is X?" questions.'
+        )
+        lowered = err.lower()
+        if '429' in lowered or 'too many' in lowered or 'rate' in lowered:
+            guidance = (
+                'Web search is temporarily rate-limited. Tell the user to try again later. '
+                'Do not answer from memory — say you could not look it up.'
+            )
+        return json.dumps({'error': f'{err}. {guidance}'}, ensure_ascii=False)
 
 
 async def fetch_url(

@@ -29,6 +29,8 @@ from open_webui.config import (
 from open_webui.constants import TASKS
 from open_webui.env import (
     BYPASS_MODEL_ACCESS_CONTROL,
+    CHAT_RESPONSE_IDLE_TIMEOUT,
+    CHAT_RESPONSE_MAX_EMPTY_RETRIES,
     CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS,
     CHAT_RESPONSE_STREAM_DELTA_CHUNK_SIZE,
     ENABLE_API_OUTLET_FILTERS,
@@ -75,6 +77,15 @@ from open_webui.socket.main import (
 from open_webui.utils.access_control import has_connection_access, has_permission
 from open_webui.utils.access_control.files import get_accessible_folder_files
 from open_webui.utils.chat import generate_chat_completion
+from open_webui.utils.chat_retry import (
+    StreamIdleTimeoutError,
+    aclose_streaming_response,
+    aiter_with_idle_timeout,
+    assistant_response_has_content,
+    emit_chat_retry_status,
+    get_retry_reason,
+    prepare_chat_retry,
+)
 from open_webui.utils.code_interpreter import execute_code_jupyter
 from open_webui.utils.context_compaction import compact_messages_for_request
 from open_webui.utils.files import (
@@ -4134,6 +4145,7 @@ async def streaming_chat_response_handler(response, ctx):
                     nonlocal output
                     nonlocal prior_output
                     nonlocal last_response_id
+                    nonlocal stream_timed_out
 
                     response_tool_calls = []
 
@@ -4176,7 +4188,25 @@ async def streaming_chat_response_handler(response, ctx):
                         if delta_count >= delta_chunk_size:
                             await flush_pending_delta_data(delta_chunk_size)
 
-                    async for line in response.body_iterator:
+                    line_source = aiter_with_idle_timeout(
+                        response.body_iterator,
+                        CHAT_RESPONSE_IDLE_TIMEOUT,
+                    )
+                    while True:
+                        try:
+                            line = await line_source.__anext__()
+                        except StopAsyncIteration:
+                            break
+                        except StreamIdleTimeoutError:
+                            stream_timed_out = True
+                            log.warning(
+                                'Chat stream idle timeout after %ss for chat %s',
+                                CHAT_RESPONSE_IDLE_TIMEOUT,
+                                metadata.get('chat_id'),
+                            )
+                            await aclose_streaming_response(response)
+                            break
+
                         line = line.decode('utf-8', 'replace') if isinstance(line, bytes) else line
                         data = line
 
@@ -4786,562 +4816,269 @@ async def streaming_chat_response_handler(response, ctx):
                         if responses_api_tool_calls:
                             tool_calls.append(_split_tool_calls(responses_api_tool_calls))
 
-                try:
-                    await stream_body_handler(response, form_data)
-                finally:
-                    if response.background:
-                        await response.background()
+                generation_response = response
+                stream_timed_out = False
 
-                tool_call_iterations = 0
-                tool_call_sources = []  # Track citation sources from tool results
-                all_tool_call_sources = []  # Accumulated sources across all iterations
-                user_message = get_last_user_message(form_data['messages'])
-
-                # Check if citations are enabled for this model
-                citations_enabled = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get(
-                    'citations', True
-                )
-
-                # Use the pre-RAG system content captured before the
-                # initial file-source injection in process_chat_payload.
-                # This ensures restore truly undoes the RAG template.
-                original_system_content = metadata.get('system_prompt')
-                if original_system_content is None:
-                    original_system_message = get_system_message(form_data['messages'])
-                    original_system_content = (
-                        get_content_from_message(original_system_message) if original_system_message else None
-                    )
-
-                while tool_calls and (
-                    CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS is None
-                    or tool_call_iterations < CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS
-                ):
-                    _raise_if_cancelled()
-                    tool_call_iterations += 1
-
-                    response_tool_calls = tool_calls.pop(0)
-
-                    # Append function_call items for each tool call
-                    # (Responses API already has them from streaming, so skip duplicates)
-                    existing_call_ids = {item.get('call_id') for item in output if item.get('type') == 'function_call'}
-                    for tc in response_tool_calls:
-                        call_id = tc.get('id', '')
-                        if call_id not in existing_call_ids:
-                            func = tc.get('function', {})
-                            output.append(
-                                {
-                                    'type': 'function_call',
-                                    'id': call_id or output_id('fc'),
-                                    'call_id': call_id,
-                                    'name': func.get('name', ''),
-                                    'arguments': func.get('arguments', '{}'),
-                                    'status': 'in_progress',
-                                }
-                            )
-
-                    await event_emitter(
-                        {
-                            'type': 'chat:completion',
-                            'data': {
-                                'output': full_output(),
-                            },
-                        }
-                    )
-
-                    tools = metadata.get('tools', {})
-
-                    results = []
-
-                    for tool_call in response_tool_calls:
+                for attempt in range(CHAT_RESPONSE_MAX_EMPTY_RETRIES + 1):
+                    if attempt > 0:
                         _raise_if_cancelled()
-                        tool_call_id = tool_call.get('id', '')
-                        tool_function_name = tool_call.get('function', {}).get('name', '')
-                        tool_args = tool_call.get('function', {}).get('arguments', '{}')
-
-                        tool_function_params = {}
-                        if tool_args and tool_args.strip():
-                            try:
-                                # json.loads cannot be used because some models do not produce valid JSON
-                                tool_function_params = ast.literal_eval(tool_args)
-                            except Exception as e:
-                                log.debug(e)
-                                # Fallback to JSON parsing
-                                try:
-                                    tool_function_params = json.loads(tool_args)
-                                except Exception as e:
-                                    log.error(f'Error parsing tool call arguments: {tool_args}')
-                                    results.append(
-                                        {
-                                            'tool_call_id': tool_call_id,
-                                            'content': f'Error: Tool call arguments could not be parsed. The model generated malformed or incomplete JSON for `{tool_function_name}`. Please try again.',
-                                        }
-                                    )
-                                    continue
-
-                        # Ensure arguments are valid JSON for downstream LLM integrations
-                        log.debug(f'Parsed args from {tool_args} to {tool_function_params}')
-                        tool_call.setdefault('function', {})['arguments'] = json.dumps(tool_function_params)
-
-                        tool_result = None
-                        tool = None
-                        tool_type = None
-                        direct_tool = False
-
-                        if tool_function_name in tools:
-                            tool = tools[tool_function_name]
-                            spec = tool.get('spec', {})
-
-                            tool_type = tool.get('type', '')
-                            direct_tool = tool.get('direct', False)
-
-                            try:
-                                allowed_params = spec.get('parameters', {}).get('properties', {}).keys()
-
-                                tool_function_params = {
-                                    k: v for k, v in tool_function_params.items() if k in allowed_params
-                                }
-
-                                if direct_tool:
-                                    tool_result = await event_caller(
-                                        {
-                                            'type': 'execute:tool',
-                                            'data': {
-                                                'id': str(uuid4()),
-                                                'name': tool_function_name,
-                                                'params': tool_function_params,
-                                                'server': tool.get('server', {}),
-                                                'session_id': metadata.get('session_id', None),
-                                            },
-                                        }
-                                    )
-
-                                else:
-                                    tool_function = await get_updated_tool_function(
-                                        function=tool['callable'],
-                                        extra_params={
-                                            '__messages__': form_data.get('messages', []),
-                                            '__files__': metadata.get('files', []),
-                                        },
-                                    )
-
-                                    tool_result = await tool_function(**tool_function_params)
-
-                            except Exception as e:
-                                tool_result = str(e)
-                        else:
-                            tool_result = f'Error: Tool "{tool_function_name}" not found.'
-
-                        tool_result, tool_result_files, tool_result_embeds = await process_tool_result(
-                            request,
-                            tool_function_name,
-                            tool_result,
-                            tool_type,
-                            direct_tool,
-                            metadata,
-                            user,
-                        )
-
-                        await terminal_event_handler(
-                            tool_function_name,
-                            tool_function_params,
-                            tool_result,
+                        retry_reason = get_retry_reason(
+                            output,
+                            content,
+                            stream_timed_out=stream_timed_out,
+                        ) or 'empty'
+                        reset_state = await prepare_chat_retry(
                             event_emitter,
+                            attempt,
+                            retry_reason,
+                            response=generation_response,
                         )
+                        output = reset_state['output']
+                        content = reset_state['content']
+                        prior_output = reset_state['prior_output']
+                        tool_calls = reset_state['tool_calls']
+                        stream_timed_out = reset_state['stream_timed_out']
 
-                        # Extract citation sources from tool results
-                        if (
-                            citations_enabled
-                            and tool_function_name
-                            in [
-                                'search_web',
-                                'fetch_url',
-                                'view_file',
-                                'view_knowledge_file',
-                                'query_knowledge_files',
-                            ]
-                            and tool_result
-                        ):
-                            try:
-                                citation_sources = get_citation_source_from_tool_result(
-                                    tool_name=tool_function_name,
-                                    tool_params=tool_function_params,
-                                    tool_result=tool_result,
-                                    tool_id=tool.get('tool_id', '') if tool else '',
-                                )
-                                tool_call_sources.extend(citation_sources)
-                            except Exception as e:
-                                log.exception(f'Error extracting citation source: {e}')
-
-                        results.append(
-                            {
-                                'tool_call_id': tool_call_id,
-                                'content': str(tool_result) if tool_result else '',
-                                **({'files': tool_result_files} if tool_result_files else {}),
-                                **({'embeds': tool_result_embeds} if tool_result_embeds else {}),
-                            }
-                        )
-
-                    # Update function_call statuses and append function_call_output items
-                    for tc in response_tool_calls:
-                        call_id = tc.get('id', '')
-                        # Mark function_call as completed
-                        for item in output:
-                            if item.get('type') == 'function_call' and item.get('call_id') == call_id:
-                                item['status'] = 'completed'
-                                # Update arguments with parsed/sanitized version
-                                item['arguments'] = tc.get('function', {}).get('arguments', '{}')
-                                break
-
-                    for result in results:
-                        output_parts = [{'type': 'input_text', 'text': result.get('content', '')}]
-
-                        # Separate image data URIs (for LLM via input_image) from
-                        # other files (for frontend display via files attribute).
-                        display_files = []
-                        for file_item in result.get('files', []):
-                            if file_item.get('type') == 'image' and file_item.get('url', '').startswith('data:'):
-                                # LLM-only: add as input_image part, not frontend display output.
-                                output_parts.append({'type': 'input_image', 'image_url': file_item['url']})
-                            else:
-                                # Frontend display (MCP images, audio, etc.)
-                                display_files.append(file_item)
-
-                        output.append(
-                            {
-                                'type': 'function_call_output',
-                                'id': output_id('fco'),
-                                'call_id': result.get('tool_call_id', ''),
-                                'output': output_parts,
-                                'status': 'completed',
-                                **({'files': display_files} if display_files else {}),
-                                **({'embeds': result.get('embeds')} if result.get('embeds') else {}),
-                            }
-                        )
-
-                    # Append a new empty message item for the next response
-                    output.append(
-                        {
-                            'type': 'message',
-                            'id': output_id('msg'),
-                            'status': 'in_progress',
-                            'role': 'assistant',
-                            'content': [{'type': 'output_text', 'text': ''}],
-                        }
-                    )
-
-                    # Emit citation sources to the frontend for display
-                    if citations_enabled:
-                        for source in tool_call_sources:
-                            await event_emitter({'type': 'source', 'data': source})
-
-                        # Apply tool source context to messages for the model.
-                        # Restoring to pre-RAG original prevents duplicating
-                        # the RAG template across file and tool sources.
-                        all_tool_call_sources.extend(tool_call_sources)
-                        if all_tool_call_sources and user_message:
-                            # Restore pre-RAG message state before re-applying
-                            # to prevent RAG template duplication.
-                            original_user_message = metadata.get('user_prompt') or user_message
-                            set_last_user_message_content(
-                                original_user_message,
-                                form_data['messages'],
-                            )
-                            if original_system_content is not None:
-                                if get_system_message(form_data['messages']):
-                                    replace_system_message_content(
-                                        original_system_content,
-                                        form_data['messages'],
-                                    )
-                                else:
-                                    form_data['messages'] = add_or_update_system_message(
-                                        original_system_content,
-                                        form_data['messages'],
-                                    )
-                            else:
-                                replace_system_message_content('', form_data['messages'])
-
-                            # Build context: file sources with content,
-                            # tool sources as citation markers only.
-                            source_ids = {}
-                            source_context = get_source_context(
-                                metadata.get('sources', []), source_ids
-                            ) + get_source_context(
-                                all_tool_call_sources,
-                                source_ids,
-                                include_content=False,
-                            )
-                            source_context = source_context.strip()
-                            if source_context:
-                                rag_content = await rag_template(
-                                    await Config.get('rag.template'),
-                                    source_context,
-                                    user_message,
-                                )
-                                if RAG_SYSTEM_CONTEXT:
-                                    form_data['messages'] = add_or_update_system_message(
-                                        rag_content,
-                                        form_data['messages'],
-                                        append=True,
-                                    )
-                                else:
-                                    form_data['messages'] = add_or_update_user_message(
-                                        rag_content,
-                                        form_data['messages'],
-                                        append=False,
-                                    )
-                        tool_call_sources.clear()
-
-                    # Strip input_image parts (large base64 data URIs) from the
-                    # output sent to the frontend — they're only for LLM consumption
-                    # via convert_output_to_messages.
-                    frontend_output = []
-                    for item in output:
-                        if item.get('type') == 'function_call_output':
-                            parts = item.get('output', [])
-                            if any(p.get('type') == 'input_image' for p in parts):
-                                item = {**item, 'output': [p for p in parts if p.get('type') != 'input_image']}
-                        frontend_output.append(item)
-
-                    await event_emitter(
-                        {
-                            'type': 'chat:completion',
-                            'data': {
-                                'output': frontend_output,
-                            },
-                        }
-                    )
+                        retry_res = await generate_chat_completion(request, form_data, user)
+                        if isinstance(retry_res, JSONResponse) and retry_res.status_code >= 400:
+                            break
+                        if not isinstance(retry_res, StreamingResponse):
+                            break
+                        generation_response = retry_res
 
                     try:
+                        await stream_body_handler(generation_response, form_data)
+                    finally:
+                        if generation_response.background:
+                            await generation_response.background()
+
+                    tool_call_iterations = 0
+                    tool_call_sources = []  # Track citation sources from tool results
+                    all_tool_call_sources = []  # Accumulated sources across all iterations
+                    user_message = get_last_user_message(form_data['messages'])
+
+                    # Check if citations are enabled for this model
+                    citations_enabled = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get(
+                        'citations', True
+                    )
+
+                    # Use the pre-RAG system content captured before the
+                    # initial file-source injection in process_chat_payload.
+                    # This ensures restore truly undoes the RAG template.
+                    original_system_content = metadata.get('system_prompt')
+                    if original_system_content is None:
+                        original_system_message = get_system_message(form_data['messages'])
+                        original_system_content = (
+                            get_content_from_message(original_system_message) if original_system_message else None
+                        )
+
+                    while tool_calls and (
+                        CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS is None
+                        or tool_call_iterations < CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS
+                    ):
                         _raise_if_cancelled()
-                        new_form_data = {
-                            **form_data,
-                            'model': model_id,
-                            'stream': True,
-                            'metadata': metadata,
-                        }
+                        tool_call_iterations += 1
 
-                        if ENABLE_RESPONSES_API_STATEFUL and last_response_id:
-                            system_message = get_system_message(form_data['messages'])
-                            new_form_data['messages'] = (
-                                [system_message] if system_message else []
-                            ) + convert_output_to_messages(
-                                output, raw=True, reasoning_format=get_reasoning_format(model)
-                            )
-                            new_form_data['previous_response_id'] = last_response_id
-                        else:
-                            tool_messages = convert_output_to_messages(
-                                output, raw=True, reasoning_format=get_reasoning_format(model)
-                            )
+                        response_tool_calls = tool_calls.pop(0)
 
-                            # Chat Completions providers don't support multimodal
-                            # tool messages.  Extract images into a user message.
-                            image_urls = []
-                            for message in tool_messages:
-                                if message.get('role') == 'tool' and isinstance(message.get('content'), list):
-                                    text_parts = []
-                                    for part in message['content']:
-                                        if part.get('type') == 'input_text':
-                                            text_parts.append(part.get('text', ''))
-                                        elif part.get('type') == 'input_image':
-                                            image_urls.append(part.get('image_url', ''))
-                                    message['content'] = ''.join(text_parts)
-
-                            new_form_data['messages'] = [
-                                *form_data['messages'],
-                                *tool_messages,
-                            ]
-
-                            if image_urls:
-                                new_form_data['messages'].append(
+                        # Append function_call items for each tool call
+                        # (Responses API already has them from streaming, so skip duplicates)
+                        existing_call_ids = {item.get('call_id') for item in output if item.get('type') == 'function_call'}
+                        for tc in response_tool_calls:
+                            call_id = tc.get('id', '')
+                            if call_id not in existing_call_ids:
+                                func = tc.get('function', {})
+                                output.append(
                                     {
-                                        'role': 'user',
-                                        'content': [
-                                            {
-                                                'type': 'text',
-                                                'text': 'Here are the images from the tool results above. Please analyze them.',
-                                            },
-                                            *[{'type': 'image_url', 'image_url': {'url': url}} for url in image_urls],
-                                        ],
+                                        'type': 'function_call',
+                                        'id': call_id or output_id('fc'),
+                                        'call_id': call_id,
+                                        'name': func.get('name', ''),
+                                        'arguments': func.get('arguments', '{}'),
+                                        'status': 'in_progress',
                                     }
                                 )
 
-                        res = await generate_chat_completion(
-                            request,
-                            new_form_data,
-                            user,
-                            bypass_system_prompt=True,
-                        )
-
-                        if isinstance(res, StreamingResponse):
-                            # Save accumulated output and start fresh.
-                            # Responses API output_index values are relative
-                            # to the current response — a clean output list
-                            # keeps indices aligned. The display prefix
-                            # ensures the UI shows tool history during
-                            # streaming.
-                            prior_output = list(output)
-                            # Trim the trailing empty placeholder message
-                            # so it doesn't persist as a ghost item once
-                            # the new stream produces real content.
-                            if (
-                                prior_output
-                                and prior_output[-1].get('type') == 'message'
-                                and prior_output[-1].get('status') == 'in_progress'
-                            ):
-                                msg_parts = prior_output[-1].get('content', [])
-                                if not msg_parts or (len(msg_parts) == 1 and not msg_parts[0].get('text', '').strip()):
-                                    prior_output.pop()
-                            output = []
-                            await stream_body_handler(res, new_form_data)
-                            output[:0] = prior_output
-                            prior_output = []
-                        else:
-                            break
-                    except Exception as e:
-                        log.debug(e)
-                        break
-
-                if (
-                    CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS is not None
-                    and tool_calls
-                    and tool_call_iterations >= CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS
-                ):
-                    log.warning('Tool-call iteration limit reached (%s)', CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS)
-                    error_content = f'Tool-call limit reached ({CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS} iterations).'
-                    if not metadata.get('chat_id', '').startswith('channel:'):
-                        await Chats.upsert_message_to_chat_by_id_and_message_id(
-                            metadata['chat_id'],
-                            metadata['message_id'],
-                            {'error': {'content': error_content}},
-                        )
-                    await event_emitter(
-                        {
-                            'type': 'chat:message:error',
-                            'data': {'error': {'content': error_content}},
-                        }
-                    )
-
-                if DETECT_CODE_INTERPRETER:
-                    MAX_RETRIES = 5
-                    retries = 0
-
-                    while output and output[-1].get('type') == 'open_webui:code_interpreter' and retries < MAX_RETRIES:
                         await event_emitter(
                             {
                                 'type': 'chat:completion',
                                 'data': {
-                                    'output': output,
+                                    'output': full_output(),
                                 },
                             }
                         )
 
-                        retries += 1
-                        log.debug(f'Attempt count: {retries}')
+                        tools = metadata.get('tools', {})
 
-                        ci_item = output[-1]
-                        ci_output = ''
-                        try:
-                            if ci_item.get('attributes', {}).get('type') == 'code':
-                                code = ci_item.get('code', '')
-                                # Sanitize code (strips ANSI codes and markdown fences)
-                                code = sanitize_code(code)
+                        results = []
 
-                                if CODE_INTERPRETER_BLOCKED_MODULES:
-                                    blocking_code = textwrap.dedent(f"""
-                                        import builtins
-    
-                                        BLOCKED_MODULES = {CODE_INTERPRETER_BLOCKED_MODULES}
-    
-                                        _real_import = builtins.__import__
-                                        async def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
-                                            if name.split('.')[0] in BLOCKED_MODULES:
-                                                importer_name = globals.get('__name__') if globals else None
-                                                if importer_name == '__main__':
-                                                    raise ImportError(
-                                                        f"Direct import of module {{name}} is restricted."
-                                                    )
-                                            return _real_import(name, globals, locals, fromlist, level)
-    
-                                        builtins.__import__ = restricted_import
-                                    """)
-                                    code = blocking_code + '\n' + code
+                        for tool_call in response_tool_calls:
+                            _raise_if_cancelled()
+                            tool_call_id = tool_call.get('id', '')
+                            tool_function_name = tool_call.get('function', {}).get('name', '')
+                            tool_args = tool_call.get('function', {}).get('arguments', '{}')
 
-                                if await Config.get('code_interpreter.engine') == 'pyodide':
-                                    ci_output = await event_caller(
-                                        {
-                                            'type': 'execute:python',
-                                            'data': {
-                                                'id': str(uuid4()),
-                                                'code': code,
-                                                'session_id': metadata.get('session_id', None),
-                                                'files': metadata.get('files', []),
+                            tool_function_params = {}
+                            if tool_args and tool_args.strip():
+                                try:
+                                    # json.loads cannot be used because some models do not produce valid JSON
+                                    tool_function_params = ast.literal_eval(tool_args)
+                                except Exception as e:
+                                    log.debug(e)
+                                    # Fallback to JSON parsing
+                                    try:
+                                        tool_function_params = json.loads(tool_args)
+                                    except Exception as e:
+                                        log.error(f'Error parsing tool call arguments: {tool_args}')
+                                        results.append(
+                                            {
+                                                'tool_call_id': tool_call_id,
+                                                'content': f'Error: Tool call arguments could not be parsed. The model generated malformed or incomplete JSON for `{tool_function_name}`. Please try again.',
+                                            }
+                                        )
+                                        continue
+
+                            # Ensure arguments are valid JSON for downstream LLM integrations
+                            log.debug(f'Parsed args from {tool_args} to {tool_function_params}')
+                            tool_call.setdefault('function', {})['arguments'] = json.dumps(tool_function_params)
+
+                            tool_result = None
+                            tool = None
+                            tool_type = None
+                            direct_tool = False
+
+                            if tool_function_name in tools:
+                                tool = tools[tool_function_name]
+                                spec = tool.get('spec', {})
+
+                                tool_type = tool.get('type', '')
+                                direct_tool = tool.get('direct', False)
+
+                                try:
+                                    allowed_params = spec.get('parameters', {}).get('properties', {}).keys()
+
+                                    tool_function_params = {
+                                        k: v for k, v in tool_function_params.items() if k in allowed_params
+                                    }
+
+                                    if direct_tool:
+                                        tool_result = await event_caller(
+                                            {
+                                                'type': 'execute:tool',
+                                                'data': {
+                                                    'id': str(uuid4()),
+                                                    'name': tool_function_name,
+                                                    'params': tool_function_params,
+                                                    'server': tool.get('server', {}),
+                                                    'session_id': metadata.get('session_id', None),
+                                                },
+                                            }
+                                        )
+
+                                    else:
+                                        tool_function = await get_updated_tool_function(
+                                            function=tool['callable'],
+                                            extra_params={
+                                                '__messages__': form_data.get('messages', []),
+                                                '__files__': metadata.get('files', []),
                                             },
-                                        }
+                                        )
+
+                                        tool_result = await tool_function(**tool_function_params)
+
+                                except Exception as e:
+                                    tool_result = str(e)
+                            else:
+                                tool_result = f'Error: Tool "{tool_function_name}" not found.'
+
+                            tool_result, tool_result_files, tool_result_embeds = await process_tool_result(
+                                request,
+                                tool_function_name,
+                                tool_result,
+                                tool_type,
+                                direct_tool,
+                                metadata,
+                                user,
+                            )
+
+                            await terminal_event_handler(
+                                tool_function_name,
+                                tool_function_params,
+                                tool_result,
+                                event_emitter,
+                            )
+
+                            # Extract citation sources from tool results
+                            if (
+                                citations_enabled
+                                and tool_function_name
+                                in [
+                                    'search_web',
+                                    'fetch_url',
+                                    'view_file',
+                                    'view_knowledge_file',
+                                    'query_knowledge_files',
+                                ]
+                                and tool_result
+                            ):
+                                try:
+                                    citation_sources = get_citation_source_from_tool_result(
+                                        tool_name=tool_function_name,
+                                        tool_params=tool_function_params,
+                                        tool_result=tool_result,
+                                        tool_id=tool.get('tool_id', '') if tool else '',
                                     )
-                                elif await Config.get('code_interpreter.engine') == 'jupyter':
-                                    ci_output = await execute_code_jupyter(
-                                        await Config.get('code_interpreter.jupyter.url'),
-                                        code,
-                                        (
-                                            await Config.get('code_interpreter.jupyter.auth_token')
-                                            if await Config.get('code_interpreter.jupyter.auth') == 'token'
-                                            else None
-                                        ),
-                                        (
-                                            await Config.get('code_interpreter.jupyter.auth_password')
-                                            if await Config.get('code_interpreter.jupyter.auth') == 'password'
-                                            else None
-                                        ),
-                                        await Config.get('code_interpreter.jupyter.timeout'),
-                                    )
+                                    tool_call_sources.extend(citation_sources)
+                                except Exception as e:
+                                    log.exception(f'Error extracting citation source: {e}')
+
+                            results.append(
+                                {
+                                    'tool_call_id': tool_call_id,
+                                    'content': str(tool_result) if tool_result else '',
+                                    **({'files': tool_result_files} if tool_result_files else {}),
+                                    **({'embeds': tool_result_embeds} if tool_result_embeds else {}),
+                                }
+                            )
+
+                        # Update function_call statuses and append function_call_output items
+                        for tc in response_tool_calls:
+                            call_id = tc.get('id', '')
+                            # Mark function_call as completed
+                            for item in output:
+                                if item.get('type') == 'function_call' and item.get('call_id') == call_id:
+                                    item['status'] = 'completed'
+                                    # Update arguments with parsed/sanitized version
+                                    item['arguments'] = tc.get('function', {}).get('arguments', '{}')
+                                    break
+
+                        for result in results:
+                            output_parts = [{'type': 'input_text', 'text': result.get('content', '')}]
+
+                            # Separate image data URIs (for LLM via input_image) from
+                            # other files (for frontend display via files attribute).
+                            display_files = []
+                            for file_item in result.get('files', []):
+                                if file_item.get('type') == 'image' and file_item.get('url', '').startswith('data:'):
+                                    # LLM-only: add as input_image part, not frontend display output.
+                                    output_parts.append({'type': 'input_image', 'image_url': file_item['url']})
                                 else:
-                                    ci_output = {'stdout': 'Code interpreter engine not configured.'}
+                                    # Frontend display (MCP images, audio, etc.)
+                                    display_files.append(file_item)
 
-                                log.debug(f'Code interpreter output: {ci_output}')
+                            output.append(
+                                {
+                                    'type': 'function_call_output',
+                                    'id': output_id('fco'),
+                                    'call_id': result.get('tool_call_id', ''),
+                                    'output': output_parts,
+                                    'status': 'completed',
+                                    **({'files': display_files} if display_files else {}),
+                                    **({'embeds': result.get('embeds')} if result.get('embeds') else {}),
+                                }
+                            )
 
-                                # Handle error responses from event_caller
-                                # (e.g. session disconnected, timeout)
-                                if isinstance(ci_output, dict) and ci_output.get('error'):
-                                    ci_output = {'stderr': ci_output['error']}
-
-                                if isinstance(ci_output, dict):
-                                    stdout = ci_output.get('stdout', '')
-
-                                    if isinstance(stdout, str):
-                                        stdoutLines = stdout.split('\n')
-                                        for idx, line in enumerate(stdoutLines):
-                                            if re.match(r'data:image/\w+;base64', line):
-                                                image_url = await get_image_url_from_base64(
-                                                    request,
-                                                    line,
-                                                    metadata,
-                                                    user,
-                                                )
-                                                if image_url:
-                                                    stdoutLines[idx] = f'![Output Image]({image_url})'
-
-                                        ci_output['stdout'] = '\n'.join(stdoutLines)
-
-                                    result = ci_output.get('result', '')
-
-                                    if isinstance(result, str):
-                                        resultLines = result.split('\n')
-                                        for idx, line in enumerate(resultLines):
-                                            if re.match(r'data:image/\w+;base64', line):
-                                                image_url = await get_image_url_from_base64(
-                                                    request,
-                                                    line,
-                                                    metadata,
-                                                    user,
-                                                )
-                                                resultLines[idx] = f'![Output Image]({image_url})'
-                                        ci_output['result'] = '\n'.join(resultLines)
-                        except Exception as e:
-                            ci_output = str(e)
-
-                        ci_item['output'] = ci_output
-                        ci_item['status'] = 'completed'
-
+                        # Append a new empty message item for the next response
                         output.append(
                             {
                                 'type': 'message',
@@ -5352,28 +5089,141 @@ async def streaming_chat_response_handler(response, ctx):
                             }
                         )
 
+                        # Emit citation sources to the frontend for display
+                        if citations_enabled:
+                            for source in tool_call_sources:
+                                await event_emitter({'type': 'source', 'data': source})
+
+                            # Apply tool source context to messages for the model.
+                            # Restoring to pre-RAG original prevents duplicating
+                            # the RAG template across file and tool sources.
+                            all_tool_call_sources.extend(tool_call_sources)
+                            if all_tool_call_sources and user_message:
+                                # Restore pre-RAG message state before re-applying
+                                # to prevent RAG template duplication.
+                                original_user_message = metadata.get('user_prompt') or user_message
+                                set_last_user_message_content(
+                                    original_user_message,
+                                    form_data['messages'],
+                                )
+                                if original_system_content is not None:
+                                    if get_system_message(form_data['messages']):
+                                        replace_system_message_content(
+                                            original_system_content,
+                                            form_data['messages'],
+                                        )
+                                    else:
+                                        form_data['messages'] = add_or_update_system_message(
+                                            original_system_content,
+                                            form_data['messages'],
+                                        )
+                                else:
+                                    replace_system_message_content('', form_data['messages'])
+
+                                # Build context: file sources with content,
+                                # tool sources as citation markers only.
+                                source_ids = {}
+                                source_context = get_source_context(
+                                    metadata.get('sources', []), source_ids
+                                ) + get_source_context(
+                                    all_tool_call_sources,
+                                    source_ids,
+                                    include_content=False,
+                                )
+                                source_context = source_context.strip()
+                                if source_context:
+                                    rag_content = await rag_template(
+                                        await Config.get('rag.template'),
+                                        source_context,
+                                        user_message,
+                                    )
+                                    if RAG_SYSTEM_CONTEXT:
+                                        form_data['messages'] = add_or_update_system_message(
+                                            rag_content,
+                                            form_data['messages'],
+                                            append=True,
+                                        )
+                                    else:
+                                        form_data['messages'] = add_or_update_user_message(
+                                            rag_content,
+                                            form_data['messages'],
+                                            append=False,
+                                        )
+                            tool_call_sources.clear()
+
+                        # Strip input_image parts (large base64 data URIs) from the
+                        # output sent to the frontend — they're only for LLM consumption
+                        # via convert_output_to_messages.
+                        frontend_output = []
+                        for item in output:
+                            if item.get('type') == 'function_call_output':
+                                parts = item.get('output', [])
+                                if any(p.get('type') == 'input_image' for p in parts):
+                                    item = {**item, 'output': [p for p in parts if p.get('type') != 'input_image']}
+                            frontend_output.append(item)
+
                         await event_emitter(
                             {
                                 'type': 'chat:completion',
                                 'data': {
-                                    'output': output,
+                                    'output': frontend_output,
                                 },
                             }
                         )
 
                         try:
+                            _raise_if_cancelled()
                             new_form_data = {
                                 **form_data,
                                 'model': model_id,
                                 'stream': True,
                                 'metadata': metadata,
-                                'messages': [
-                                    *form_data['messages'],
-                                    *convert_output_to_messages(
-                                        output, raw=True, reasoning_format=get_reasoning_format(model)
-                                    ),
-                                ],
                             }
+
+                            if ENABLE_RESPONSES_API_STATEFUL and last_response_id:
+                                system_message = get_system_message(form_data['messages'])
+                                new_form_data['messages'] = (
+                                    [system_message] if system_message else []
+                                ) + convert_output_to_messages(
+                                    output, raw=True, reasoning_format=get_reasoning_format(model)
+                                )
+                                new_form_data['previous_response_id'] = last_response_id
+                            else:
+                                tool_messages = convert_output_to_messages(
+                                    output, raw=True, reasoning_format=get_reasoning_format(model)
+                                )
+
+                                # Chat Completions providers don't support multimodal
+                                # tool messages.  Extract images into a user message.
+                                image_urls = []
+                                for message in tool_messages:
+                                    if message.get('role') == 'tool' and isinstance(message.get('content'), list):
+                                        text_parts = []
+                                        for part in message['content']:
+                                            if part.get('type') == 'input_text':
+                                                text_parts.append(part.get('text', ''))
+                                            elif part.get('type') == 'input_image':
+                                                image_urls.append(part.get('image_url', ''))
+                                        message['content'] = ''.join(text_parts)
+
+                                new_form_data['messages'] = [
+                                    *form_data['messages'],
+                                    *tool_messages,
+                                ]
+
+                                if image_urls:
+                                    new_form_data['messages'].append(
+                                        {
+                                            'role': 'user',
+                                            'content': [
+                                                {
+                                                    'type': 'text',
+                                                    'text': 'Here are the images from the tool results above. Please analyze them.',
+                                                },
+                                                *[{'type': 'image_url', 'image_url': {'url': url}} for url in image_urls],
+                                            ],
+                                        }
+                                    )
 
                             res = await generate_chat_completion(
                                 request,
@@ -5383,12 +5233,232 @@ async def streaming_chat_response_handler(response, ctx):
                             )
 
                             if isinstance(res, StreamingResponse):
+                                # Save accumulated output and start fresh.
+                                # Responses API output_index values are relative
+                                # to the current response — a clean output list
+                                # keeps indices aligned. The display prefix
+                                # ensures the UI shows tool history during
+                                # streaming.
+                                prior_output = list(output)
+                                # Trim the trailing empty placeholder message
+                                # so it doesn't persist as a ghost item once
+                                # the new stream produces real content.
+                                if (
+                                    prior_output
+                                    and prior_output[-1].get('type') == 'message'
+                                    and prior_output[-1].get('status') == 'in_progress'
+                                ):
+                                    msg_parts = prior_output[-1].get('content', [])
+                                    if not msg_parts or (len(msg_parts) == 1 and not msg_parts[0].get('text', '').strip()):
+                                        prior_output.pop()
+                                output = []
                                 await stream_body_handler(res, new_form_data)
+                                output[:0] = prior_output
+                                prior_output = []
                             else:
                                 break
                         except Exception as e:
                             log.debug(e)
                             break
+
+                    if (
+                        CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS is not None
+                        and tool_calls
+                        and tool_call_iterations >= CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS
+                    ):
+                        log.warning('Tool-call iteration limit reached (%s)', CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS)
+                        error_content = f'Tool-call limit reached ({CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS} iterations).'
+                        if not metadata.get('chat_id', '').startswith('channel:'):
+                            await Chats.upsert_message_to_chat_by_id_and_message_id(
+                                metadata['chat_id'],
+                                metadata['message_id'],
+                                {'error': {'content': error_content}},
+                            )
+                        await event_emitter(
+                            {
+                                'type': 'chat:message:error',
+                                'data': {'error': {'content': error_content}},
+                            }
+                        )
+
+                    if DETECT_CODE_INTERPRETER:
+                        MAX_RETRIES = 5
+                        retries = 0
+
+                        while output and output[-1].get('type') == 'open_webui:code_interpreter' and retries < MAX_RETRIES:
+                            await event_emitter(
+                                {
+                                    'type': 'chat:completion',
+                                    'data': {
+                                        'output': output,
+                                    },
+                                }
+                            )
+
+                            retries += 1
+                            log.debug(f'Attempt count: {retries}')
+
+                            ci_item = output[-1]
+                            ci_output = ''
+                            try:
+                                if ci_item.get('attributes', {}).get('type') == 'code':
+                                    code = ci_item.get('code', '')
+                                    # Sanitize code (strips ANSI codes and markdown fences)
+                                    code = sanitize_code(code)
+
+                                    if CODE_INTERPRETER_BLOCKED_MODULES:
+                                        blocking_code = textwrap.dedent(f"""
+                                            import builtins
+    
+                                            BLOCKED_MODULES = {CODE_INTERPRETER_BLOCKED_MODULES}
+    
+                                            _real_import = builtins.__import__
+                                            async def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
+                                                if name.split('.')[0] in BLOCKED_MODULES:
+                                                    importer_name = globals.get('__name__') if globals else None
+                                                    if importer_name == '__main__':
+                                                        raise ImportError(
+                                                            f"Direct import of module {{name}} is restricted."
+                                                        )
+                                                return _real_import(name, globals, locals, fromlist, level)
+    
+                                            builtins.__import__ = restricted_import
+                                        """)
+                                        code = blocking_code + '\n' + code
+
+                                    if await Config.get('code_interpreter.engine') == 'pyodide':
+                                        ci_output = await event_caller(
+                                            {
+                                                'type': 'execute:python',
+                                                'data': {
+                                                    'id': str(uuid4()),
+                                                    'code': code,
+                                                    'session_id': metadata.get('session_id', None),
+                                                    'files': metadata.get('files', []),
+                                                },
+                                            }
+                                        )
+                                    elif await Config.get('code_interpreter.engine') == 'jupyter':
+                                        ci_output = await execute_code_jupyter(
+                                            await Config.get('code_interpreter.jupyter.url'),
+                                            code,
+                                            (
+                                                await Config.get('code_interpreter.jupyter.auth_token')
+                                                if await Config.get('code_interpreter.jupyter.auth') == 'token'
+                                                else None
+                                            ),
+                                            (
+                                                await Config.get('code_interpreter.jupyter.auth_password')
+                                                if await Config.get('code_interpreter.jupyter.auth') == 'password'
+                                                else None
+                                            ),
+                                            await Config.get('code_interpreter.jupyter.timeout'),
+                                        )
+                                    else:
+                                        ci_output = {'stdout': 'Code interpreter engine not configured.'}
+
+                                    log.debug(f'Code interpreter output: {ci_output}')
+
+                                    # Handle error responses from event_caller
+                                    # (e.g. session disconnected, timeout)
+                                    if isinstance(ci_output, dict) and ci_output.get('error'):
+                                        ci_output = {'stderr': ci_output['error']}
+
+                                    if isinstance(ci_output, dict):
+                                        stdout = ci_output.get('stdout', '')
+
+                                        if isinstance(stdout, str):
+                                            stdoutLines = stdout.split('\n')
+                                            for idx, line in enumerate(stdoutLines):
+                                                if re.match(r'data:image/\w+;base64', line):
+                                                    image_url = await get_image_url_from_base64(
+                                                        request,
+                                                        line,
+                                                        metadata,
+                                                        user,
+                                                    )
+                                                    if image_url:
+                                                        stdoutLines[idx] = f'![Output Image]({image_url})'
+
+                                            ci_output['stdout'] = '\n'.join(stdoutLines)
+
+                                        result = ci_output.get('result', '')
+
+                                        if isinstance(result, str):
+                                            resultLines = result.split('\n')
+                                            for idx, line in enumerate(resultLines):
+                                                if re.match(r'data:image/\w+;base64', line):
+                                                    image_url = await get_image_url_from_base64(
+                                                        request,
+                                                        line,
+                                                        metadata,
+                                                        user,
+                                                    )
+                                                    resultLines[idx] = f'![Output Image]({image_url})'
+                                            ci_output['result'] = '\n'.join(resultLines)
+                            except Exception as e:
+                                ci_output = str(e)
+
+                            ci_item['output'] = ci_output
+                            ci_item['status'] = 'completed'
+
+                            output.append(
+                                {
+                                    'type': 'message',
+                                    'id': output_id('msg'),
+                                    'status': 'in_progress',
+                                    'role': 'assistant',
+                                    'content': [{'type': 'output_text', 'text': ''}],
+                                }
+                            )
+
+                            await event_emitter(
+                                {
+                                    'type': 'chat:completion',
+                                    'data': {
+                                        'output': output,
+                                    },
+                                }
+                            )
+
+                            try:
+                                new_form_data = {
+                                    **form_data,
+                                    'model': model_id,
+                                    'stream': True,
+                                    'metadata': metadata,
+                                    'messages': [
+                                        *form_data['messages'],
+                                        *convert_output_to_messages(
+                                            output, raw=True, reasoning_format=get_reasoning_format(model)
+                                        ),
+                                    ],
+                                }
+
+                                res = await generate_chat_completion(
+                                    request,
+                                    new_form_data,
+                                    user,
+                                    bypass_system_prompt=True,
+                                )
+
+                                if isinstance(res, StreamingResponse):
+                                    await stream_body_handler(res, new_form_data)
+                                else:
+                                    break
+                            except Exception as e:
+                                log.debug(e)
+                                break
+
+                    retry_reason = get_retry_reason(
+                        output,
+                        content,
+                        stream_timed_out=stream_timed_out,
+                    )
+                    if retry_reason is None:
+                        break
+                    if attempt >= CHAT_RESPONSE_MAX_EMPTY_RETRIES:
+                        break
 
                 # Mark all in-progress items as completed
                 for item in output:
@@ -5551,10 +5621,39 @@ async def streaming_chat_response_handler(response, ctx):
         )
 
 
+async def process_non_streaming_with_retries(response, ctx):
+    request = ctx['request']
+    form_data = ctx['form_data']
+    user = ctx['user']
+    event_emitter = ctx.get('event_emitter')
+    current_response = response
+
+    for attempt in range(CHAT_RESPONSE_MAX_EMPTY_RETRIES + 1):
+        if attempt > 0:
+            _raise_if_cancelled()
+            await emit_chat_retry_status(event_emitter, attempt, CHAT_RESPONSE_MAX_EMPTY_RETRIES, 'empty')
+            current_response = await generate_chat_completion(request, form_data, user)
+            if isinstance(current_response, JSONResponse) and current_response.status_code >= 400:
+                break
+            if isinstance(current_response, StreamingResponse):
+                return await streaming_chat_response_handler(current_response, ctx)
+
+        ctx.pop('assistant_message', None)
+        result = await non_streaming_chat_response_handler(current_response, ctx)
+
+        assistant_message = ctx.get('assistant_message') or {}
+        if get_retry_reason(assistant_message.get('output'), assistant_message.get('content')) is None:
+            return result
+        if attempt >= CHAT_RESPONSE_MAX_EMPTY_RETRIES:
+            return result
+
+    return result
+
+
 async def process_chat_response(response, ctx):
     # Non-streaming response
     if not isinstance(response, StreamingResponse):
-        return await non_streaming_chat_response_handler(response, ctx)
+        return await process_non_streaming_with_retries(response, ctx)
 
     # Non standard response
     if not any(

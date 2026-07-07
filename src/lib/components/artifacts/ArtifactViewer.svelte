@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { getContext, onMount, onDestroy } from 'svelte';
+	import type { Writable } from 'svelte/store';
+	import type { i18n as i18nType } from 'i18next';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 
@@ -36,7 +38,7 @@
 	import Pencil from '$lib/components/icons/Pencil.svelte';
 	import ChevronLeft from '$lib/components/icons/ChevronLeft.svelte';
 
-	const i18n = getContext('i18n');
+	const i18n = getContext<Writable<i18nType>>('i18n');
 
 	export let id: string;
 

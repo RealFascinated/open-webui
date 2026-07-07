@@ -135,6 +135,7 @@
 		if (!show || !closeOnOutsideClick) return;
 		if (triggerEl?.contains(event.target)) return;
 		if (contentEl?.contains(event.target)) return;
+		if (event.target instanceof Element && event.target.closest('[data-menu-flyout]')) return;
 		show = false;
 		onOpenChange(false);
 	}

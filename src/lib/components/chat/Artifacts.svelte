@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { onMount, onDestroy, getContext } from 'svelte';
+	import type { Writable } from 'svelte/store';
+	import type { i18n as i18nType } from 'i18next';
 	import { goto } from '$app/navigation';
 
-	const i18n = getContext('i18n');
+	const i18n = getContext<Writable<i18nType>>('i18n');
 
 	import {
 		artifactCode,
@@ -74,7 +76,10 @@
 
 	const iframeLoadHandler = () => {
 		artifactError = null;
-		iframeElement.contentWindow.addEventListener(
+		const contentWindow = iframeElement?.contentWindow;
+		if (!contentWindow) return;
+
+		contentWindow.addEventListener(
 			'click',
 			function (e) {
 				const target = (e.target as Element).closest('a') as HTMLAnchorElement | null;
@@ -82,7 +87,7 @@
 					e.preventDefault();
 					const url = new URL(target.href, iframeElement.baseURI);
 					if (url.origin === window.location.origin) {
-						iframeElement.contentWindow.history.pushState(
+						contentWindow.history.pushState(
 							null,
 							'',
 							url.pathname + url.search + url.hash
@@ -95,8 +100,8 @@
 			true
 		);
 
-		iframeElement.contentWindow.addEventListener('mouseenter', function () {
-			iframeElement.contentWindow.addEventListener('dragstart', (event) => {
+		contentWindow.addEventListener('mouseenter', function () {
+			contentWindow.addEventListener('dragstart', (event) => {
 				event.preventDefault();
 			});
 		});
@@ -132,8 +137,9 @@
 
 			iframeElement.contentWindow?.postMessage({ _owsRequestId: reqId, result }, '*');
 		} catch (err: unknown) {
+			const errMsg = err instanceof Error ? err.message : 'Storage error';
 			iframeElement.contentWindow?.postMessage(
-				{ _owsRequestId: reqId, error: err?.message ?? 'Storage error' },
+				{ _owsRequestId: reqId, error: errMsg },
 				'*'
 			);
 		}
@@ -182,10 +188,13 @@
 	// ── Actions ──────────────────────────────────────────────────────
 
 	const showFullScreen = () => {
-		if (iframeElement?.requestFullscreen) {
-			iframeElement.requestFullscreen();
-		} else if ((iframeElement as unknown)?.webkitRequestFullscreen) {
-			(iframeElement as unknown).webkitRequestFullscreen();
+		const el = iframeElement as HTMLIFrameElement & {
+			webkitRequestFullscreen?: () => void;
+		};
+		if (el?.requestFullscreen) {
+			el.requestFullscreen();
+		} else if (el?.webkitRequestFullscreen) {
+			el.webkitRequestFullscreen();
 		}
 	};
 

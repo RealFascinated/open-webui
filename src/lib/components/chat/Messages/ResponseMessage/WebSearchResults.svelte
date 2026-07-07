@@ -4,7 +4,18 @@
 	import Search from '$lib/components/icons/Search.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 
-	export let status = { urls: [], query: '' };
+	type SearchResultItem = {
+		link?: string;
+		title?: string;
+		[key: string]: unknown;
+	};
+
+	export let status: {
+		urls?: string[];
+		query?: string;
+		items?: SearchResultItem[];
+		[key: string]: unknown;
+	} = { urls: [], query: '' };
 	let state = false;
 </script>
 
@@ -58,6 +69,7 @@
 
 		{#if status?.items}
 			{#each status.items as item, itemIdx}
+				{#if item.link}
 				<a
 					href={item.link}
 					target="_blank"
@@ -95,6 +107,7 @@
 						</svg>
 					</div>
 				</a>
+				{/if}
 			{/each}
 		{:else if status?.urls}
 			{#each status.urls as url, urlIdx}

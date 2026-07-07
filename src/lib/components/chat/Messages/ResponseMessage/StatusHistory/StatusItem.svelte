@@ -1,11 +1,34 @@
-<script>
+<script lang="ts">
 	import { getContext } from 'svelte';
-	const i18n = getContext('i18n');
+	import type { Writable } from 'svelte/store';
+	import type { i18n as i18nType } from 'i18next';
+
+	const i18n = getContext<Writable<i18nType>>('i18n');
 	import WebSearchResults from '../WebSearchResults.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
 	import { t } from 'i18next';
 
-	export let status = null;
+	type SearchResultItem = {
+		link?: string;
+		title?: string;
+		[key: string]: unknown;
+	};
+
+	type StatusEntry = {
+		done?: boolean;
+		hidden?: boolean;
+		action?: string;
+		description?: string;
+		urls?: string[];
+		items?: SearchResultItem[];
+		queries?: string[];
+		query?: string;
+		count?: number;
+		error?: string;
+		[key: string]: unknown;
+	};
+
+	export let status: StatusEntry | null = null;
 	export let done = false;
 </script>
 
@@ -162,6 +185,14 @@
 					{:else}
 						{$i18n.t('Compacting context')}
 					{/if}
+				</div>
+			</div>
+		{:else if status?.action === 'chat_retry'}
+			<div class="flex flex-col justify-center -space-y-0.5">
+				<div
+					class="shimmer text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+				>
+					{status?.description}
 				</div>
 			</div>
 		{:else}

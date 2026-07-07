@@ -45,7 +45,9 @@ def search_duckduckgo(
             search_results = results if results is not None else []
         except RatelimitException as e:
             log.error(f'RatelimitException: {e}')
-            search_results = []
+            raise RuntimeError(
+                'DuckDuckGo search rate limit exceeded. Try again later or configure a different web search engine.'
+            ) from e
     if filter_list:
         search_results = get_filtered_results(search_results, filter_list)
 

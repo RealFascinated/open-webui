@@ -721,23 +721,7 @@
 							</div>
 						{/if}
 
-						{#if message?.weather}
-							<WeatherCard weather={message.weather} />
-						{/if}
-
-						{#if message?.currency}
-							<CurrencyCard currency={message.currency} />
-						{/if}
-
-						{#if message?.map}
-							<MapCard map={message.map} />
-						{/if}
-
-						{#if message?.sports}
-							<SportsCard sports={message.sports} />
-						{/if}
-
-						{#if message?.embeds && message.embeds.length > 0}
+					{#if message?.embeds && message.embeds.length > 0}
 							<div
 								class="my-1 w-full flex overflow-x-auto gap-2 flex-wrap"
 								id={`${message.id}-embeds-container`}
@@ -916,13 +900,29 @@
 								/>
 							{/if}
 
-							{#if message.code_executions}
-								<CodeExecutions codeExecutions={message.code_executions} />
-							{/if}
+						{#if message.code_executions}
+							<CodeExecutions codeExecutions={message.code_executions} />
+						{/if}
 
-							{#if message?.options}
-								<OptionsCard options={message.options} disabled={!isLastMessage} />
-							{/if}
+						{#if message?.weather}
+							<WeatherCard weather={message.weather} />
+						{/if}
+
+						{#if message?.currency}
+							<CurrencyCard currency={message.currency} />
+						{/if}
+
+						{#if message?.map}
+							<MapCard map={message.map} />
+						{/if}
+
+						{#if message?.sports}
+							<SportsCard sports={message.sports} />
+						{/if}
+
+						{#if message?.options}
+							<OptionsCard options={message.options} disabled={!isLastMessage} />
+						{/if}
 						</div>
 					</div>
 				</div>

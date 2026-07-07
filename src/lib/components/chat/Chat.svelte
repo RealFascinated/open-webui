@@ -2051,7 +2051,16 @@
 	};
 
 	const chatCompletionEventHandler = async (data, message, chatId) => {
-		const { id, done, choices, content, output, sources, selected_model_id, error, usage } = data;
+		const { id, done, choices, content, output, sources, selected_model_id, error, usage, status } =
+			data;
+
+		if (status?.action === 'chat_retry') {
+			if (message?.statusHistory) {
+				message.statusHistory.push(status);
+			} else {
+				message.statusHistory = [status];
+			}
+		}
 
 		// Store raw OR-aligned output items from backend
 		if (output) {

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { getContext, onDestroy } from 'svelte';
+	import type { Writable } from 'svelte/store';
+	import type { i18n as i18nType } from 'i18next';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import {
@@ -21,7 +23,7 @@
 		type UsageRecord
 	} from '$lib/utils/usage';
 
-	const i18n = getContext('i18n');
+	const i18n = getContext<Writable<i18nType>>('i18n');
 
 	export let usage: UsageRecord;
 	export let model: UsageModel = null;

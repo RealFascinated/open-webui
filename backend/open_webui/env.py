@@ -973,6 +973,32 @@ else:
 if CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS == -1:
     CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS = None
 
+CHAT_RESPONSE_MAX_EMPTY_RETRIES = os.getenv('CHAT_RESPONSE_MAX_EMPTY_RETRIES', '10')
+if CHAT_RESPONSE_MAX_EMPTY_RETRIES == '':
+    CHAT_RESPONSE_MAX_EMPTY_RETRIES = 10
+else:
+    try:
+        CHAT_RESPONSE_MAX_EMPTY_RETRIES = int(CHAT_RESPONSE_MAX_EMPTY_RETRIES)
+    except Exception:
+        CHAT_RESPONSE_MAX_EMPTY_RETRIES = 10
+
+if CHAT_RESPONSE_MAX_EMPTY_RETRIES < 0:
+    CHAT_RESPONSE_MAX_EMPTY_RETRIES = 0
+
+# Seconds without upstream stream data before treating the response as stalled.
+# Set to 0 to disable idle-timeout retries (empty-response retries still apply).
+CHAT_RESPONSE_IDLE_TIMEOUT = os.getenv('CHAT_RESPONSE_IDLE_TIMEOUT', '120')
+if CHAT_RESPONSE_IDLE_TIMEOUT == '':
+    CHAT_RESPONSE_IDLE_TIMEOUT = 120
+else:
+    try:
+        CHAT_RESPONSE_IDLE_TIMEOUT = float(CHAT_RESPONSE_IDLE_TIMEOUT)
+    except Exception:
+        CHAT_RESPONSE_IDLE_TIMEOUT = 120
+
+if CHAT_RESPONSE_IDLE_TIMEOUT < 0:
+    CHAT_RESPONSE_IDLE_TIMEOUT = 0
+
 
 def _parse_float_env(name: str, default: float) -> float:
     raw = os.getenv(name, str(default))
