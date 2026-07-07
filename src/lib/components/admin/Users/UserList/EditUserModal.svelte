@@ -42,7 +42,7 @@
 		password: ''
 	};
 
-	let userGroups: any[] | null = null;
+	let userGroups: unknown[] | null = null;
 
 	const submitHandler = async () => {
 		const res = await updateUserById(localStorage.token, selectedUser.id, _user).catch((error) => {
@@ -241,16 +241,6 @@
 		margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
 	}
 
-	.tabs::-webkit-scrollbar {
-		display: none; /* for Chrome, Safari and Opera */
-	}
 
-	.tabs {
-		-ms-overflow-style: none; /* IE and Edge */
-		scrollbar-width: none; /* Firefox */
-	}
 
-	input[type='number'] {
-		-moz-appearance: textfield; /* Firefox */
-	}
 </style>

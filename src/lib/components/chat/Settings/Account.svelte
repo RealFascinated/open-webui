@@ -19,8 +19,8 @@
 
 	const i18n = getContext('i18n');
 
-	export let saveHandler: Function;
-	export let saveSettings: Function;
+	export let saveHandler: (...args: unknown[]) => unknown;
+	export let saveSettings: (...args: unknown[]) => unknown;
 
 	let loaded = false;
 

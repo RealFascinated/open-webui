@@ -110,15 +110,10 @@ from open_webui.utils.misc import (
     set_last_user_message_content,
     strip_empty_content_blocks,
 )
-from open_webui.utils.deferred_tools import (
-    build_active_tools_payload,
-    build_tools_payload_for_provider,
-    init_deferred_loading,
-    uses_anthropic_native_deferred,
-)
 from open_webui.utils.payload import apply_system_prompt_to_body, resolve_system_prompt
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.response import augment_provider_usage, merge_usage, normalize_usage
+from open_webui.utils.llamacpp_tokens import collect_tool_specs_by_source, snapshot_messages
 from open_webui.utils.sanitize import sanitize_code
 from open_webui.utils.task import (
     get_task_model_id,
@@ -2067,6 +2062,24 @@ def strip_compaction_fields(messages: list[dict]) -> list[dict]:
     return stripped
 
 
+def _track_llamacpp_context(model: dict) -> bool:
+    return model.get('provider') == 'llama.cpp'
+
+
+def _record_context_snapshot(metadata: dict, key: str, messages: list) -> None:
+    snapshots = metadata.setdefault('context_snapshots', {})
+    snapshots[key] = snapshot_messages(messages)
+
+
+def usage_with_context_breakdown(request: Request, usage: dict | None) -> dict | None:
+    breakdown = getattr(request.state, 'context_breakdown', None)
+    if not breakdown:
+        return usage
+    result = dict(usage or {})
+    result['context_breakdown'] = breakdown
+    return result
+
+
 def sanitize_tool_pairs(messages: list[dict]) -> list[dict]:
     tool_result_ids = {
         message.get('tool_call_id')
@@ -2384,6 +2397,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     )
     form_data['messages'] = sanitize_tool_pairs(form_data['messages'])
 
+    track_context = _track_llamacpp_context(model)
+
     system_message = get_system_message(form_data.get('messages', []))
     if system_message:  # Chat Controls/User Settings
         try:
@@ -2526,6 +2541,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     features = form_data.pop('features', None) or {}
     extra_params['__features__'] = features
+
+    if track_context:
+        _record_context_snapshot(metadata, 'base', form_data.get('messages', []))
+
     if features:
         if 'voice' in features and features['voice']:
             if await Config.get('task.voice.prompt.enable'):
@@ -2540,7 +2559,11 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 )
 
         if 'memory' in features and features['memory'] and await Config.get('memories.system_context.enable'):
+            if track_context:
+                _record_context_snapshot(metadata, 'pre_memory', form_data.get('messages', []))
             form_data = await add_memory_context(request, form_data, user, model)
+            if track_context:
+                _record_context_snapshot(metadata, 'post_memory', form_data.get('messages', []))
 
         if 'web_search' in features and features['web_search']:
             # Skip forced RAG web search when native FC is enabled - model can use web_search tool
@@ -2611,6 +2634,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     )
 
     if skill_ids:
+        if track_context:
+            _record_context_snapshot(metadata, 'pre_skills', form_data.get('messages', []))
         from open_webui.models.skills import Skills as SkillsModel
 
         accessible_skill_ids = {s.id for s in await SkillsModel.get_skills_by_user_id(user.id, 'read')}
@@ -2641,6 +2666,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 form_data['messages'],
                 append=True,
             )
+
+        if track_context:
+            _record_context_snapshot(metadata, 'post_skills', form_data.get('messages', []))
 
     # Strip <$skillId|label> mention tags so the model doesn't see raw markup.
     strip_skill_mentions(form_data.get('messages', []))
@@ -2862,7 +2890,11 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         if use_builtin_tools:
             # Add file context to user messages
             chat_id = metadata.get('chat_id')
+            if track_context:
+                _record_context_snapshot(metadata, 'pre_files', form_data.get('messages', []))
             form_data['messages'] = await add_file_context(form_data.get('messages', []), chat_id, user)
+            if track_context:
+                _record_context_snapshot(metadata, 'post_files', form_data.get('messages', []))
             builtin_tools = await get_builtin_tools(
                 request,
                 {
@@ -2883,16 +2915,16 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             metadata['tools'] = tools_dict
 
             if metadata.get('params', {}).get('function_calling') != 'legacy':
-                init_deferred_loading(
-                    tools_dict,
-                    metadata,
-                    model,
-                    native_anthropic=uses_anthropic_native_deferred(model),
-                )
-                # If the function calling is native, then call the tools function calling handler
-                form_data['tools'] = build_tools_payload_for_provider(tools_dict, metadata, model)
+                form_data['tools'] = [
+                    {'type': 'function', 'function': tool.get('spec', {})} for tool in tools_dict.values()
+                ]
                 if inlet_filter_tools:
                     form_data['tools'].extend(inlet_filter_tools)
+                if track_context:
+                    metadata['tool_specs_by_source'] = collect_tool_specs_by_source(
+                        tools_dict,
+                        form_data.get('tools'),
+                    )
             else:
                 # If the function calling is not native, then call the tools function calling handler
                 try:
@@ -2935,6 +2967,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     # If context is not empty, insert it into the messages
     if sources and prompt:
+        if track_context:
+            _record_context_snapshot(metadata, 'pre_rag', form_data.get('messages', []))
         form_data['messages'] = await apply_source_context_to_messages(request, form_data['messages'], sources, prompt)
 
     # If there are citations, add them to the data_items
@@ -2967,6 +3001,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # Merge any duplicate system messages into a single message at position 0
     # to prevent template parsing errors with strict chat templates (e.g. Qwen)
     form_data['messages'] = merge_system_messages(form_data.get('messages', []))
+
+    if track_context:
+        _record_context_snapshot(metadata, 'final', form_data.get('messages', []))
 
     return form_data, metadata, events
 
@@ -3662,6 +3699,7 @@ async def non_streaming_chat_response_handler(response, ctx):
 
                     # Save message in the database
                     usage = normalize_usage(response_data.get('usage', {}) or {})
+                    usage = usage_with_context_breakdown(request, usage)
 
                     if not metadata.get('chat_id', '').startswith('channel:'):
                         await Chats.upsert_message_to_chat_by_id_and_message_id(
@@ -4280,6 +4318,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     raw_usage = augment_provider_usage(data, data.get('usage', {}) or {})
                                     if raw_usage:
                                         usage = merge_usage(usage, raw_usage)
+                                        usage = usage_with_context_breakdown(request, usage)
                                         await event_emitter(
                                             {
                                                 'type': 'chat:completion',
@@ -4831,23 +4870,6 @@ async def streaming_chat_response_handler(response, ctx):
                         tool_type = None
                         direct_tool = False
 
-                        if tool_function_name in (
-                            'tool_search_tool_bm25',
-                            'tool_search_tool_regex',
-                        ):
-                            results.append(
-                                {
-                                    'tool_call_id': tool_call_id,
-                                    'content': json.dumps(
-                                        {
-                                            'status': 'success',
-                                            'message': 'Tool search is handled by the Anthropic API.',
-                                        }
-                                    ),
-                                }
-                            )
-                            continue
-
                         if tool_function_name in tools:
                             tool = tools[tool_function_name]
                             spec = tool.get('spec', {})
@@ -5073,18 +5095,6 @@ async def streaming_chat_response_handler(response, ctx):
                     )
 
                     try:
-                        if metadata.get('deferred_loading') and metadata.get('deferred_loading_mode') == 'client':
-                            form_data['tools'] = build_active_tools_payload(
-                                metadata.get('tools', {}),
-                                metadata,
-                            )
-                        elif metadata.get('deferred_loading') and metadata.get('deferred_loading_mode') == 'anthropic':
-                            form_data['tools'] = build_tools_payload_for_provider(
-                                metadata.get('tools', {}),
-                                metadata,
-                                model,
-                            )
-
                         new_form_data = {
                             **form_data,
                             'model': model_id,
@@ -5372,11 +5382,12 @@ async def streaming_chat_response_handler(response, ctx):
                     if not metadata.get('chat_id', '').startswith('channel:')
                     else ''
                 )
+                final_usage = usage_with_context_breakdown(request, usage) if usage else None
                 data = {
                     'done': True,
                     'output': output,
                     'title': title,
-                    **({'usage': usage} if usage else {}),
+                    **({'usage': final_usage} if final_usage else {}),
                 }
 
                 if not metadata.get('chat_id', '').startswith('channel:'):
@@ -5388,14 +5399,14 @@ async def streaming_chat_response_handler(response, ctx):
                             {
                                 'done': True,
                                 'output': output,
-                                **({'usage': usage} if usage else {}),
+                                **({'usage': final_usage} if final_usage else {}),
                             },
                         )
-                    elif usage:
+                    elif final_usage:
                         await Chats.upsert_message_to_chat_by_id_and_message_id(
                             metadata['chat_id'],
                             metadata['message_id'],
-                            {'done': True, 'usage': usage},
+                            {'done': True, 'usage': final_usage},
                         )
                     else:
                         await Chats.upsert_message_to_chat_by_id_and_message_id(
@@ -5430,7 +5441,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                 ctx['assistant_message'] = {
                     'output': output,
-                    **({'usage': usage} if usage else {}),
+                    **({'usage': final_usage} if final_usage else {}),
                 }
                 await outlet_filter_handler(ctx)
                 await background_tasks_handler(ctx)

@@ -17,8 +17,8 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 
-	export let onSubmit: Function = () => {};
-	export let onDelete: Function = () => {};
+	export let onSubmit: (...args: unknown[]) => unknown = () => {};
+	export let onDelete: (...args: unknown[]) => unknown = () => {};
 
 	export let show = false;
 	export let edit = false;

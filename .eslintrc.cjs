@@ -25,6 +25,11 @@ module.exports = {
 			parser: 'svelte-eslint-parser',
 			parserOptions: {
 				parser: '@typescript-eslint/parser'
+			},
+			rules: {
+				// @typescript-eslint/no-unused-vars crashes on some Svelte AST shapes; svelte-check covers this.
+				'@typescript-eslint/no-unused-vars': 'off',
+				'no-unused-vars': 'off'
 			}
 		}
 	]

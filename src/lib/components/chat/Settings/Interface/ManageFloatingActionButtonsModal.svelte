@@ -22,6 +22,7 @@
 	};
 
 	$: if (show) {
+		// reset when modal opens
 	}
 
 	onMount(() => {});

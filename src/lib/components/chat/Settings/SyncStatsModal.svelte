@@ -34,7 +34,7 @@
 						'*'
 					);
 				}
-			} catch (err: any) {
+			} catch (err: unknown) {
 				console.error('Failed to verify chat:', err);
 				if (window.opener) {
 					window.opener.postMessage(
@@ -190,7 +190,7 @@
 			postToOpener({ type: 'sync:complete' });
 			syncing = false;
 			completed = true;
-		} catch (err: any) {
+		} catch (err: unknown) {
 			handleError(err?.message || 'An unexpected error occurred');
 		}
 	};
@@ -244,9 +244,10 @@
 			const reader = res.body.getReader();
 			const decoder = new TextDecoder();
 
-			const items: any[] = [];
+			const items: unknown[] = [];
 			let buffer = '';
 
+			// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
@@ -292,7 +293,7 @@
 				document.body.removeChild(a);
 				window.URL.revokeObjectURL(url);
 			}
-		} catch (err: any) {
+		} catch (err: unknown) {
 			// Don't show error if user cancelled the download
 			if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
 				// User cancelled - just reset state silently

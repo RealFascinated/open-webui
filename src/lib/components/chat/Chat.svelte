@@ -321,7 +321,9 @@
 						imageGenerationEnabled = input.imageGenerationEnabled;
 						codeInterpreterEnabled = input.codeInterpreterEnabled;
 					}
-				} catch (e) {}
+				} catch {
+					// Ignore malformed persisted input state
+				}
 			} else {
 				await setDefaults();
 			}
@@ -577,7 +579,7 @@
 		});
 	};
 
-	const terminalEventHandler = (type: string, data: any) => {
+	const terminalEventHandler = (type: string, data: unknown) => {
 		if (type === 'terminal:display_file') {
 			if (!data?.path) return;
 			displayFileHandler(data.path, { showControls, showFileNavPath });
@@ -927,7 +929,9 @@
 		try {
 			speechSynthesis.cancel();
 			$audioQueue?.stop();
-		} catch {}
+		} catch {
+			// intentionally empty
+		}
 	};
 
 	const hasPendingAssistantLeaf = () =>
@@ -1064,7 +1068,9 @@
 						imageGenerationEnabled = input.imageGenerationEnabled;
 						codeInterpreterEnabled = input.codeInterpreterEnabled;
 					}
-				} catch (e) {}
+				} catch {
+					// Ignore malformed persisted input state
+				}
 			}
 
 			const chatInput = document.getElementById('chat-input');
@@ -1111,7 +1117,7 @@
 			name: fileData.name,
 			url: fileData.url,
 			headers: {
-				Authorization: `Bearer ${token}`
+				Authorization: `Bearer ${fileData.headers.Authorization}`
 			}
 		});
 
@@ -1270,7 +1276,7 @@
 
 				files = [...files];
 			} catch (e) {
-				files = files.filter((f) => f.name !== url);
+				files = files.filter((f) => f.name !== fileItem.url);
 				toast.error(`${e}`);
 			}
 		}
@@ -2318,7 +2324,7 @@
 			modelIdx = null,
 			regenerationPrompt = null
 		}: {
-			messages?: any[] | null;
+			messages?: unknown[] | null;
 			modelId?: string | null;
 			modelIdx?: number | null;
 			regenerationPrompt?: string | null;
@@ -2536,7 +2542,7 @@
 			true;
 		// Always include system prompt — backend extracts it and prepends to DB messages.
 		// Only temp chats need conversation messages (persisted chats load from DB).
-		let messages: any[] = [
+		let messages: unknown[] = [
 			params?.system || $settings.system
 				? { role: 'system', content: `${params?.system ?? $settings?.system ?? ''}` }
 				: undefined
@@ -3063,7 +3069,7 @@
 	const MAX_DRAFT_LENGTH = 5000;
 	let saveDraftTimeout: ReturnType<typeof setTimeout> | null = null;
 
-	const saveDraft = async (draft: any, chatId: string | null = null) => {
+	const saveDraft = async (draft: unknown, chatId: string | null = null) => {
 		if (saveDraftTimeout) {
 			clearTimeout(saveDraftTimeout);
 		}
@@ -3236,22 +3242,18 @@
 			{#if $selectedFolder && $selectedFolder?.meta?.background_image_url}
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat"
-					style="background-image: url({$selectedFolder?.meta?.background_image_url})  "
-				/>
+					style="background-image: url({$selectedFolder?.meta?.background_image_url})  "></div>
 
 				<div
-					class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"
-				/>
+					class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"></div>
 			{:else if $settings?.backgroundImageUrl ?? $config?.license_metadata?.background_image_url ?? null}
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat"
 					style="background-image: url({$settings?.backgroundImageUrl ??
-						$config?.license_metadata?.background_image_url})  "
-				/>
+						$config?.license_metadata?.background_image_url})  "></div>
 
 				<div
-					class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"
-				/>
+					class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"></div>
 			{/if}
 
 			<PaneGroup direction="horizontal" class="w-full h-full">

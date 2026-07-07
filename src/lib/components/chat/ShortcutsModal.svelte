@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getContext, onMount } from 'svelte';
 	import Modal from '../common/Modal.svelte';
-	import { shortcuts } from '$lib/shortcuts';
+	import { shortcuts, Shortcut } from '$lib/shortcuts';
 	import { settings } from '$lib/stores';
 	import ShortcutItem from './ShortcutItem.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
@@ -55,7 +55,7 @@
 		{#each Object.entries(categorizedShortcuts) as [category, items], categoryIndex}
 			{#if categoryIndex > 0}
 				<div class="py-3">
-					<div class="w-full border-t dark:border-gray-850 border-gray-50" />
+					<div class="w-full border-t dark:border-gray-850 border-gray-50"></div>
 				</div>
 			{/if}
 
@@ -114,22 +114,7 @@
 </Modal>
 
 <style>
-	input::-webkit-outer-spin-button,
-	input::-webkit-inner-spin-button {
-		-webkit-appearance: none;
-		margin: 0;
-	}
 
-	.tabs::-webkit-scrollbar {
-		display: none;
-	}
 
-	.tabs {
-		-ms-overflow-style: none;
-		scrollbar-width: none;
-	}
 
-	input[type='number'] {
-		-moz-appearance: textfield;
-	}
 </style>

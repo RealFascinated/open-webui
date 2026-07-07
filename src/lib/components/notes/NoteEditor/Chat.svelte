@@ -67,7 +67,7 @@
 	export let onStop = () => {};
 	export let onEdited = () => {};
 
-	export let insertNoteHandler = () => {};
+	export const insertNoteHandler = () => {};
 	export let scrollToBottomHandler = () => {};
 
 	let loaded = false;
@@ -209,6 +209,7 @@ Based on the user's instruction, update and enhance the existing notes or select
 				.pipeThrough(splitStream('\n'))
 				.getReader();
 
+			// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 			while (true) {
 				const { value, done } = await reader.read();
 				if (done || stopResponseFlag) {

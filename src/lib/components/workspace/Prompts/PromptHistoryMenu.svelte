@@ -10,8 +10,8 @@
 	const i18n = getContext('i18n');
 
 	export let isProduction = false;
-	export let onDelete: Function;
-	export let onClose: Function;
+	export let onDelete: (...args: unknown[]) => unknown;
+	export let onClose: (...args: unknown[]) => unknown;
 
 	let show = false;
 	let showDeleteConfirmDialog = false;

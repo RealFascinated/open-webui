@@ -7,6 +7,12 @@ node_modules
 .env.*
 !.env.example
 
+# Vendored / generated assets (not application source)
+/static
+/backend/open_webui/static
+/backend/venv
+/docs/system_prompts_leaks
+
 # Ignore files for PNPM, NPM and YARN
 pnpm-lock.yaml
 package-lock.json

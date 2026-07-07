@@ -15,7 +15,7 @@
 		description: string;
 		content: string;
 		is_active: boolean;
-		access_grants: any[];
+		access_grants: unknown[];
 	} | null = null;
 
 	let clone = false;

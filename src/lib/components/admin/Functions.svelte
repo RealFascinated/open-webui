@@ -185,13 +185,17 @@
 
 		if (res) {
 			if (func.is_global) {
-				func.type === 'filter'
-					? toast.success($i18n.t('Filter is now globally enabled'))
-					: toast.success($i18n.t('Function is now globally enabled'));
+				if (func.type === 'filter') {
+					toast.success($i18n.t('Filter is now globally enabled'));
+				} else {
+					toast.success($i18n.t('Function is now globally enabled'));
+				}
 			} else {
-				func.type === 'filter'
-					? toast.success($i18n.t('Filter is now globally disabled'))
-					: toast.success($i18n.t('Function is now globally disabled'));
+				if (func.type === 'filter') {
+					toast.success($i18n.t('Filter is now globally disabled'));
+				} else {
+					toast.success($i18n.t('Function is now globally disabled'));
+				}
 			}
 
 			_functions.set(await getFunctions(localStorage.token));
@@ -500,6 +504,7 @@
 
 									<Tooltip content={$i18n.t('Valves')}>
 										<button
+											aria-label={$i18n.t('Valves')}
 											class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 											type="button"
 											on:click={() => {

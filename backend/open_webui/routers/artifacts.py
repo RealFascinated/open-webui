@@ -23,6 +23,18 @@ from open_webui.utils.auth import get_verified_user
 router = APIRouter()
 
 
+async def _require_artifacts_feature(user, db: AsyncSession):
+    if not await Config.get('artifacts.enable'):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Artifacts feature is disabled',
+        )
+    if user.role != 'admin' and not await has_permission(
+        user.id, 'features.artifacts', await Config.get('user.permissions'), db=db
+    ):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.UNAUTHORIZED)
+
+
 ############################
 # Publish Artifact
 ############################
@@ -34,10 +46,7 @@ async def publish_artifact(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    if user.role != 'admin' and not await has_permission(
-        user.id, 'features.artifacts', await Config.get('user.permissions'), db=db
-    ):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.UNAUTHORIZED)
+    await _require_artifacts_feature(user, db)
 
     artifact = await Artifacts.publish_artifact(user.id, form_data, db=db)
     return ArtifactWithCodeResponse(**artifact.model_dump())
@@ -53,10 +62,7 @@ async def get_artifacts(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    if user.role != 'admin' and not await has_permission(
-        user.id, 'features.artifacts', await Config.get('user.permissions'), db=db
-    ):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.UNAUTHORIZED)
+    await _require_artifacts_feature(user, db)
 
     artifacts = await Artifacts.get_artifacts_by_user_id(user.id, skip=0, limit=50, db=db)
     return [ArtifactResponse(**a.model_dump()) for a in artifacts]
@@ -73,6 +79,8 @@ async def get_artifact(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
+    await _require_artifacts_feature(user, db)
+
     artifact = await Artifacts.get_artifact_by_id(artifact_id, db=db)
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
@@ -95,6 +103,8 @@ async def update_artifact(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
+    await _require_artifacts_feature(user, db)
+
     artifact = await Artifacts.get_artifact_by_id(artifact_id, db=db)
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
@@ -117,6 +127,8 @@ async def delete_artifact(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
+    await _require_artifacts_feature(user, db)
+
     artifact = await Artifacts.get_artifact_by_id(artifact_id, db=db)
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
@@ -141,6 +153,8 @@ async def list_storage_keys(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
+    await _require_artifacts_feature(user, db)
+
     artifact = await Artifacts.get_artifact_by_id(artifact_id, db=db)
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
@@ -171,6 +185,8 @@ async def get_storage_item(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
+    await _require_artifacts_feature(user, db)
+
     artifact = await Artifacts.get_artifact_by_id(artifact_id, db=db)
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
@@ -199,6 +215,8 @@ async def set_storage_item(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
+    await _require_artifacts_feature(user, db)
+
     artifact = await Artifacts.get_artifact_by_id(artifact_id, db=db)
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
@@ -250,6 +268,8 @@ async def delete_storage_item(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
+    await _require_artifacts_feature(user, db)
+
     artifact = await Artifacts.get_artifact_by_id(artifact_id, db=db)
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)

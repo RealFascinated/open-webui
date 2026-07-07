@@ -21,7 +21,7 @@
 
 	export let chevron = true;
 	export let onAddLabel: string = '';
-	export let onAdd: null | Function = null;
+	export let onAdd: null | ((...args: unknown[]) => unknown) = null;
 
 	export let dragAndDrop = true;
 
@@ -151,7 +151,6 @@
 					localStorage.setItem(`${id}-folder-state`, `${state}`);
 				}}
 			>
-				<!-- svelte-ignore a11y-no-static-element-interactions -->
 				<div
 					id="sidebar-folder-button"
 					class=" w-full group rounded-xl relative flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-900 transition {buttonClassName}"

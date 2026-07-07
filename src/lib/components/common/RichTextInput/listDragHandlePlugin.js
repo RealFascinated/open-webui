@@ -405,7 +405,9 @@ export function listDragHandlePlugin(options = {}) {
 						view.dispatch(
 							view.state.tr.setSelection(NodeSelection.create(view.state.doc, fromStart))
 						);
-					} catch {}
+					} catch {
+			// intentionally empty
+		}
 
 					const startMouse = { x: event.clientX, y: event.clientY };
 					const ghostEl = ensureGhost(view, fromStart);

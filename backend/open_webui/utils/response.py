@@ -162,6 +162,11 @@ def merge_usage(current: dict | None, incoming: dict | None) -> dict:
                 incoming_usage.get(key) if isinstance(incoming_usage.get(key), dict) else {},
             )
 
+    if 'context_breakdown' in incoming_usage:
+        result['context_breakdown'] = incoming_usage['context_breakdown']
+    elif 'context_breakdown' in current_usage:
+        result['context_breakdown'] = current_usage['context_breakdown']
+
     return result
 
 

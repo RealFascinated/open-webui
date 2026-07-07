@@ -40,7 +40,7 @@
 		ciphers: ''
 	};
 
-	let oauthConfig: any = null;
+	let oauthConfig: unknown = null;
 
 	const updateLdapServerHandler = async () => {
 		await updateLdapConfig(localStorage.token, ENABLE_LDAP);

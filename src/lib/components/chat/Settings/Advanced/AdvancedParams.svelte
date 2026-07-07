@@ -7,7 +7,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let onChange: (params: any) => void = () => {};
+	export let onChange: (params: unknown) => void = () => {};
 
 	export let admin = false;
 	export let custom = false;

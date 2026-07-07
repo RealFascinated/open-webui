@@ -8,7 +8,7 @@ export class KokoroWorker {
 		text: string;
 		voice: string;
 		resolve: (value: string) => void;
-		reject: (reason: any) => void;
+		reject: (reason: unknown) => void;
 	}> = [];
 	private processing = false; // To track if a request is being processed
 

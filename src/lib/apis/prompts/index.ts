@@ -424,7 +424,7 @@ export const deletePromptById = async (token: string, promptId: string) => {
 export const updatePromptAccessGrants = async (
 	token: string,
 	promptId: string,
-	accessGrants: any[]
+	accessGrants: object[]
 ) => {
 	let error = null;
 

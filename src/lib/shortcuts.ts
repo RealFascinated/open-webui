@@ -6,7 +6,7 @@ type ShortcutRegistry = {
 		tooltip?: string;
 		setting?: {
 			id: string;
-			value: any;
+			value: unknown;
 		};
 	};
 };

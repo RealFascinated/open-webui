@@ -116,6 +116,7 @@ class ArtifactPublishForm(BaseModel):
 
 class ArtifactUpdateForm(BaseModel):
     title: Optional[str] = None
+    type: Optional[str] = None
     code: Optional[str] = None
     meta: Optional[str] = None
 
@@ -196,6 +197,8 @@ class ArtifactTable:
                 return None
             if form_data.title is not None:
                 artifact.title = form_data.title
+            if form_data.type is not None:
+                artifact.type = form_data.type
             if form_data.code is not None:
                 artifact.code = form_data.code
             if form_data.meta is not None:

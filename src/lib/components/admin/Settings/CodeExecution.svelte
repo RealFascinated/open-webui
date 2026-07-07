@@ -11,7 +11,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let saveHandler: Function;
+	export let saveHandler: (...args: unknown[]) => unknown;
 
 	let config = null;
 

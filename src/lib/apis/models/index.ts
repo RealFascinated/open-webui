@@ -185,10 +185,21 @@ export const getBaseModels = async (token: string = '', tag: string = '') => {
 	return res;
 };
 
+type ModelFormPayload = {
+	id?: string;
+	base_model_id?: string;
+	name?: string;
+	meta?: Record<string, unknown>;
+	params?: Record<string, unknown>;
+	access_grants?: object[];
+	is_active?: boolean;
+};
+
 export const createNewModel = async (token: string, model: object) => {
 	let error = null;
 
-	const { id, base_model_id, name, meta, params, access_grants, is_active } = model as any;
+	const { id, base_model_id, name, meta, params, access_grants, is_active } =
+		model as ModelFormPayload;
 	const payload = { id, base_model_id, name, meta, params, access_grants, is_active };
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/models/create`, {
@@ -290,7 +301,8 @@ export const toggleModelById = async (token: string, id: string) => {
 export const updateModelById = async (token: string, id: string, model: object) => {
 	let error = null;
 
-	const { base_model_id, name, meta, params, access_grants, is_active } = model as any;
+	const { base_model_id, name, meta, params, access_grants, is_active } =
+		model as ModelFormPayload;
 	const payload = { id, base_model_id, name, meta, params, access_grants, is_active };
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/models/model/update`, {
@@ -327,7 +339,7 @@ export const updateModelAccessGrants = async (
 	token: string,
 	id: string,
 	name: string,
-	accessGrants: any[]
+	accessGrants: object[]
 ) => {
 	let error = null;
 

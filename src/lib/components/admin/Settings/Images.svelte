@@ -159,7 +159,9 @@
 			if (obj && typeof obj === 'object') {
 				return true;
 			}
-		} catch (e) {}
+		} catch {
+			// invalid JSON
+		}
 		return false;
 	};
 

@@ -31,7 +31,7 @@
 
 	export let selectedToolIds: string[] = [];
 	export let selectedSkillIds: string[] = [];
-	export let selectedModels: string[] = [];
+	export const selectedModels: string[] = [];
 
 	export let toggleFilters: { id: string; name: string; description?: string; icon?: string }[] =
 		[];
@@ -42,7 +42,7 @@
 	export let showCodeInterpreterButton = false;
 	export let codeInterpreterEnabled = false;
 
-	export let onShowValves: Function;
+	export let onShowValves: (...args: unknown[]) => unknown;
 
 	let tools = null;
 	let skills = null;
@@ -149,15 +149,12 @@
 	<div in:fly={{ x: -20, duration: 150 }}>
 		{#if rootSection === 'all' || rootSection === 'nav'}
 			{#if showToolsNavButton}
-				<div
-					bind:this={toolsTriggerElement}
-					class="relative"
-					on:mouseenter={openToolsFlyout}
-					on:mouseleave={closeToolsFlyout}
-				>
+				<div bind:this={toolsTriggerElement} class="relative">
 					<button
 						class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
 						type="button"
+						on:mouseenter={openToolsFlyout}
+						on:mouseleave={closeToolsFlyout}
 						on:click={toggleToolsFlyout}
 					>
 						<Wrench />

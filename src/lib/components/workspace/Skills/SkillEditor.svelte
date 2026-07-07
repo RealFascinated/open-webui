@@ -13,7 +13,7 @@
 	import { updateSkillAccessGrants } from '$lib/apis/skills';
 	import { goto } from '$app/navigation';
 
-	export let onSubmit: Function;
+	export let onSubmit: (...args: unknown[]) => unknown;
 	export let edit = false;
 	export let skill = null;
 	export let clone = false;
@@ -210,8 +210,7 @@
 									on:input={handleContentInput}
 									placeholder={$i18n.t('Enter skill instructions in markdown...')}
 									aria-label={$i18n.t('Skill Instructions')}
-									required
-								/>
+									required></textarea>
 							{/if}
 						</div>
 					</div>

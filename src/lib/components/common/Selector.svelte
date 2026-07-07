@@ -1,13 +1,16 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
+	const i18n = getContext('i18n');
+
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import Check from '../icons/Check.svelte';
 	import Search from '../icons/Search.svelte';
 	import Select from './Select.svelte';
 
 	export let value = '';
-	export let placeholder = $i18n.t('Select a model');
+	export let placeholder = 'Select a model';
 	export let searchEnabled = true;
-	export let searchPlaceholder = $i18n.t('Search a model');
+	export let searchPlaceholder = 'Search a model';
 
 	export let items = [
 		{ value: 'mango', label: 'Mango' },

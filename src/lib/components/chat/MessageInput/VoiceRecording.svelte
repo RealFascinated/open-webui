@@ -493,8 +493,7 @@
 							: 'bg-indigo-500 dark:bg-indigo-400  '} 
                     
                     inline-block h-full"
-						style="height: {Math.min(100, Math.max(14, rms * 100))}%;"
-					/>
+						style="height: {Math.min(100, Math.max(14, rms * 100))}%;"></div>
 				</div>
 			{/each}
 		</div>
@@ -566,42 +565,37 @@
 								}
 							}
 						</style><g class="spinner_OSmW"
-							><rect x="11" y="1" width="2" height="5" opacity=".14" /><rect
+							><rect x="11" y="1" width="2" height="5" opacity=".14"></rect><rect
 								x="11"
 								y="1"
 								width="2"
 								height="5"
 								transform="rotate(30 12 12)"
-								opacity=".29"
-							/><rect
+								opacity=".29"></rect><rect
 								x="11"
 								y="1"
 								width="2"
 								height="5"
 								transform="rotate(60 12 12)"
-								opacity=".43"
-							/><rect
+								opacity=".43"></rect><rect
 								x="11"
 								y="1"
 								width="2"
 								height="5"
 								transform="rotate(90 12 12)"
-								opacity=".57"
-							/><rect
+								opacity=".57"></rect><rect
 								x="11"
 								y="1"
 								width="2"
 								height="5"
 								transform="rotate(120 12 12)"
-								opacity=".71"
-							/><rect
+								opacity=".71"></rect><rect
 								x="11"
 								y="1"
 								width="2"
 								height="5"
 								transform="rotate(150 12 12)"
-								opacity=".86"
-							/><rect x="11" y="1" width="2" height="5" transform="rotate(180 12 12)" /></g
+								opacity=".86"></rect><rect x="11" y="1" width="2" height="5" transform="rotate(180 12 12)"></rect></g
 						></svg
 					>
 				</div>
@@ -610,6 +604,7 @@
 					id="confirm-recording-button"
 					type="button"
 					class="p-1.5 bg-indigo-500 text-white dark:bg-indigo-500 dark:text-blue-950 rounded-full"
+					aria-label={$i18n.t('Confirm')}
 					on:click={async () => {
 						await confirmRecording();
 					}}
@@ -622,7 +617,7 @@
 						stroke="currentColor"
 						class="size-4"
 					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+						<path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"></path>
 					</svg>
 				</button>
 			{/if}

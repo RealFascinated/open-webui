@@ -16,7 +16,7 @@
 
 	import AddToolServerModal from '$lib/components/AddToolServerModal.svelte';
 
-	export let saveSettings: Function;
+	export let saveSettings: (...args: unknown[]) => unknown;
 
 	let servers = null;
 	let terminalServerConfigs: { url: string; key: string; name?: string; enabled: boolean }[] = [];

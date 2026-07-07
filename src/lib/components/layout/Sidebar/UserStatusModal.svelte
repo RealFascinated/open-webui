@@ -17,7 +17,7 @@
 	import Emoji from '$lib/components/common/Emoji.svelte';
 
 	export let show = false;
-	export let onSave: Function = () => {};
+	export let onSave: (...args: unknown[]) => unknown = () => {};
 
 	let emoji = '';
 	let message = '';

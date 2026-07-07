@@ -21,7 +21,7 @@
 
 	export let user;
 
-	export let setInputText: Function = () => {};
+	export let setInputText: (...args: unknown[]) => unknown = () => {};
 	export let gotoMessage;
 	export let showPreviousMessage;
 	export let showNextMessage;

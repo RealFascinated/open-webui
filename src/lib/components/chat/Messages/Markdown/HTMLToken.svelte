@@ -9,7 +9,7 @@
 
 	export let id: string;
 	export let token: Token;
-	export let onPreview: Function = () => {};
+	export let onPreview: (content: string) => void = () => {};
 
 	let html: string | null = null;
 
@@ -29,9 +29,11 @@
 </script>
 
 {#if token.type === 'html' && isAntArtifact}
+	<div data-token-id={id}>
 	{#each antArtifacts as artifact}
 		<AntArtifactCard {artifact} {onPreview} />
 	{/each}
+	</div>
 {:else if token.type === 'html' && isVisualization}
 	{#if visualizationType === 'html'}
 		<iframe
@@ -46,6 +48,7 @@
 		></iframe>
 	{:else}
 		<div class="my-2 w-full overflow-x-auto">
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 			{@html DOMPurify.sanitize(visualizationContent, { USE_PROFILES: { svg: true, svgFilters: true } })}
 		</div>
 	{/if}
@@ -71,7 +74,6 @@
 		{@const audio = html.match(/<audio[^>]*>([\s\S]*?)<\/audio>/)}
 		{@const audioSrc = audio && audio[1]}
 		{#if audioSrc}
-			<!-- svelte-ignore a11y-media-has-caption -->
 			<audio
 				class="w-full my-2"
 				src={audioSrc.replaceAll('&amp;', '&')}
@@ -112,7 +114,9 @@
 					try {
 						e.currentTarget.style.height =
 							e.currentTarget.contentWindow.document.body.scrollHeight + 20 + 'px';
-					} catch {}
+					} catch {
+						// Cross-origin iframe — cannot read content height
+					}
 				}}
 			></iframe>
 		{:else}
@@ -154,7 +158,9 @@
 					try {
 						e.currentTarget.style.height =
 							e.currentTarget.contentWindow.document.body.scrollHeight + 20 + 'px';
-					} catch {}
+					} catch {
+						// Cross-origin iframe — cannot read content height
+					}
 				}}
 			></iframe>
 		{/if}

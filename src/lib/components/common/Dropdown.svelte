@@ -184,12 +184,12 @@
 
 {#if show}
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
 		use:portal
 		bind:this={contentEl}
 		class={contentClass}
 		role="menu"
+		tabindex="-1"
 		style:max-height={maxHeight}
 		style:overflow-y="auto"
 		transition:flyAndScale

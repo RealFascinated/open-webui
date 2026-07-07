@@ -441,6 +441,7 @@ export const getAllChats = async (token: string) => {
 	const chats: object[] = [];
 	let buffer = '';
 
+	// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 	while (true) {
 		const { done, value } = await reader.read();
 		if (done) break;

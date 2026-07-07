@@ -71,7 +71,6 @@ from open_webui.tools.builtin import (
     list_folders,
     list_memories,
     list_memory_paths,
-    tool_search,
     move_chat_to_folder,
     map_display,
     present_options,
@@ -515,6 +514,7 @@ async def get_builtin_tools(
         'automations.enable',
         'calendar.enable',
         'folders.enable',
+        'artifacts.enable',
     )
 
     async def has_user_permission(feature_key: str) -> bool:
@@ -723,10 +723,6 @@ async def get_builtin_tools(
                 delete_artifact,
             ]
         )
-
-    # Meta tool — always available to discover session tools
-    if tool_search not in builtin_functions:
-        builtin_functions.append(tool_search)
 
     for func in builtin_functions:
         callable = await get_async_tool_function_and_apply_extra_params(

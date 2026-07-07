@@ -48,7 +48,7 @@
 		// recursive form, but without the stack-overflow-and-recover path it hit on
 		// scalar values (e.g. JSON.parse('5') -> 5 -> infinite self-recursion).
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		let value: any = str;
+		let value: unknown = str;
 		while (typeof value === 'string') {
 			try {
 				value = JSON.parse(value);

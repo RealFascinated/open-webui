@@ -41,7 +41,7 @@
 	let editName = '';
 	let editInput: HTMLInputElement;
 
-	const startRename = (file: any) => {
+	const startRename = (file: unknown) => {
 		editingFileId = file?.id ?? file?.tempId;
 		editName = file?.name ?? file?.meta?.name ?? '';
 		setTimeout(() => editInput?.select(), 0);
@@ -79,6 +79,7 @@
 			class=" flex cursor-pointer w-full px-2 bg-transparent dark:hover:bg-gray-850/50 hover:bg-white rounded-xl transition {selectedFileId
 				? ''
 				: 'hover:bg-gray-100 dark:hover:bg-gray-850'}"
+			role="listitem"
 			draggable="true"
 			on:dragstart={(e) => {
 				const fileId = file?.id ?? file?.tempId;

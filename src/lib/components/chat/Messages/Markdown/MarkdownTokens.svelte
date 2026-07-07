@@ -44,12 +44,12 @@
 	export let topPadding = false;
 	export let allowEmbeds = true;
 
-	export let onSave: Function = () => {};
-	export let onUpdate: Function = () => {};
-	export let onPreview: Function = () => {};
+	export let onSave: (...args: unknown[]) => unknown = () => {};
+	export let onUpdate: (...args: unknown[]) => unknown = () => {};
+	export let onPreview: (...args: unknown[]) => unknown = () => {};
 
-	export let onTaskClick: Function = () => {};
-	export let onSourceClick: Function = () => {};
+	export let onTaskClick: (...args: unknown[]) => unknown = () => {};
+	export let onSourceClick: (...args: unknown[]) => unknown = () => {};
 
 	const headerComponent = (depth: number) => {
 		return 'h' + depth;
@@ -503,7 +503,9 @@
 				try {
 					e.currentTarget.style.height =
 						e.currentTarget.contentWindow.document.body.scrollHeight + 20 + 'px';
-				} catch {}
+				} catch {
+			// intentionally empty
+		}
 			}}
 		></iframe>
 	{:else if token.type === 'paragraph'}
@@ -578,7 +580,7 @@
 			{onSourceClick}
 		/>
 	{:else if token.type === 'space'}
-		<div class="my-2" />
+		<div class="my-2" ></div>
 	{:else}
 		{console.log('Unknown token', token)}
 	{/if}

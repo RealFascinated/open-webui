@@ -234,6 +234,7 @@
 		let currentPage = 1;
 		let fetchedTotal = 0;
 
+		// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 		while (true) {
 			const res = await getWorkspaceModels(
 				localStorage.token,

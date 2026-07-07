@@ -44,7 +44,6 @@
 </script>
 
 {#if renderToString && renderedHTML}
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<svelte:element
 		this={displayMode ? 'div' : 'span'}
@@ -54,6 +53,7 @@
 			toast.success($i18n.t('Copied to clipboard'));
 		}}
 	>
+		<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 		{@html renderedHTML}
 	</svelte:element>
 {/if}

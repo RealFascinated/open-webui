@@ -4581,6 +4581,9 @@ def _prepare_artifact_storage(content: str, artifact_type: str) -> tuple[str, st
             ensure_ascii=False,
         )
         return 'iframe', build_react_html(content), meta
+    if normalized == 'markdown':
+        meta = json.dumps({'mime_type': 'text/markdown'}, ensure_ascii=False)
+        return 'markdown', content, meta
     if normalized == 'svg':
         return 'svg', content, None
     return 'iframe', content, None
@@ -4590,6 +4593,8 @@ def _editable_artifact_content(artifact) -> tuple[str, str]:
     meta = _parse_artifact_meta(artifact.meta)
     if meta.get('react_source'):
         return 'react', meta['react_source']
+    if meta.get('mime_type') == 'text/markdown' or artifact.type == 'markdown':
+        return 'markdown', artifact.code
     if artifact.type == 'svg':
         return 'svg', artifact.code
     return 'iframe', artifact.code
@@ -4795,6 +4800,7 @@ async def update_artifact(
         db_type, code, meta = _prepare_artifact_storage(str(content), resolved_type)
         form = ArtifactUpdateForm(
             title=title.strip() if title else None,
+            type=db_type,
             code=code,
             meta=meta,
         )
@@ -4852,33 +4858,4 @@ async def delete_artifact(
         )
     except Exception as e:
         log.exception(f'delete_artifact error: {e}')
-        return json.dumps({'error': str(e)})
-
-
-# =============================================================================
-# TOOL DISCOVERY
-# =============================================================================
-
-
-async def tool_search(
-    query: str,
-    __metadata__: dict = None,
-) -> str:
-    """
-    Search the tool catalog and load matching tools into context.
-    Use when you need a capability that is not among your currently loaded tools.
-
-    :param query: Natural language or keyword query describing the needed capability
-    :return: JSON with tool_reference matches and confirmation of loaded tools
-    """
-    try:
-        if not query or not str(query).strip():
-            return json.dumps({'error': 'A search query is required.'})
-
-        from open_webui.utils.deferred_tools import run_tool_search
-
-        result = run_tool_search(__metadata__ or {}, str(query).strip())
-        return json.dumps(result, ensure_ascii=False)
-    except Exception as e:
-        log.exception(f'tool_search error: {e}')
         return json.dumps({'error': str(e)})

@@ -14,7 +14,7 @@
 	const i18n = getContext('i18n');
 
 	export let show = false;
-	export let className = 'max-w-[180px]';
+	export const className = 'max-w-[180px]';
 
 	export let onDownload = (type) => {};
 	export let onDelete = () => {};

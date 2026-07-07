@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { pendingSubmit } from '$lib/stores';
+
 	export let currency: {
 		from?: string;
 		to?: string;
@@ -8,10 +10,16 @@
 		inverse_rate?: number;
 		updated?: string;
 	} = {};
+	export let disabled = false;
 
 	const commonPairs = ['EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF'];
 
 	$: otherPairs = commonPairs.filter((c) => c !== currency.from && c !== currency.to).slice(0, 4);
+
+	const handlePairClick = (to: string) => {
+		if (disabled || !currency.from || currency.amount == null) return;
+		pendingSubmit.set(`Convert ${currency.amount} ${currency.from} to ${to}`);
+	};
 </script>
 
 <div
@@ -37,9 +45,14 @@
 	{#if otherPairs.length > 0 && currency.from}
 		<div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-850 flex flex-wrap gap-2">
 			{#each otherPairs as code}
-				<span class="text-xs px-2 py-0.5 rounded-full bg-gray-50 dark:bg-gray-850 text-gray-500 dark:text-gray-400">
+				<button
+					type="button"
+					class="text-xs px-2 py-0.5 rounded-full bg-gray-50 dark:bg-gray-850 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
+					disabled={disabled}
+					on:click={() => handlePairClick(code)}
+				>
 					{currency.from}/{code}
-				</span>
+				</button>
 			{/each}
 		</div>
 	{/if}

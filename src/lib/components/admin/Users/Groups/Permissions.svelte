@@ -15,7 +15,7 @@
 		permissions = fillMissingProperties(permissions, DEFAULT_PERMISSIONS);
 	}
 
-	function fillMissingProperties(obj: any, defaults: any) {
+	function fillMissingProperties(obj: unknown, defaults: unknown) {
 		return {
 			...defaults,
 			...obj,

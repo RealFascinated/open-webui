@@ -531,7 +531,6 @@
 			dispatch('open', state);
 		}}
 	>
-		<!-- svelte-ignore a11y-no-static-element-interactions -->
 		<div class="w-full group">
 			<div
 				id="folder-{folderId}-button"
@@ -539,6 +538,8 @@
 				folderId
 					? 'bg-gray-100 dark:bg-gray-900 selected'
 					: ''}"
+				role="button"
+				tabindex="0"
 				on:dblclick={(e) => {
 					if (folders[folderId]?.shared) return;
 					if (clickTimer) {
@@ -548,7 +549,7 @@
 					renameHandler();
 				}}
 				on:click={async (e) => {
-					(e) => e.stopPropagation();
+					e.stopPropagation();
 					if (clickTimer) {
 						clearTimeout(clickTimer);
 						clickTimer = null;
@@ -571,6 +572,12 @@
 						}
 						clickTimer = null;
 					}, 100); // 100ms delay (typical double-click threshold)
+				}}
+				on:keydown={(e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						e.currentTarget.click();
+					}
 				}}
 				on:pointerup={(e) => {
 					e.stopPropagation();

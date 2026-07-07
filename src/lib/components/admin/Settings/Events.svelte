@@ -37,11 +37,11 @@
 	let targetUserIds: string[] = [];
 	let targetGroupIds: string[] = [];
 	let targetQuery = '';
-	let targetUserResults: any[] = [];
-	let targetGroupResults: any[] = [];
-	let groups: any[] = [];
-	let selectedUsers: Record<string, any> = {};
-	let selectedGroups: Record<string, any> = {};
+	let targetUserResults: unknown[] = [];
+	let targetGroupResults: unknown[] = [];
+	let groups: unknown[] = [];
+	let selectedUsers: Record<string, unknown> = {};
+	let selectedGroups: Record<string, unknown> = {};
 	let targetSearchTimer: ReturnType<typeof setTimeout>;
 	let form = {
 		id: '',
@@ -280,15 +280,15 @@
 		}
 
 		targetGroupResults = groups
-			.filter((group: any) => group.name?.toLowerCase().includes(query))
-			.filter((group: any) => !targetGroupIds.includes(group.id))
+			.filter((group: unknown) => group.name?.toLowerCase().includes(query))
+			.filter((group: unknown) => !targetGroupIds.includes(group.id))
 			.slice(0, 5);
 
 		const res = await searchUsers(localStorage.token, targetQuery, 'name', 'asc', 1).catch(
 			() => null
 		);
 		targetUserResults = (res?.users ?? [])
-			.filter((user: any) => !targetUserIds.includes(user.id))
+			.filter((user: unknown) => !targetUserIds.includes(user.id))
 			.slice(0, 5);
 	};
 
@@ -297,7 +297,7 @@
 		targetSearchTimer = setTimeout(searchTargets, 250);
 	};
 
-	const addTargetUser = (user: any) => {
+	const addTargetUser = (user: unknown) => {
 		if (!targetUserIds.includes(user.id)) {
 			targetUserIds = [...targetUserIds, user.id];
 			selectedUsers = { ...selectedUsers, [user.id]: user };
@@ -307,7 +307,7 @@
 		targetGroupResults = [];
 	};
 
-	const addTargetGroup = (group: any) => {
+	const addTargetGroup = (group: unknown) => {
 		if (!targetGroupIds.includes(group.id)) {
 			targetGroupIds = [...targetGroupIds, group.id];
 			selectedGroups = { ...selectedGroups, [group.id]: group };

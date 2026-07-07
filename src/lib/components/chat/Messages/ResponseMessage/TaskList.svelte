@@ -60,7 +60,7 @@
 									stroke="currentColor"
 									stroke-width="2.5"
 								>
-									<path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" />
+									<path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"></path>
 								</svg>
 							{:else if task.status === 'in_progress'}
 								<svg
@@ -70,7 +70,7 @@
 									stroke="currentColor"
 									stroke-width="2.5"
 								>
-									<path d="M12 3a9 9 0 1 0 9 9" stroke-linecap="round" />
+									<path d="M12 3a9 9 0 1 0 9 9" stroke-linecap="round"></path>
 								</svg>
 							{:else if task.status === 'cancelled'}
 								<svg
@@ -80,7 +80,7 @@
 									stroke="currentColor"
 									stroke-width="2"
 								>
-									<circle cx="12" cy="12" r="9" stroke-dasharray="4 3" />
+									<circle cx="12" cy="12" r="9" stroke-dasharray="4 3"></circle>
 								</svg>
 							{:else}
 								<svg
@@ -90,7 +90,7 @@
 									stroke="currentColor"
 									stroke-width="2"
 								>
-									<circle cx="12" cy="12" r="9" />
+									<circle cx="12" cy="12" r="9"></circle>
 								</svg>
 							{/if}
 						</span>

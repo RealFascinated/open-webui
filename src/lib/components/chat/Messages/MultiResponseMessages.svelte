@@ -32,23 +32,23 @@
 	export let readOnly = false;
 	export let editCodeBlock = true;
 
-	export let setInputText: Function = () => {};
-	export let updateChat: Function;
-	export let editMessage: Function;
-	export let saveMessage: Function;
-	export let rateMessage: Function;
-	export let actionMessage: Function;
+	export let setInputText: (...args: unknown[]) => unknown = () => {};
+	export let updateChat: (...args: unknown[]) => unknown;
+	export let editMessage: (...args: unknown[]) => unknown;
+	export let saveMessage: (...args: unknown[]) => unknown;
+	export let rateMessage: (...args: unknown[]) => unknown;
+	export let actionMessage: (...args: unknown[]) => unknown;
 
-	export let submitMessage: Function;
-	export let deleteMessage: Function;
+	export let submitMessage: (...args: unknown[]) => unknown;
+	export let deleteMessage: (...args: unknown[]) => unknown;
 
-	export let continueResponse: Function;
-	export let regenerateResponse: Function;
-	export let mergeResponses: Function;
+	export let continueResponse: (...args: unknown[]) => unknown;
+	export let regenerateResponse: (...args: unknown[]) => unknown;
+	export let mergeResponses: (...args: unknown[]) => unknown;
 
-	export let addMessages: Function;
+	export let addMessages: (...args: unknown[]) => unknown;
 
-	export let triggerScroll: Function;
+	export let triggerScroll: (...args: unknown[]) => unknown;
 
 	export let topPadding = false;
 
@@ -260,8 +260,6 @@
 						>
 							{#each Object.keys(groupedMessageIds) as modelIdx}
 								{#if groupedMessageIdsIdx[modelIdx] !== undefined && (groupedMessageIds[modelIdx]?.messageIds ?? []).length > 0}
-									<!-- svelte-ignore a11y-no-static-element-interactions -->
-									<!-- svelte-ignore a11y-click-events-have-key-events -->
 
 									{@const _messageId =
 										groupedMessageIds[modelIdx].messageIds[groupedMessageIdsIdx[modelIdx]]}
@@ -330,8 +328,6 @@
 			{:else}
 				{#each Object.keys(groupedMessageIds) as modelIdx}
 					{#if groupedMessageIdsIdx[modelIdx] !== undefined && groupedMessageIds[modelIdx].messageIds.length > 0}
-						<!-- svelte-ignore a11y-no-static-element-interactions -->
-						<!-- svelte-ignore a11y-click-events-have-key-events -->
 						{@const _messageId =
 							groupedMessageIds[modelIdx].messageIds[groupedMessageIdsIdx[modelIdx]]}
 
@@ -344,8 +340,16 @@
 								: `border-gray-100/30 dark:border-gray-850/30 border-dashed ${
 										$mobile ? 'min-w-full' : 'min-w-80'
 									}`} transition-all p-5 rounded-2xl"
+							role="button"
+							tabindex="0"
 							on:click={async () => {
 								onGroupClick(_messageId, modelIdx);
+							}}
+							on:keydown={async (e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									onGroupClick(_messageId, modelIdx);
+								}
 							}}
 						>
 							{#key history.currentId}
@@ -429,9 +433,7 @@
 								<button
 									type="button"
 									id="merge-response-button"
-									class="{true
-										? 'visible'
-										: 'invisible group-hover:visible'} p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
+									class="visible group-hover:visible p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 									on:click={() => {
 										mergeResponsesHandler();
 									}}

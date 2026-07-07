@@ -154,9 +154,9 @@
 												stroke="currentColor"
 												stroke-width="2"
 											>
-												<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+												<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
 												<polyline points="7,10 12,15 17,10" />
-												<line x1="12" y1="15" x2="12" y2="3" />
+												<line x1="12" y1="15" x2="12" y2="3"></line>
 											</svg>
 										</div>
 									</button>
@@ -188,6 +188,7 @@
 									</div>
 									<div class=" absolute -top-1 -right-1">
 										<button
+											aria-label={$i18n.t('Remove')}
 											class=" bg-white text-black border border-white rounded-full group-hover:visible invisible transition"
 											type="button"
 											on:click={() => removeImage(index)}
@@ -200,8 +201,7 @@
 												class="size-4"
 											>
 												<path
-													d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-												/>
+													d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"></path>
 											</svg>
 										</button>
 									</div>
@@ -228,7 +228,7 @@
 								}
 							}}
 							rows="2"
-						/>
+						></textarea>
 					</div>
 
 					<!-- Actions -->

@@ -22,7 +22,7 @@ export interface ImageOptions {
 	 * @default {}
 	 * @example { class: 'foo' }
 	 */
-	HTMLAttributes: Record<string, any>;
+	HTMLAttributes: Record<string, string | number | boolean | undefined>;
 }
 
 export interface SetImageOptions {

@@ -7,8 +7,8 @@
 	const i18n = getContext('i18n');
 
 	export let tags;
-	export let deleteTag: Function;
-	export let addTag: Function;
+	export let deleteTag: (...args: unknown[]) => unknown;
+	export let addTag: (...args: unknown[]) => unknown;
 
 	export let show = false;
 </script>

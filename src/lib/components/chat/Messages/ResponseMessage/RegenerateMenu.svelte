@@ -7,8 +7,8 @@
 
 	const i18n = getContext('i18n');
 
-	export let onRegenerate: Function = (prompt = null) => {};
-	export let onClose: Function = () => {};
+	export let onRegenerate: (...args: unknown[]) => unknown = (prompt = null) => {};
+	export let onClose: (...args: unknown[]) => unknown = () => {};
 
 	let show = false;
 	let inputValue = '';

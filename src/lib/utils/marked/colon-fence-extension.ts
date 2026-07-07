@@ -9,7 +9,18 @@
  * The extension is generic and will tokenize any :::<identifier> block.
  */
 
-function colonFenceTokenizer(this: any, src: string) {
+type ColonFenceTokenizerContext = {
+	lexer: {
+		blockTokens: (text: string, tokens: unknown[]) => void;
+	};
+};
+
+type ColonFenceToken = {
+	fenceType: string;
+	text: string;
+};
+
+function colonFenceTokenizer(this: ColonFenceTokenizerContext, src: string) {
 	// Match :::type at the start of a line, optionally followed by content, then closing :::
 	const match = /^:::([\w-]+)[^\n]*\n([\s\S]*?)(?:\n:::(?:\s*(?:\n|$)))/.exec(src);
 	if (match) {
@@ -17,7 +28,7 @@ function colonFenceTokenizer(this: any, src: string) {
 		const text = match[2].trim();
 		const raw = match[0];
 
-		const tokens: any[] = [];
+		const tokens: unknown[] = [];
 		this.lexer.blockTokens(text, tokens);
 
 		return {
@@ -35,7 +46,7 @@ function colonFenceStart(src: string) {
 	return idx ? idx.index! : -1;
 }
 
-function colonFenceRenderer(token: any) {
+function colonFenceRenderer(token: ColonFenceToken) {
 	return `<div class="colon-fence colon-fence-${token.fenceType}">${token.text}</div>`;
 }
 
@@ -49,7 +60,7 @@ function colonFenceExtension() {
 	};
 }
 
-export default function (options = {}) {
+export default function () {
 	return {
 		extensions: [colonFenceExtension()]
 	};

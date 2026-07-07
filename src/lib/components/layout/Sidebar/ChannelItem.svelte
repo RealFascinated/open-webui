@@ -17,7 +17,7 @@
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import Emoji from '$lib/components/common/Emoji.svelte';
 
-	export let onUpdate: Function = () => {};
+	export let onUpdate: (...args: unknown[]) => unknown = () => {};
 
 	export let className = '';
 	export let channel;
@@ -26,7 +26,7 @@
 
 	let itemElement;
 
-	const hasPublicReadGrant = (grants: any) =>
+	const hasPublicReadGrant = (grants: unknown) =>
 		Array.isArray(grants) &&
 		grants.some(
 			(grant) =>
@@ -35,7 +35,7 @@
 				grant?.permission === 'read'
 		);
 
-	const isPublicChannel = (channel: any): boolean => {
+	const isPublicChannel = (channel: unknown): boolean => {
 		if (channel?.type === 'group') {
 			if (typeof channel?.is_private === 'boolean') {
 				return !channel.is_private;
@@ -51,7 +51,7 @@
 	{channel}
 	edit={true}
 	{onUpdate}
-	onSubmit={async (payload: any) => {
+	onSubmit={async (payload: Record<string, unknown>) => {
 		const { name, is_private, access_grants, group_ids, user_ids } = payload ?? {};
 		const res = await updateChannelById(localStorage.token, channel.id, {
 			name,

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { getContext, onMount } from 'svelte';
-	const i18n = getContext<any>('i18n');
+	const i18n = getContext<unknown>('i18n');
 
 	import { settings } from '$lib/stores';
 
@@ -24,9 +24,9 @@
 	export let show = false;
 	export let edit = false;
 	export let direct = false;
-	export let connection: any = null;
+	export let connection: unknown = null;
 
-	export let onSubmit: Function = () => {};
+	export let onSubmit: (...args: unknown[]) => unknown = () => {};
 	export let onDelete: () => void = () => {};
 
 	let url = '';
@@ -39,7 +39,7 @@
 	let showAdvanced = false;
 	let showAccessControlModal = false;
 	let showDeleteConfirmDialog = false;
-	let accessGrants: any[] = [];
+	let accessGrants: unknown[] = [];
 
 	// Policy / auto-detect state
 	let serverType: 'orchestrator' | 'terminal' | null = null;
@@ -193,7 +193,7 @@
 	};
 
 	const buildPolicyData = (): object => {
-		const data: Record<string, any> = {};
+		const data: Record<string, unknown> = {};
 
 		if (policyImage) data.image = policyImage;
 		if (policyCpu) data.cpu_limit = policyCpu;

@@ -81,6 +81,7 @@
 			<button
 				type="button"
 				class="p-0.5 rounded-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition"
+				aria-label={$i18n.t('Add Terminal')}
 				on:click|stopPropagation={() => {
 					dispatch('selected');
 					showSettings.set('tools');
@@ -93,8 +94,7 @@
 					class="size-3.5"
 				>
 					<path
-						d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
-					/>
+						d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"></path>
 				</svg>
 			</button>
 		</Tooltip>
@@ -124,8 +124,7 @@
 						<path
 							fill-rule="evenodd"
 							d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-							clip-rule="evenodd"
-						/>
+							clip-rule="evenodd"></path>
 					</svg>
 				</div>
 			{/if}
@@ -147,6 +146,7 @@
 				<button
 					type="button"
 					class="p-0.5 rounded-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition"
+					aria-label={$i18n.t('Add Terminal')}
 					on:click|stopPropagation={() => {
 						dispatch('selected');
 						goto('/admin/settings/integrations');
@@ -159,8 +159,7 @@
 						class="size-3.5"
 					>
 						<path
-							d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
-						/>
+							d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"></path>
 					</svg>
 				</button>
 			</Tooltip>
@@ -191,8 +190,7 @@
 						<path
 							fill-rule="evenodd"
 							d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-							clip-rule="evenodd"
-						/>
+							clip-rule="evenodd"></path>
 					</svg>
 				</div>
 			{/if}

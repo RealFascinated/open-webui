@@ -51,7 +51,7 @@ export const removeOpenAIConnection = async (token: string, url: string) => {
 	const current = await getOpenAIConfig(token);
 	const urls: string[] = current?.OPENAI_API_BASE_URLS ?? [];
 	const keys: string[] = current?.OPENAI_API_KEYS ?? [];
-	const configs: Record<string, any> = current?.OPENAI_API_CONFIGS ?? {};
+	const configs: Record<string, object> = current?.OPENAI_API_CONFIGS ?? {};
 
 	const normalizedUrl = url.replace(/\/$/, '');
 	const idx = urls.findIndex((u: string) => u.replace(/\/$/, '') === normalizedUrl);
@@ -61,7 +61,7 @@ export const removeOpenAIConnection = async (token: string, url: string) => {
 	const newKeys = keys.filter((_: string, i: number) => i !== idx);
 
 	// Re-index configs (mirrors admin/Settings/Connections.svelte onDelete)
-	const newConfigs: Record<string, any> = {};
+	const newConfigs: Record<string, object> = {};
 	newUrls.forEach((_: string, newIdx: number) => {
 		newConfigs[newIdx] = configs[newIdx < idx ? newIdx : newIdx + 1];
 	});
@@ -88,7 +88,7 @@ export const addTerminalConnection = async (
 	const servers = current?.TERMINAL_SERVER_CONNECTIONS ?? [];
 
 	// Don't add duplicates
-	if (servers.find((s: any) => s.url === connection.url)) {
+	if (servers.find((s: { url?: string }) => s.url === connection.url)) {
 		return current;
 	}
 
@@ -112,7 +112,7 @@ export const removeTerminalConnection = async (token: string, url: string) => {
 	const current = await getTerminalServerConnections(token);
 	const servers = current?.TERMINAL_SERVER_CONNECTIONS ?? [];
 
-	const filtered = servers.filter((s: any) => s.url !== url);
+	const filtered = servers.filter((s: { url?: string }) => s.url !== url);
 	if (filtered.length === servers.length) return current; // nothing to remove
 
 	return await setTerminalServerConnections(token, {

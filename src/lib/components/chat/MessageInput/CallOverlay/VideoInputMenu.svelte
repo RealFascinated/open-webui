@@ -6,8 +6,8 @@
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 
-	export let onClose: Function = () => {};
-	export let devices: any;
+	export let onClose: (...args: unknown[]) => unknown = () => {};
+	export let devices: unknown;
 
 	let show = false;
 </script>

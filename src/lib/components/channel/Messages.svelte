@@ -34,10 +34,10 @@
 	export let top = false;
 	export let thread = false;
 
-	export let onLoad: Function = () => {};
-	export let onReply: Function = () => {};
-	export let onThread: Function = () => {};
-	export let onPin: Function = () => {};
+	export let onLoad: (...args: unknown[]) => unknown = () => {};
+	export let onReply: (...args: unknown[]) => unknown = () => {};
+	export let onThread: (...args: unknown[]) => unknown = () => {};
+	export let onPin: (...args: unknown[]) => unknown = () => {};
 
 	let messagesLoading = false;
 
@@ -256,6 +256,6 @@
 			/>
 		{/each}
 
-		<div class="pb-6" />
+		<div class="pb-6"></div>
 	</div>
 {/if}

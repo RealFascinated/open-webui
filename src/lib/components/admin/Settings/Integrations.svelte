@@ -32,16 +32,14 @@
 		setTerminalServerConnections
 	} from '$lib/apis/configs';
 
-	export let saveSettings: Function;
-
-	type ToolServerConnection = any;
+	type ToolServerConnection = Record<string, unknown>;
 	type TerminalConnection = {
 		id?: string;
 		url?: string;
 		name?: string;
 		key?: string;
 		enabled?: boolean;
-		[key: string]: any;
+		[key: string]: unknown;
 	};
 
 	let servers: ToolServerConnection[] | null = null;
@@ -93,7 +91,7 @@
 				name: t.name,
 				key: localStorage.token
 			}));
-			terminalServers.set([...existingDirectTerminals, ...systemEntries] as any);
+			terminalServers.set([...existingDirectTerminals, ...systemEntries] as unknown);
 		}
 	};
 

@@ -23,7 +23,7 @@
 	const nodesInitialized = useNodesInitialized();
 
 	export let history;
-	export let onClose;
+	export let onClose = () => {};
 	export let onNodeClick;
 
 	let selectedMessageId = null;
@@ -171,7 +171,7 @@
 	});
 </script>
 
-<div class="w-full h-full relative">
+<div class="w-full h-full relative" data-on-close={!!onClose}>
 	{#if $nodes.length > 0}
 		<Flow
 			{nodes}

@@ -14,12 +14,12 @@
 	import FolderOpen from '$lib/components/icons/FolderOpen.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
-	export let folder: any;
-	export let allSharedFolders: any[] = [];
+	export let folder: unknown;
+	export let allSharedFolders: unknown[] = [];
 	export let className = '';
 
 	let expanded = false;
-	let chats: any[] = [];
+	let chats: unknown[] = [];
 	let loading = false;
 	let loaded = false;
 
@@ -52,7 +52,6 @@
 </script>
 
 <div class={className}>
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div class="w-full group">
 		<button
 			class="w-full py-1 flex items-center gap-1 text-xs text-left font-medium

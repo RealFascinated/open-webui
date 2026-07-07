@@ -62,7 +62,7 @@ export function injectStorageBridge(html: string, artifactId: string): string {
     list:   function (prefix, shared)      { return _call('list',   { prefix: prefix || '', shared: !!shared }); }
   };
 })();
-<\/script>`;
+</script>`;
 
 	const idx = html.indexOf('<head>');
 	if (idx !== -1) {

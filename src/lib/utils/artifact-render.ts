@@ -3,6 +3,7 @@ import { buildReactHtml } from './react-artifact';
 export type ArtifactMeta = {
 	mime_type?: string;
 	react_source?: string;
+	identifier?: string;
 };
 
 export function parseArtifactMeta(meta: string | null | undefined): ArtifactMeta {
@@ -15,39 +16,98 @@ export function parseArtifactMeta(meta: string | null | undefined): ArtifactMeta
 	}
 }
 
+/** Human-readable type badge for library UI. */
+export function artifactDisplayLabel(type: string, meta: string | null | undefined): string {
+	const parsed = parseArtifactMeta(meta);
+	if (parsed.react_source || parsed.mime_type === 'application/vnd.ant.react') return 'React';
+	if (parsed.mime_type === 'text/markdown' || type === 'markdown') return 'Markdown';
+	if (type === 'svg') return 'SVG';
+	return 'HTML';
+}
+
 /** Editable source for code view / agent tools (JSX when react, else stored code). */
 export function artifactEditableSource(
 	code: string,
 	meta: string | null | undefined,
 	type: string
-): { artifactType: string; content: string } {
+): { artifactType: string; content: string; extension: string } {
 	const parsed = parseArtifactMeta(meta);
 	if (parsed.react_source) {
-		return { artifactType: 'react', content: parsed.react_source };
+		return { artifactType: 'react', content: parsed.react_source, extension: 'jsx' };
 	}
-	return { artifactType: type === 'svg' ? 'svg' : 'iframe', content: code };
+	if (parsed.mime_type === 'text/markdown' || type === 'markdown') {
+		return { artifactType: 'markdown', content: code, extension: 'md' };
+	}
+	if (type === 'svg') {
+		return { artifactType: 'svg', content: code, extension: 'svg' };
+	}
+	return { artifactType: 'iframe', content: code, extension: 'html' };
 }
 
 /** HTML to load in an iframe preview. */
-export function artifactPreviewHtml(
-	code: string,
-	meta: string | null | undefined,
-	type: string
-): string {
+export function artifactPreviewHtml(code: string, meta: string | null | undefined, type?: string): string {
 	const parsed = parseArtifactMeta(meta);
 	if (parsed.react_source) {
 		return buildReactHtml(parsed.react_source);
 	}
+	if (parsed.mime_type === 'text/markdown' || type === 'markdown') {
+		return code;
+	}
 	return code;
+}
+
+export function artifactIsMarkdown(type: string, meta: string | null | undefined): boolean {
+	const parsed = parseArtifactMeta(meta);
+	return parsed.mime_type === 'text/markdown' || type === 'markdown';
 }
 
 export function artifactPublishMeta(content: {
 	sourceCode?: string;
 	mimeType?: string;
+	identifier?: string;
+	type?: string;
 }): string | undefined {
-	if (!content.sourceCode) return undefined;
-	return JSON.stringify({
-		mime_type: content.mimeType ?? 'application/vnd.ant.react',
-		react_source: content.sourceCode
-	});
+	const payload: ArtifactMeta = {};
+
+	if (content.identifier) {
+		payload.identifier = content.identifier;
+	}
+
+	if (content.sourceCode) {
+		payload.mime_type = content.mimeType ?? 'application/vnd.ant.react';
+		payload.react_source = content.sourceCode;
+	} else if (content.mimeType === 'text/markdown' || content.type === 'markdown') {
+		payload.mime_type = 'text/markdown';
+	}
+
+	if (Object.keys(payload).length === 0) return undefined;
+	return JSON.stringify(payload);
+}
+
+/** Build identifier → artifact id map for the current chat. */
+export function buildPublishedArtifactIdMap(
+	artifacts: { id: string; chat_id: string | null; title: string | null; meta: string | null }[],
+	chatId: string
+): Record<string, string> {
+	const map: Record<string, string> = {};
+	for (const artifact of artifacts) {
+		if (artifact.chat_id !== chatId) continue;
+		const meta = parseArtifactMeta(artifact.meta);
+		if (meta.identifier) {
+			map[meta.identifier] = artifact.id;
+		} else if (artifact.title) {
+			map[`title:${artifact.title}`] = artifact.id;
+		}
+	}
+	return map;
+}
+
+export function resolvePublishedArtifactId(
+	identifier: string | undefined,
+	title: string | undefined,
+	map: Record<string, string>
+): string | undefined {
+	if (identifier && map[identifier]) return map[identifier];
+	if (title && map[`title:${title}`]) return map[`title:${title}`];
+	return undefined;
 }

@@ -2,11 +2,12 @@
 	import { pendingSubmit } from '$lib/stores';
 
 	export let options: { question?: string; options?: string[] } = {};
+	export let disabled = false;
 
 	let selected: string | null = null;
 
 	const handleSelect = (label: string) => {
-		if (selected) return;
+		if (disabled || selected) return;
 		selected = label;
 		pendingSubmit.set(label);
 	};
@@ -27,7 +28,7 @@
 					: selected
 						? 'border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
 						: 'border-gray-200 dark:border-gray-800 hover:border-gray-400 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'}"
-				disabled={selected !== null && selected !== option}
+				disabled={disabled || (selected !== null && selected !== option)}
 				on:click={() => handleSelect(option)}
 			>
 				{option}

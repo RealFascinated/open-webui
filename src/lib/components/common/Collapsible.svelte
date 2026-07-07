@@ -53,7 +53,7 @@
 	export let messageDone = false;
 	export let hide = false;
 
-	export let onChange: Function = () => {};
+	export let onChange: (...args: unknown[]) => unknown = () => {};
 
 	const toggleOpen = () => {
 		if (disabled) {
@@ -70,7 +70,6 @@
 <div {id} class={className}>
 	{#if title !== null}
 		<!-- svelte-ignore a11y-no-static-element-interactions -->
-		<!-- svelte-ignore a11y-click-events-have-key-events -->
 		<div class="{buttonClassName} {disabled ? '' : 'cursor-pointer'}" on:pointerup={toggleOpen}>
 			<div
 				class=" w-full flex items-center justify-between gap-2 {attributes?.done &&

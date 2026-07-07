@@ -8,13 +8,13 @@
 	import UnshareAllConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import Spinner from '../common/Spinner.svelte';
 
-	const i18n: Writable<any> = getContext('i18n');
+	const i18n: Writable<unknown> = getContext('i18n');
 
 	export let show = false;
 	export let onUpdate = () => {};
 
 	let loading = false;
-	let chatList: any[] | null = null;
+	let chatList: unknown[] | null = null;
 	let page = 1;
 
 	let query = '';
@@ -23,11 +23,11 @@
 
 	let allChatsLoaded = false;
 	let chatListLoading = false;
-	let searchDebounceTimeout: any;
+	let searchDebounceTimeout: unknown;
 
 	let showUnshareAllConfirmDialog = false;
 
-	let filter: any = {};
+	let filter: unknown = {};
 	$: filter = {
 		...(query ? { query } : {}),
 		...(orderBy ? { order_by: orderBy } : {}),

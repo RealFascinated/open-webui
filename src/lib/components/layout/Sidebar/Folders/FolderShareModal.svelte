@@ -16,7 +16,7 @@
 	};
 
 	export let show = false;
-	export let folder: any = null;
+	export let folder: unknown = null;
 
 	let accessGrants: AccessGrant[] = [];
 	let loading = false;

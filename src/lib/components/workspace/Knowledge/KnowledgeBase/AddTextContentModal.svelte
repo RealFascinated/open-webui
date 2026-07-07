@@ -69,8 +69,7 @@
 						<textarea
 							class="w-full h-full min-h-[200px] bg-transparent outline-none resize-none text-base leading-relaxed placeholder:text-gray-300 dark:placeholder:text-gray-600"
 							bind:value={content}
-							placeholder={$i18n.t('Write something...')}
-						/>
+							placeholder={$i18n.t('Write something...')}></textarea>
 					</div>
 				</div>
 			</div>
@@ -151,16 +150,6 @@
 		margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
 	}
 
-	.tabs::-webkit-scrollbar {
-		display: none; /* for Chrome, Safari and Opera */
-	}
 
-	.tabs {
-		-ms-overflow-style: none; /* IE and Edge */
-		scrollbar-width: none; /* Firefox */
-	}
 
-	input[type='number'] {
-		-moz-appearance: textfield; /* Firefox */
-	}
 </style>

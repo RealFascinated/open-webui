@@ -76,6 +76,7 @@
 	const renderMarkdown = (src: string): string =>
 		DOMPurify.sanitize(marked.parse(src, { async: false }) as string);
 
+	// eslint-disable-next-line no-control-regex -- strip ANSI escape codes from notebook output
 	const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
 
 	const getOutputImages = (output: NotebookOutput): string[] => {
@@ -289,13 +290,13 @@
 						}}
 					></textarea>
 				{:else}
-					<!-- svelte-ignore a11y-click-events-have-key-events -->
 					<div
 						class="nb-markdown prose dark:prose-invert max-w-full text-sm cursor-text"
 						role="textbox"
 						tabindex="0"
 						on:dblclick={() => startEditing(i)}
 					>
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 						{@html renderMarkdown(toStr(cell.source))}
 					</div>
 				{/if}
@@ -347,7 +348,6 @@
 								on:cancel={() => cancelEditing(i)}
 							/>
 						{:else}
-							<!-- svelte-ignore a11y-click-events-have-key-events -->
 							<div
 								class="nb-code-source-clickable"
 								role="textbox"
@@ -356,6 +356,7 @@
 							>
 								{#if highlightedCells[i]}
 									<div class="nb-code-source shiki-preview">
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 										{@html highlightedCells[i]}
 									</div>
 								{:else}
@@ -376,6 +377,7 @@
 										{@const images = getOutputImages(output)}
 										{@const text = getOutputText(output)}
 										{#if html}
+											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 											<div class="nb-output-html">{@html html}</div>
 										{/if}
 										{#each images as src}

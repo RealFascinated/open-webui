@@ -105,7 +105,6 @@
 </script>
 
 {#if show}
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
 		bind:this={modalElement}
@@ -135,6 +134,7 @@
 					<div class=" text-sm text-gray-500 flex-1">
 						{#if message !== ''}
 							{@const html = DOMPurify.sanitize(marked.parse(message))}
+							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 							{@html html}
 						{:else}
 							{$i18n.t('This action cannot be undone. Do you wish to continue?')}
@@ -168,8 +168,7 @@
 									placeholder={inputPlaceholder ? inputPlaceholder : $i18n.t('Enter your message')}
 									class="w-full mt-2 rounded-lg px-4 py-2 text-sm dark:text-gray-300 dark:bg-gray-900 outline-hidden resize-none"
 									rows="3"
-									required
-								/>
+									required></textarea>
 							{/if}
 						{/if}
 					</div>
@@ -201,9 +200,6 @@
 {/if}
 
 <style>
-	.modal-content {
-		animation: scaleUp 0.1s ease-out forwards;
-	}
 
 	@keyframes scaleUp {
 		from {

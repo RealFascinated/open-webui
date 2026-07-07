@@ -115,7 +115,7 @@
 
 	let newFolderId = null;
 
-	let sharedFolders: any[] = [];
+	let sharedFolders: unknown[] = [];
 
 	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
 
@@ -560,7 +560,9 @@
 			if (!Number.isNaN(width) && width >= MIN_WIDTH && width <= MAX_WIDTH) {
 				sidebarWidth.set(width);
 			}
-		} catch {}
+		} catch {
+			// intentionally empty
+		}
 
 		document.documentElement.style.setProperty('--sidebar-width', `${$sidebarWidth}px`);
 		sidebarWidth.subscribe((w) => {
@@ -678,7 +680,7 @@
 	const chatActiveEventHandler = (event: {
 		chat_id: string;
 		message_id: string;
-		data: { type: string; data: any };
+		data: { type: string; data: unknown };
 	}) => {
 		if (event.data?.type === 'chat:active') {
 			const { active } = event.data.data;
@@ -742,7 +744,7 @@
 
 <ChannelModal
 	bind:show={showCreateChannel}
-	onSubmit={async (payload: any) => {
+	onSubmit={async (payload: Record<string, unknown>) => {
 		let { type, name, is_private, access_grants, group_ids, user_ids } = payload ?? {};
 		name = name?.trim();
 
@@ -788,17 +790,24 @@
 	}}
 />
 
-<!-- svelte-ignore a11y-no-static-element-interactions -->
-
 {#if $showSidebar}
 	<div
 		class=" {$isApp
 			? ' ml-[4.5rem] md:ml-0'
 			: ''} fixed md:hidden z-40 top-0 right-0 left-0 bottom-0 bg-black/60 w-full min-h-screen h-screen flex justify-center overflow-hidden overscroll-contain"
+		role="button"
+		tabindex="0"
+		aria-label={$i18n.t('Close sidebar')}
 		on:mousedown={() => {
 			showSidebar.set(!$showSidebar);
 		}}
-	/>
+		on:keydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				showSidebar.set(!$showSidebar);
+			}
+		}}
+	></div>
 {/if}
 
 <SearchModal
@@ -813,11 +822,12 @@
 <button
 	id="sidebar-new-chat-button"
 	class="hidden"
+	aria-label={$i18n.t('New Chat')}
 	on:click={() => {
 		goto('/');
 		newChatHandler();
 	}}
-/>
+></button>
 
 <svelte:window
 	on:mousemove={(e) => {
@@ -939,8 +949,7 @@
 												<path
 													stroke-linecap="round"
 													stroke-linejoin="round"
-													d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z"
-												/>
+													d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z"></path>
 											</svg>
 										{:else if itemId === 'automations'}
 											<svg
@@ -954,8 +963,7 @@
 												<path
 													stroke-linecap="round"
 													stroke-linejoin="round"
-													d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-												/>
+													d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"></path>
 											</svg>
 										{:else if itemId === 'calendar'}
 											<svg
@@ -969,13 +977,12 @@
 												<path
 													stroke-linecap="round"
 													stroke-linejoin="round"
-													d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
-												/>
+													d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"></path>
 											</svg>
 										{:else if itemId === 'artifacts'}
 											<Cube className="size-4.5" />
 										{:else if itemId === 'playground'}
-											<Code className="size-4.5" />
+											<Code className="size-4.5"></Code>
 										{/if}
 									</div>
 								</a>
@@ -1017,9 +1024,7 @@
 										<div class="absolute -bottom-0.5 -right-0.5">
 											<span class="relative flex size-2.5">
 												<span
-													class="relative inline-flex size-2.5 rounded-full {true
-														? 'bg-green-500'
-														: 'bg-gray-300 dark:bg-gray-700'} border-2 border-white dark:border-gray-900"
+													class="relative inline-flex size-2.5 rounded-full bg-green-500 border-2 border-white dark:border-gray-900"
 												></span>
 											</span>
 										</div>
@@ -1190,8 +1195,7 @@
 													<path
 														stroke-linecap="round"
 														stroke-linejoin="round"
-														d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z"
-													/>
+														d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z"></path>
 												</svg>
 											{:else if itemId === 'automations'}
 												<svg
@@ -1205,8 +1209,7 @@
 													<path
 														stroke-linecap="round"
 														stroke-linejoin="round"
-														d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-													/>
+														d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"></path>
 												</svg>
 											{:else if itemId === 'calendar'}
 												<svg
@@ -1220,13 +1223,12 @@
 													<path
 														stroke-linecap="round"
 														stroke-linejoin="round"
-														d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
-													/>
+														d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"></path>
 												</svg>
 											{:else if itemId === 'artifacts'}
 												<Cube className="size-4.5" strokeWidth="2" />
 											{:else if itemId === 'playground'}
-												<Code className="size-4.5" strokeWidth="2" />
+												<Code className="size-4.5" strokeWidth="2"></Code>
 											{/if}
 										</div>
 
@@ -1647,9 +1649,7 @@
 										<div class="absolute -bottom-0.5 -right-0.5">
 											<span class="relative flex size-2.5">
 												<span
-													class="relative inline-flex size-2.5 rounded-full {true
-														? 'bg-green-500'
-														: 'bg-gray-300 dark:bg-gray-700'} border-2 border-white dark:border-gray-900"
+													class="relative inline-flex size-2.5 rounded-full bg-green-500 border-2 border-white dark:border-gray-900"
 												></span>
 											</span>
 										</div>
@@ -1668,12 +1668,24 @@
 		<div
 			class="relative flex items-center justify-center group border-l border-gray-50 dark:border-gray-850/30 hover:border-gray-200 dark:hover:border-gray-800 transition z-20"
 			id="sidebar-resizer"
+			role="slider"
+			tabindex="0"
+			aria-orientation="vertical"
+			aria-label={$i18n.t('Resize sidebar')}
+			aria-valuemin={MIN_WIDTH}
+			aria-valuemax={MAX_WIDTH}
+			aria-valuenow={$sidebarWidth}
 			on:mousedown={resizeStartHandler}
-			role="separator"
+			on:keydown={(e) => {
+				if (e.key === 'ArrowLeft') {
+					sidebarWidth.update((w) => Math.max(MIN_WIDTH, (w ?? 260) - 10));
+				} else if (e.key === 'ArrowRight') {
+					sidebarWidth.update((w) => Math.min(MAX_WIDTH, (w ?? 260) + 10));
+				}
+			}}
 		>
 			<div
-				class=" absolute -left-1.5 -right-1.5 -top-0 -bottom-0 z-20 cursor-col-resize bg-transparent"
-			/>
+				class=" absolute -left-1.5 -right-1.5 -top-0 -bottom-0 z-20 cursor-col-resize bg-transparent"></div>
 		</div>
 	{/if}
 {/if}

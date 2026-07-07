@@ -33,6 +33,7 @@
 {#if show && anchor}
 	<div
 		class="fixed z-[10001] flex items-stretch {opensLeft ? 'flex-row-reverse' : ''}"
+		role="group"
 		style="top: {top}px; {sideStyle}"
 		on:mouseenter={onMouseEnter}
 		on:mouseleave={onMouseLeave}
@@ -41,8 +42,7 @@
 			class="w-3 shrink-0 self-stretch"
 			aria-hidden="true"
 			on:mouseenter={onMouseEnter}
-			on:mouseleave={onMouseLeave}
-		/>
+			on:mouseleave={onMouseLeave}></div>
 		<div
 			class="w-80 min-w-[20rem] max-w-[calc(100vw-1rem)] rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-850 shadow-lg max-h-[min(28rem,calc(100dvh-5rem))] overflow-y-auto scrollbar-thin px-1 py-1"
 		>

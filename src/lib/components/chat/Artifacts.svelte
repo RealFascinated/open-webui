@@ -120,7 +120,7 @@
 			}
 
 			iframeElement.contentWindow?.postMessage({ _owsRequestId: reqId, result }, '*');
-		} catch (err: any) {
+		} catch (err: unknown) {
 			iframeElement.contentWindow?.postMessage(
 				{ _owsRequestId: reqId, error: err?.message ?? 'Storage error' },
 				'*'
@@ -145,8 +145,8 @@
 	const showFullScreen = () => {
 		if (iframeElement?.requestFullscreen) {
 			iframeElement.requestFullscreen();
-		} else if ((iframeElement as any)?.webkitRequestFullscreen) {
-			(iframeElement as any).webkitRequestFullscreen();
+		} else if ((iframeElement as unknown)?.webkitRequestFullscreen) {
+			(iframeElement as unknown).webkitRequestFullscreen();
 		}
 	};
 
@@ -266,6 +266,7 @@
 				<!-- Version nav -->
 				<div class="flex items-center gap-0.5 shrink-0" dir="ltr">
 					<button
+						aria-label={$i18n.t('Previous')}
 						class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-30 disabled:cursor-not-allowed"
 						on:click={() => navigateContent('prev')}
 						disabled={contents.length <= 1}
@@ -278,6 +279,7 @@
 						{selectedContentIdx + 1}/{contents.length}
 					</span>
 					<button
+						aria-label={$i18n.t('Next')}
 						class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-30 disabled:cursor-not-allowed"
 						on:click={() => navigateContent('next')}
 						disabled={contents.length <= 1}

@@ -53,8 +53,7 @@
 					stroke-linecap="round"
 					stroke-linejoin="round"
 					stroke-width="3"
-					d="m5 12 4.7 4.5 9.3-9"
-				/>
+					d="m5 12 4.7 4.5 9.3-9"></path>
 			</svg>
 		{:else if indeterminate}
 			<svg
@@ -69,8 +68,7 @@
 					stroke-linecap="round"
 					stroke-linejoin="round"
 					stroke-width="3"
-					d="M5 12h14"
-				/>
+					d="M5 12h14"></path>
 			</svg>
 		{/if}
 	</div>

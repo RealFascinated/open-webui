@@ -16,11 +16,11 @@
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import FileItemModal from '$lib/components/common/FileItemModal.svelte';
 
-	const i18n: Writable<any> = getContext('i18n');
+	const i18n: Writable<unknown> = getContext('i18n');
 
 	export let show = false;
 
-	let files: any[] | null = null;
+	let files: unknown[] | null = null;
 	let fileCount: number | null = null;
 	let query = '';
 	let orderBy = 'created_at';
@@ -34,7 +34,7 @@
 	let selectedFileId: string | null = null;
 	let showDeleteConfirmDialog = false;
 
-	let selectedFile: any = null;
+	let selectedFile: unknown = null;
 	let showFileItemModal = false;
 
 	let shiftKey = false;
@@ -105,7 +105,7 @@
 		filesLoading = false;
 	};
 
-	const sortFiles = (fileList: any[]): any[] => {
+	const sortFiles = (fileList: unknown[]): unknown[] => {
 		return fileList.sort((a, b) => {
 			let aVal = a[orderBy] ?? 0;
 			let bVal = b[orderBy] ?? 0;
@@ -135,7 +135,7 @@
 		}
 	};
 
-	const openFileViewer = (file: any) => {
+	const openFileViewer = (file: unknown) => {
 		selectedFile = {
 			id: file.id,
 			name: file.filename,
@@ -216,6 +216,7 @@
 				{/if}
 			</div>
 			<button
+				aria-label={$i18n.t('Close')}
 				class="self-center"
 				on:click={() => {
 					show = false;
@@ -339,7 +340,15 @@
 							{#each files as file (file.id)}
 								<div
 									class="w-full flex justify-between items-center rounded-lg text-sm py-2 px-3 hover:bg-gray-50 dark:hover:bg-gray-850 cursor-pointer"
+									role="button"
+									tabindex="0"
 									on:click={() => openFileViewer(file)}
+									on:keydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											openFileViewer(file);
+										}
+									}}
 								>
 									<div class="basis-3/5 min-w-0">
 										<div class="text-ellipsis line-clamp-1">{file.filename}</div>

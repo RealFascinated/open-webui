@@ -8,7 +8,7 @@
 
 	export let title: string = 'N/A';
 
-	export let onClick: Function = () => {};
+	export let onClick: (...args: unknown[]) => unknown = () => {};
 
 	// Helper function to return only the domain from a URL
 	function getDomain(url: string): string {

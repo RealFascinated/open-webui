@@ -33,8 +33,8 @@
 	export let folder = null;
 	export let readOnly: boolean = false;
 
-	export let onUpdate: Function = (folderId) => {};
-	export let onDelete: Function = (folderId) => {};
+	export let onUpdate: (...args: unknown[]) => unknown = (folderId) => {};
+	export let onDelete: (...args: unknown[]) => unknown = (folderId) => {};
 
 	let showFolderModal = false;
 	let showCreateSubFolderModal = false;

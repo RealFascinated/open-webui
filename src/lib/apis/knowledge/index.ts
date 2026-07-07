@@ -645,7 +645,7 @@ export const updateKnowledgeById = async (token: string, id: string, form: Knowl
 export const updateKnowledgeAccessGrants = async (
 	token: string,
 	id: string,
-	accessGrants: any[]
+	accessGrants: object[]
 ) => {
 	let error = null;
 

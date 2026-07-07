@@ -242,7 +242,7 @@
 		}
 
 		// Build the grouped object while tracking order
-		const grouped: Record<string, any[]> = {};
+		const grouped: Record<string, unknown[]> = {};
 		const orderedKeys: string[] = [];
 
 		for (const note of res) {
@@ -258,7 +258,7 @@
 		}
 
 		// Return as array of [timeRange, notes] to preserve insertion order
-		return orderedKeys.map((key) => [key, grouped[key]] as [string, any[]]);
+		return orderedKeys.map((key) => [key, grouped[key]] as [string, unknown[]]);
 	};
 
 	let dragged = false;

@@ -1,4 +1,7 @@
-"""Build self-contained HTML pages that render React/JSX components (artifact runtime)."""
+"""Build self-contained HTML pages that render React/JSX components (artifact runtime).
+
+Keep in sync with src/lib/utils/react-artifact.ts — that file is the canonical reference.
+"""
 
 
 def build_react_html(jsx_code: str) -> str:
@@ -86,7 +89,9 @@ def build_react_html(jsx_code: str) -> str:
   if (!comp) {{
     document.getElementById('root').innerHTML =
       '<div style="padding:1rem 1.25rem;font-family:monospace;color:#b91c1c;background:#fee2e2;border-radius:8px;margin:1rem;font-size:13px">' +
-      '<strong>No default export found.</strong></div>';
+      '<strong>No default export found.</strong><br/>' +
+      'Add <code style="background:#fca5a5;padding:2px 4px;border-radius:3px">export default function App() {{ ... }}</code> ' +
+      'to render your component.</div>';
     return;
   }}
 

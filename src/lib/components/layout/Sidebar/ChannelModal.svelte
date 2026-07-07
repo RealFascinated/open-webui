@@ -20,10 +20,10 @@
 	import WebhooksModal from '$lib/components/channel/WebhooksModal.svelte';
 
 	export let show = false;
-	export let onSubmit: Function = () => {};
-	export let onUpdate: Function = () => {};
+	export let onSubmit: (...args: unknown[]) => unknown = () => {};
+	export let onUpdate: (...args: unknown[]) => unknown = () => {};
 
-	export let channel: any = null;
+	export let channel: unknown = null;
 	export let edit = false;
 
 	let channelTypes = ['group', 'dm'];

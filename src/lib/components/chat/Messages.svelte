@@ -29,25 +29,25 @@
 	export let chatId = '';
 	export let user = $_user;
 
-	export let prompt;
+	export let prompt = '';
 	export let history = {};
 	export let selectedModels;
 	export let atSelectedModel;
 
 	let messages = [];
 
-	export let setInputText: Function = () => {};
+	export let setInputText: (...args: unknown[]) => unknown = () => {};
 
-	export let sendMessage: Function;
-	export let continueResponse: Function;
-	export let regenerateResponse: Function;
-	export let mergeResponses: Function;
+	export let sendMessage: (...args: unknown[]) => unknown;
+	export let continueResponse: (...args: unknown[]) => unknown;
+	export let regenerateResponse: (...args: unknown[]) => unknown;
+	export let mergeResponses: (...args: unknown[]) => unknown;
 
-	export let chatActionHandler: Function;
-	export let showMessage: Function = () => {};
-	export let submitMessage: Function = () => {};
-	export let addMessages: Function = () => {};
-	export let pinFileToChat: Function = () => {};
+	export let chatActionHandler: (...args: unknown[]) => unknown;
+	export const showMessage: (...args: unknown[]) => unknown = () => {};
+	export let submitMessage: (...args: unknown[]) => unknown = () => {};
+	export let addMessages: (...args: unknown[]) => unknown = () => {};
+	export let pinFileToChat: (...args: unknown[]) => unknown = () => {};
 	export let pinnedFileIds = [];
 
 	export let readOnly = false;
@@ -178,8 +178,8 @@
 			// Keep local plain-content edits aligned with the saved chat response.
 			if (res?.chat?.history?.messages) {
 				for (const [id, msg] of Object.entries(res.chat.history.messages)) {
-					if (history.messages[id] && (msg as any).content) {
-						history.messages[id].content = (msg as any).content;
+					if (history.messages[id] && (msg as unknown).content) {
+						history.messages[id].content = (msg as unknown).content;
 					}
 				}
 				history = history;
@@ -502,7 +502,7 @@
 	};
 </script>
 
-<div class={className}>
+<div class={className} data-prompt={prompt}>
 	{#if Object.keys(history?.messages ?? {}).length == 0}
 		<ChatPlaceholder modelIds={selectedModels} {atSelectedModel} {onSelect} />
 	{:else}
@@ -559,9 +559,9 @@
 						{/each}
 					</ul>
 				</section>
-				<div class="pb-18" />
+				<div class="pb-18"></div>
 				{#if bottomPadding}
-					<div class="  pb-6" />
+					<div class="  pb-6"></div>
 				{/if}
 			{/key}
 		</div>

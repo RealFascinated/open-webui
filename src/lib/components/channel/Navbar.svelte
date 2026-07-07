@@ -26,7 +26,7 @@
 	let showChannelPinnedMessagesModal = false;
 	let showChannelInfoModal = false;
 
-	const hasPublicReadGrant = (grants: any) =>
+	const hasPublicReadGrant = (grants: unknown) =>
 		Array.isArray(grants) &&
 		grants.some(
 			(grant) =>
@@ -35,7 +35,7 @@
 				grant?.permission === 'read'
 		);
 
-	const isPublicChannel = (channel: any): boolean => {
+	const isPublicChannel = (channel: unknown): boolean => {
 		if (channel?.type === 'group') {
 			if (typeof channel?.is_private === 'boolean') {
 				return !channel.is_private;

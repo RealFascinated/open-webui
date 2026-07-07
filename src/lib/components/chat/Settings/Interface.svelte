@@ -17,7 +17,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let saveSettings: Function;
+	export let saveSettings: (...args: unknown[]) => unknown;
 
 	let backgroundImageUrl = null;
 	let inputFiles = null;
@@ -1105,13 +1105,14 @@
 
 			<div>
 				<div class=" py-0.5 flex w-full justify-between">
-					<label id="floating-action-buttons-label" class=" self-center text-xs">
+					<label id="floating-action-buttons-label" class=" self-center text-xs" for="floating-action-buttons-manage">
 						{$i18n.t('Floating Quick Actions')}
 					</label>
 
 					<div class="flex items-center gap-3 p-1">
 						{#if showFloatingActionButtons}
 							<button
+								id="floating-action-buttons-manage"
 								class="text-xs text-gray-700 dark:text-gray-400 underline"
 								type="button"
 								aria-label={$i18n.t('Open Modal To Manage Floating Quick Actions')}

@@ -18,8 +18,8 @@
 	const i18n = getContext('i18n');
 
 	export let eventTarget: EventTarget;
-	export let submitPrompt: Function;
-	export let stopResponse: Function;
+	export let submitPrompt: (prompt: string) => void | Promise<void>;
+	export let stopResponse: () => void | Promise<void>;
 	export let files;
 	export let chatId;
 	export let modelId;
@@ -52,7 +52,7 @@
 		const devices = await navigator.mediaDevices.enumerateDevices();
 		videoInputDevices = devices.filter((device) => device.kind === 'videoinput');
 
-		if (!!navigator.mediaDevices.getDisplayMedia) {
+		if (navigator.mediaDevices.getDisplayMedia) {
 			videoInputDevices = [
 				...videoInputDevices,
 				{
@@ -817,12 +817,11 @@
 									transform: translate(0);
 								}
 							}
-						</style><circle class="spinner_qM83" cx="4" cy="12" r="3" /><circle
+						</style><circle class="spinner_qM83" cx="4" cy="12" r="3"></circle><circle
 							class="spinner_qM83 spinner_oXPr"
 							cx="12"
 							cy="12"
-							r="3"
-						/><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
+							r="3"></circle><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3"></circle></svg
 					>
 				{:else}
 					<div
@@ -834,7 +833,7 @@
 									? 'size-14'
 									: 'size-12'}  transition-all rounded-full bg-cover bg-center bg-no-repeat"
 						style={`background-image: url('${WEBUI_API_BASE_URL}/models/model/profile/image?id=${model?.id}&lang=${$i18n.language}&voice=true');`}
-					/>
+					></div>
 				{/if}
 				<!-- navbar -->
 			</button>
@@ -893,12 +892,11 @@
 										transform: translate(0);
 									}
 								}
-							</style><circle class="spinner_qM83" cx="4" cy="12" r="3" /><circle
+							</style><circle class="spinner_qM83" cx="4" cy="12" r="3"></circle><circle
 								class="spinner_qM83 spinner_oXPr"
 								cx="12"
 								cy="12"
-								r="3"
-							/><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3" /></svg
+								r="3"></circle><circle class="spinner_qM83 spinner_ZTLf" cx="20" cy="12" r="3"></circle></svg
 						>
 					{:else}
 						<div
@@ -910,25 +908,25 @@
 										? 'size-44'
 										: 'size-40'} transition-all rounded-full bg-cover bg-center bg-no-repeat"
 							style={`background-image: url('${WEBUI_API_BASE_URL}/models/model/profile/image?id=${model?.id}&lang=${$i18n.language}&voice=true');`}
-						/>
+						></div>
 					{/if}
 				</button>
 			{:else}
 				<div class="relative flex video-container w-full max-h-full pt-2 pb-4 md:py-6 px-2 h-full">
-					<!-- svelte-ignore a11y-media-has-caption -->
 					<video
 						id="camera-feed"
 						autoplay
 						class="rounded-2xl h-full min-w-full object-cover object-center"
 						playsinline
-					/>
+					></video>
 
-					<canvas id="camera-canvas" style="display:none;" />
+					<canvas id="camera-canvas" style="display:none;"></canvas>
 
 					<div class=" absolute top-4 md:top-8 left-4">
 						<button
 							type="button"
 							class="p-1.5 text-white cursor-pointer backdrop-blur-xl bg-black/10 rounded-full"
+							aria-label={$i18n.t('Close camera')}
 							on:click={() => {
 								stopCamera();
 							}}
@@ -940,8 +938,7 @@
 								class="size-6"
 							>
 								<path
-									d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z"
-								/>
+									d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z"></path>
 							</svg>
 						</button>
 					</div>
@@ -984,7 +981,7 @@
 							await startVideoStream();
 						}}
 					>
-						<button class="p-3 rounded-full bg-gray-50 dark:bg-gray-900" type="button">
+						<button class="p-3 rounded-full bg-gray-50 dark:bg-gray-900" type="button" aria-label={$i18n.t('Switch camera')}>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 20 20"
@@ -994,8 +991,7 @@
 								<path
 									fill-rule="evenodd"
 									d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z"
-									clip-rule="evenodd"
-								/>
+									clip-rule="evenodd"></path>
 							</svg>
 						</button>
 					</VideoInputMenu>
@@ -1004,6 +1000,7 @@
 						<button
 							class="p-3 rounded-full bg-gray-50 dark:bg-gray-900"
 							type="button"
+							aria-label={$i18n.t('Camera')}
 							on:click={async () => {
 								await navigator.mediaDevices.getUserMedia({ video: true });
 								startCamera();
@@ -1020,13 +1017,11 @@
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
-									d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-								/>
+									d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"></path>
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
-									d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
-								/>
+									d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"></path>
 							</svg>
 						</button>
 					</Tooltip>
@@ -1054,8 +1049,7 @@
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
-									d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"
-								/>
+									d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"></path>
 								<line
 									x1="3"
 									y1="3"
@@ -1063,8 +1057,7 @@
 									y2="21"
 									stroke="currentColor"
 									stroke-width="1.5"
-									stroke-linecap="round"
-								/>
+									stroke-linecap="round"></line>
 							</svg>
 						{:else}
 							<!-- Mic On icon -->
@@ -1079,8 +1072,7 @@
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
-									d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"
-								/>
+									d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"></path>
 							</svg>
 						{/if}
 					</button>
@@ -1088,6 +1080,7 @@
 
 				<button
 					class="p-3 rounded-full bg-gray-50 dark:bg-gray-900"
+					aria-label={$i18n.t('End call')}
 					on:click={async () => {
 						await stopAudioStream();
 						await stopVideoStream();
@@ -1107,8 +1100,7 @@
 						class="size-5"
 					>
 						<path
-							d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"
-						/>
+							d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"></path>
 					</svg>
 				</button>
 			</div>

@@ -6,12 +6,12 @@
 	const i18n = getContext('i18n');
 
 	export let name = '';
-	export let color = '';
+	export const color = '';
 	export let description = '';
 	export let data = {};
 
 	export let edit = false;
-	export let onDelete: Function = () => {};
+	export let onDelete: (...args: unknown[]) => unknown = () => {};
 </script>
 
 <div class="flex gap-2">
@@ -59,8 +59,7 @@
 			className="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden resize-none"
 			rows={4}
 			bind:value={description}
-			placeholder={$i18n.t('Group Description')}
-		/>
+			placeholder={$i18n.t('Group Description')}></Textarea>
 	</div>
 </div>
 

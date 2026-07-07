@@ -1030,6 +1030,50 @@ async def get_event_emitter(request_info, update_db=True):
                         },
                     )
 
+            elif event_type == 'chat:message:weather':
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    request_info['chat_id'],
+                    request_info['message_id'],
+                    {'weather': event_data.get('data', {})},
+                )
+
+            elif event_type == 'chat:message:options':
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    request_info['chat_id'],
+                    request_info['message_id'],
+                    {'options': event_data.get('data', {})},
+                )
+
+            elif event_type == 'chat:message:currency':
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    request_info['chat_id'],
+                    request_info['message_id'],
+                    {'currency': event_data.get('data', {})},
+                )
+
+            elif event_type == 'chat:message:map':
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    request_info['chat_id'],
+                    request_info['message_id'],
+                    {'map': event_data.get('data', {})},
+                )
+
+            elif event_type == 'chat:message:sports':
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    request_info['chat_id'],
+                    request_info['message_id'],
+                    {'sports': event_data.get('data', {})},
+                )
+
+            elif event_type == 'chat:message:followups':
+                data = event_data.get('data', {})
+                followups = data.get('suggestions', data) if isinstance(data, dict) else data
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    request_info['chat_id'],
+                    request_info['message_id'],
+                    {'suggestedFollowups': followups},
+                )
+
     if 'user_id' in request_info and 'chat_id' in request_info and 'message_id' in request_info:
         return __event_emitter__
     else:

@@ -122,6 +122,14 @@ print("${endTag}")
 
 			const packages = ['black'];
 
+			const extractBetweenDelimiters = (stdout, start, end) => {
+				console.log('stdout', stdout);
+				const startIdx = stdout.indexOf(start);
+				const endIdx = stdout.indexOf(end, startIdx + start.length);
+				if (startIdx === -1 || endIdx === -1) return null;
+				return stdout.slice(startIdx + start.length, endIdx).trim();
+			};
+
 			function handleMessage(event) {
 				const { id: eventId, stdout, stderr } = event.data;
 				if (eventId !== id) return; // Only handle our message
@@ -132,14 +140,6 @@ print("${endTag}")
 				if (stderr) {
 					reject(stderr);
 				} else {
-					function extractBetweenDelimiters(stdout, start, end) {
-						console.log('stdout', stdout);
-						const startIdx = stdout.indexOf(start);
-						const endIdx = stdout.indexOf(end, startIdx + start.length);
-						if (startIdx === -1 || endIdx === -1) return null;
-						return stdout.slice(startIdx + start.length, endIdx).trim();
-					}
-
 					const formatted = extractBetweenDelimiters(
 						stdout && typeof stdout === 'string' ? stdout : '',
 						startTag,
@@ -169,7 +169,9 @@ print("${endTag}")
 				worker.removeEventListener('error', handleError);
 				try {
 					worker.terminate();
-				} catch {}
+				} catch {
+			// intentionally empty
+		}
 				pyodideWorkerInstance = null;
 				reject('Execution Time Limit Exceeded');
 			}, 60000);
@@ -318,4 +320,4 @@ print("${endTag}")
 	});
 </script>
 
-<div id="code-textarea-{id}" class="h-full w-full text-sm" />
+<div id="code-textarea-{id}" class="h-full w-full text-sm"></div>

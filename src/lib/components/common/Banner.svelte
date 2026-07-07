@@ -92,14 +92,14 @@
 									<path
 										fill-rule="evenodd"
 										d="M4.22 11.78a.75.75 0 0 1 0-1.06L9.44 5.5H5.75a.75.75 0 0 1 0-1.5h5.5a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0V6.56l-5.22 5.22a.75.75 0 0 1-1.06 0Z"
-										clip-rule="evenodd"
-									/>
+										clip-rule="evenodd"></path>
 								</svg>
 							</div>
 						</div>
 					{/if}
 				</div>
 				<div class="flex-1 text-xs text-gray-700 dark:text-white max-h-60 overflow-y-auto">
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 					{@html DOMPurify.sanitize(marked.parse((banner?.content ?? '').replace(/\n/g, '<br>')))}
 				</div>
 			</div>
@@ -126,8 +126,7 @@
 							<path
 								fill-rule="evenodd"
 								d="M4.22 11.78a.75.75 0 0 1 0-1.06L9.44 5.5H5.75a.75.75 0 0 1 0-1.5h5.5a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0V6.56l-5.22 5.22a.75.75 0 0 1-1.06 0Z"
-								clip-rule="evenodd"
-							/>
+								clip-rule="evenodd"></path>
 						</svg>
 					</div>
 				</div>

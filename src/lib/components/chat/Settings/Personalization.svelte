@@ -8,7 +8,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let saveSettings: Function;
+	export let saveSettings: (...args: unknown[]) => unknown;
 
 	let showManageModal = false;
 

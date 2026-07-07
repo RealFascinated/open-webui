@@ -42,7 +42,7 @@
 		utilities: {
 			label: $i18n.t('Utilities'),
 			description: $i18n.t(
-				'Weather, maps, currency conversion, sports scores, and interactive option chips'
+				'Weather, maps, currency conversion, sports scores, option buttons, and follow-up chips'
 			)
 		},
 		image_generation: {
@@ -71,7 +71,7 @@
 		},
 		artifacts: {
 			label: $i18n.t('Artifacts'),
-			description: $i18n.t('List, read, save, and update artifacts in the user library')
+			description: $i18n.t('List, read, save, update, and delete artifacts in the user library')
 		}
 	};
 

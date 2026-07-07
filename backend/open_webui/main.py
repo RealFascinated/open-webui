@@ -1708,14 +1708,6 @@ async def generate_messages(
     # Convert Anthropic payload to OpenAI format
     requested_model = form_data.get('model', '')
 
-    incoming_tools = form_data.get('tools') or []
-    if any(isinstance(tool, dict) and tool.get('defer_loading') for tool in incoming_tools):
-        request.state.metadata = {
-            **(getattr(request.state, 'metadata', None) or {}),
-            'deferred_loading': True,
-            'deferred_loading_mode': 'anthropic',
-        }
-
     openai_payload = convert_anthropic_to_openai_payload(form_data)
 
     # Route through the existing chat_completion handler

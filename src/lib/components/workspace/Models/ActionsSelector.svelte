@@ -13,7 +13,7 @@
 		};
 	};
 
-	const i18n = getContext('i18n') as any;
+	const i18n = getContext('i18n') as unknown;
 
 	export let actions: Action[] = [];
 	export let selectedActionIds: string[] = [];

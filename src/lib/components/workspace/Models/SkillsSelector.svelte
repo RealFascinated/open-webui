@@ -13,7 +13,7 @@
 	export let skills: Skill[] = [];
 	export let selectedSkillIds: string[] = [];
 
-	const i18n = getContext('i18n') as any;
+	const i18n = getContext('i18n') as unknown;
 
 	$: selectedSkills = skills.filter((skill) => selectedSkillIds.includes(skill.id));
 	$: availableSkills = skills.filter((skill) => !selectedSkillIds.includes(skill.id));

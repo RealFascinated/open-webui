@@ -29,10 +29,10 @@
 
 	dayjs.extend(localizedFormat);
 
-	export let onSubmit: Function;
+	export let onSubmit: (...args: unknown[]) => unknown;
 	export let edit = false;
 	export let prompt = null;
-	export let clone = false;
+	export const clone = false;
 	export let disabled = false;
 
 	const i18n = getContext('i18n');
@@ -51,9 +51,9 @@
 	let showAccessControlModal = false;
 	let hasManualEdit = false;
 
-	let history: any[] = [];
+	let history: unknown[] = [];
 	let historyLoading = false;
-	let selectedHistoryEntry: any = null;
+	let selectedHistoryEntry: unknown = null;
 	let historyPage = 0;
 	let historyHasMore = true;
 	let contentCopied = false;
@@ -169,7 +169,7 @@
 		}
 	};
 
-	const setAsProduction = async (historyEntry: any) => {
+	const setAsProduction = async (historyEntry: unknown) => {
 		if (disabled) {
 			toast.error($i18n.t('You do not have permission to edit this prompt.'));
 			return;

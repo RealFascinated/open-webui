@@ -17,6 +17,36 @@ const OPENAPI_HTTP_METHODS = new Set([
 	'trace'
 ]);
 
+type OpenApiParameter = {
+	name?: string;
+	in?: string;
+	[key: string]: unknown;
+};
+
+type OpenApiOperation = {
+	operationId?: string;
+	parameters?: OpenApiParameter[];
+	requestBody?: { content?: Record<string, unknown> };
+	[key: string]: unknown;
+};
+
+type OpenApiPathItem = {
+	parameters?: OpenApiParameter[];
+	[method: string]: OpenApiOperation | OpenApiParameter[] | unknown;
+};
+
+type OpenApiSpec = {
+	paths: Record<string, OpenApiPathItem>;
+	info?: Record<string, unknown>;
+	[key: string]: unknown;
+};
+
+type ToolServerExecutionData = {
+	openapi: OpenApiSpec;
+	info: Record<string, unknown>;
+	specs: Record<string, unknown>[];
+};
+
 // Every request sent from here is a petition. May it reach
 // the one for whom it was intended, and return answered.
 export const getModels = async (
@@ -101,7 +131,7 @@ export const getModels = async (
 										.then((res) => {
 											return res;
 										})
-										.catch((err) => {
+										.catch(() => {
 											return {
 												object: 'list',
 												data: [],
@@ -461,7 +491,7 @@ export const getToolServersData = async (servers: object[]) => {
 					} else if ((specType === 'json' && server?.spec) ?? null) {
 						try {
 							res = JSON.parse(server?.spec);
-						} catch (e) {
+						} catch {
 							error = 'Failed to parse JSON spec';
 						}
 					}
@@ -480,7 +510,7 @@ export const getToolServersData = async (servers: object[]) => {
 							specs: convertOpenApiToToolPayload(res)
 						};
 
-						const result: Record<string, any> = {
+						const result: Record<string, unknown> = {
 							url: server?.url,
 							openapi: openapi,
 							info: info,
@@ -512,7 +542,7 @@ export const getToolServersData = async (servers: object[]) => {
 									}
 								}
 							}
-						} catch (e) {
+						} catch {
 							// Server doesn't support /system — that's fine
 						}
 
@@ -534,21 +564,21 @@ export const executeToolServer = async (
 	token: string,
 	url: string,
 	name: string,
-	params: Record<string, any>,
-	serverData: { openapi: any; info: any; specs: any },
+	params: Record<string, unknown>,
+	serverData: ToolServerExecutionData,
 	sessionId?: string
 ) => {
 	let error = null;
 
 	try {
 		// Find the matching operationId in the OpenAPI spec (only valid HTTP methods)
-		const matchingRoute = Object.entries(serverData.openapi.paths).find(([_, methods]) =>
-			Object.entries(methods as any).some(
-				([method, operation]: any) =>
+		const matchingRoute = Object.entries(serverData.openapi.paths).find(([, methods]) =>
+			Object.entries(methods as OpenApiPathItem).some(
+				([method, operation]) =>
 					OPENAPI_HTTP_METHODS.has(method) &&
 					operation &&
 					typeof operation === 'object' &&
-					operation.operationId === name
+					(operation as OpenApiOperation).operationId === name
 			)
 		);
 
@@ -558,27 +588,29 @@ export const executeToolServer = async (
 
 		const [routePath, methods] = matchingRoute;
 
-		const methodEntry = Object.entries(methods as any).find(
-			([method, operation]: any) =>
+		const methodEntry = Object.entries(methods as OpenApiPathItem).find(
+			([method, operation]) =>
 				OPENAPI_HTTP_METHODS.has(method) &&
 				operation &&
 				typeof operation === 'object' &&
-				operation.operationId === name
+				(operation as OpenApiOperation).operationId === name
 		);
 
 		if (!methodEntry) {
 			throw new Error(`No matching method found for operationId: ${name}`);
 		}
 
-		const [httpMethod, operation]: [string, any] = methodEntry;
+		const [httpMethod, operationEntry]: [string, OpenApiOperation] = methodEntry;
 
 		// Merge path-level and operation-level parameters.
 		// Operation-level params override path-level params with the same (name, in).
-		const pathLevelParams: any[] = Array.isArray((methods as any).parameters)
-			? (methods as any).parameters
+		const pathLevelParams: OpenApiParameter[] = Array.isArray((methods as OpenApiPathItem).parameters)
+			? ((methods as OpenApiPathItem).parameters as OpenApiParameter[])
 			: [];
-		const opParams: any[] = Array.isArray(operation.parameters) ? operation.parameters : [];
-		const mergedParams = new Map();
+		const opParams: OpenApiParameter[] = Array.isArray(operationEntry.parameters)
+			? operationEntry.parameters
+			: [];
+		const mergedParams = new Map<string, OpenApiParameter>();
 		for (const param of pathLevelParams) {
 			if (param?.name) mergedParams.set(`${param.name}:${param.in ?? ''}`, param);
 		}
@@ -587,15 +619,15 @@ export const executeToolServer = async (
 		}
 
 		// Split parameters by type
-		const pathParams: Record<string, any> = {};
-		const queryParams: Record<string, any> = {};
-		let bodyParams: any = {};
+		const pathParams: Record<string, unknown> = {};
+		const queryParams: Record<string, unknown> = {};
+		let bodyParams: Record<string, unknown> = {};
 
 		for (const param of mergedParams.values()) {
 			const paramName = param?.name;
 			if (!paramName) continue;
 			const paramIn = param?.in;
-			if (params.hasOwnProperty(paramName)) {
+			if (Object.hasOwn(params, paramName)) {
 				if (paramIn === 'path') {
 					pathParams[paramName] = params[paramName];
 				} else if (paramIn === 'query') {
@@ -620,8 +652,7 @@ export const executeToolServer = async (
 		}
 
 		// Handle requestBody composite
-		if (operation.requestBody && operation.requestBody.content) {
-			const contentType = Object.keys(operation.requestBody.content)[0];
+		if (operationEntry.requestBody && operationEntry.requestBody.content) {
 			if (params !== undefined) {
 				bodyParams = params;
 			} else {
@@ -644,7 +675,7 @@ export const executeToolServer = async (
 
 		if (
 			['post', 'put', 'patch', 'delete'].includes(httpMethod.toLowerCase()) &&
-			operation.requestBody
+			operationEntry.requestBody
 		) {
 			requestOptions.body = JSON.stringify(bodyParams);
 		}
@@ -681,8 +712,8 @@ export const executeToolServer = async (
 			}
 		}
 		return [responseData, responseHeaders];
-	} catch (err: any) {
-		error = err.message;
+	} catch (err: unknown) {
+		error = err instanceof Error ? err.message : String(err);
 		console.error('API Request Error:', error);
 		return [{ error }, null];
 	}
@@ -1481,8 +1512,15 @@ export const getBackendConfig = async () => {
 				) {
 					throw { authRedirect: true };
 				}
-			} catch (probeErr: any) {
-				if (probeErr?.authRedirect) throw probeErr;
+			} catch (probeErr: unknown) {
+				if (
+					typeof probeErr === 'object' &&
+					probeErr !== null &&
+					'authRedirect' in probeErr &&
+					(probeErr as { authRedirect?: boolean }).authRedirect
+				) {
+					throw probeErr;
+				}
 				// Probe also failed — genuine network/backend issue
 			}
 		}
@@ -1755,4 +1793,4 @@ export interface ModelMeta {
 	profile_image_url?: string;
 }
 
-export interface ModelParams {}
+export type ModelParams = Record<string, unknown>;

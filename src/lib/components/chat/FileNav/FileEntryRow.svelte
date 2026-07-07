@@ -84,7 +84,7 @@
 		longPressTimer = setTimeout(() => {
 			didLongPress = true;
 			onLongPress();
-			onSelect(entry, e as any);
+			onSelect(entry, e as unknown);
 		}, 500);
 	};
 
@@ -167,7 +167,9 @@
 					if (p + '/' === destFolder || p === destFolder) continue;
 					onMove(p, destFolder);
 				}
-			} catch {}
+			} catch {
+			// intentionally empty
+		}
 		}}
 	>
 		<button
@@ -258,7 +260,6 @@
 				</svg>
 			{/if}
 			{#if renaming}
-				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<input
 					bind:this={renameInput}
 					bind:value={renameValue}

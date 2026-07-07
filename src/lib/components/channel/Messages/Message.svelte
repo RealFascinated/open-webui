@@ -11,6 +11,9 @@
 	dayjs.extend(localizedFormat);
 
 	import { getContext, onMount } from 'svelte';
+	import type { Writable } from 'svelte/store';
+	import type { i18n as i18nType } from 'i18next';
+
 	const i18n = getContext<Writable<i18nType>>('i18n');
 
 	import { formatDate } from '$lib/utils';
@@ -53,12 +56,12 @@
 	export let disabled = false;
 	export let pending = false;
 
-	export let onDelete: Function = () => {};
-	export let onEdit: Function = () => {};
-	export let onReply: Function = () => {};
-	export let onPin: Function = () => {};
-	export let onThread: Function = () => {};
-	export let onReaction: Function = () => {};
+	export let onDelete: (...args: unknown[]) => unknown = () => {};
+	export let onEdit: (...args: unknown[]) => unknown = () => {};
+	export let onReply: (...args: unknown[]) => unknown = () => {};
+	export let onPin: (...args: unknown[]) => unknown = () => {};
+	export let onThread: (...args: unknown[]) => unknown = () => {};
+	export let onReaction: (...args: unknown[]) => unknown = () => {};
 
 	let showButtons = false;
 
@@ -163,6 +166,8 @@
 {#if message}
 	<div
 		class="swipe-reply-wrapper relative"
+		role="group"
+		aria-label={$i18n.t('Message')}
 		on:touchstart={handleTouchStart}
 		on:touchmove={handleTouchMove}
 		on:touchend={handleTouchEnd}
@@ -463,7 +468,9 @@
 									{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
 										<Image src={fileUrl} alt={file.name} imageClassName=" max-h-96 rounded-lg" />
 									{:else if file.type === 'video' || (file?.content_type ?? '').startsWith('video/')}
-										<video src={fileUrl} controls class=" max-h-96 rounded-lg"></video>
+										<video src={fileUrl} controls class=" max-h-96 rounded-lg">
+											<track kind="captions" />
+										</video>
 									{:else}
 										<FileItem
 											item={file}

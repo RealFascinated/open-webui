@@ -190,7 +190,7 @@ interface PickerResult {
 	command?: string;
 	items?: OneDriveFileInfo[];
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 // Get picker parameters based on account type
@@ -237,7 +237,7 @@ interface OneDriveFileInfo {
 	};
 	'@sharePoint.endpoint': string;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 // Download file from OneDrive

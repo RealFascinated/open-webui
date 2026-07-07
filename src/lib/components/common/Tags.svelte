@@ -96,6 +96,7 @@
 				placeholder={$i18n.t('Add a tag...')}
 				role="combobox"
 				aria-autocomplete="list"
+				aria-controls="tags-suggestions-listbox"
 				aria-expanded={suggestionsOpen && filteredSuggestionTags.length > 0}
 				autocomplete="off"
 				on:focus={() => {
@@ -127,6 +128,7 @@
 				<div
 					use:portal
 					bind:this={popupElement}
+					id="tags-suggestions-listbox"
 					class="fixed w-48 max-h-48 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-0.5 shadow-lg dark:border-gray-800 dark:bg-gray-850"
 					role="listbox"
 					style="z-index: 9999; top: 0; left: 0;"
@@ -136,6 +138,7 @@
 							type="button"
 							class="flex w-full items-center rounded-xl px-2 py-[5px] text-left text-xs text-gray-700 transition-colors hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
 							role="option"
+							aria-selected="false"
 							on:mousedown={(event) => {
 								event.preventDefault();
 							}}

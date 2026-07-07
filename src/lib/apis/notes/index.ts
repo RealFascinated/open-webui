@@ -76,7 +76,7 @@ export const getNotes = async (token: string = '', raw: boolean = false) => {
 	}
 
 	// Build the grouped object
-	const grouped: Record<string, any[]> = {};
+	const grouped: Record<string, Record<string, unknown>[]> = {};
 	for (const note of res) {
 		const timeRange = getTimeRange(note.updated_at / 1000000000);
 		if (!grouped[timeRange]) {
@@ -253,7 +253,7 @@ export const updateNoteById = async (token: string, id: string, note: NoteItem) 
 	return res;
 };
 
-export const updateNoteAccessGrants = async (token: string, id: string, accessGrants: any[]) => {
+export const updateNoteAccessGrants = async (token: string, id: string, accessGrants: object[]) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/notes/${id}/access/update`, {

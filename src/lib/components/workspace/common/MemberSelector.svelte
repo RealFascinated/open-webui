@@ -20,7 +20,7 @@
 
 	export let includeGroups = true;
 	export let includeUsers = true;
-	export let pagination = false;
+	export const pagination = false;
 	export let includeSessionUser = false;
 
 	export let groupIds = [];

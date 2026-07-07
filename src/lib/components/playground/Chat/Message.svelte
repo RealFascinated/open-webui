@@ -47,11 +47,12 @@
 				// e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
 			}}
 			bind:value={message.content}
-		/>
+		></textarea>
 	</div>
 
 	<div class=" pt-1">
 		<button
+			aria-label={$i18n.t('Delete')}
 			class=" group-hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-300 transition"
 			on:click={() => {
 				onDelete();
@@ -68,8 +69,7 @@
 				<path
 					stroke-linecap="round"
 					stroke-linejoin="round"
-					d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-				/>
+					d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"></path>
 			</svg>
 		</button>
 	</div>

@@ -75,8 +75,7 @@
 					className="mr-2 text-xs w-full bg-transparent outline-hidden resize-none"
 					placeholder={$i18n.t('Content')}
 					bind:value={banner.content}
-					maxSize={100}
-				/>
+					maxSize={100}></Textarea>
 
 				<div class="relative -left-2">
 					<Tooltip content={$i18n.t('Remember Dismissal')} className="flex h-fit items-center">

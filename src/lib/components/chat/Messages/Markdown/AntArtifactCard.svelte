@@ -4,14 +4,14 @@
 	import Document from '$lib/components/icons/Document.svelte';
 
 	export let artifact: AntArtifact;
-	export let onPreview: (content: string) => void = () => {};
+	export let onPreview: (key: string) => void = () => {};
 </script>
 
 {#if artifact.artifactType}
 	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 	<div
 		class="group w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850 transition-colors cursor-pointer my-1"
-		on:click={() => onPreview(artifact.content)}
+		on:click={() => onPreview(artifact.identifier || artifact.content)}
 	>
 		<div
 			class="shrink-0 flex items-center justify-center size-8 rounded-lg border border-gray-200 dark:border-gray-700
@@ -50,8 +50,18 @@
 				stroke-width="2"
 				stroke="currentColor"
 			>
-				<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+				<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"></path>
 			</svg>
+		</div>
+	</div>
+{:else}
+	<div
+		class="my-1 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-3.5 py-3 text-sm text-amber-900 dark:text-amber-200"
+	>
+		<div class="font-medium">Unsupported artifact type</div>
+		<div class="text-xs mt-1 text-amber-800/80 dark:text-amber-300/80">
+			{artifact.type || 'unknown'} is not supported in the artifact panel. Use text/html, application/vnd.ant.react,
+			image/svg+xml, or text/markdown.
 		</div>
 	</div>
 {/if}

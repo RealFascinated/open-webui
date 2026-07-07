@@ -12,7 +12,7 @@
 	export let userName: string = '';
 
 	let loading = true;
-	let preview: any = null;
+	let preview: unknown = null;
 	let error: string = '';
 
 	$: if (show && userId) {

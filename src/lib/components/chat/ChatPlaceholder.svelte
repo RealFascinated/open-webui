@@ -96,6 +96,7 @@
 						<div
 							class="mt-0.5 text-base font-normal text-gray-500 dark:text-gray-400 line-clamp-3 markdown"
 						>
+							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 							{@html DOMPurify.sanitize(
 								marked.parse(
 									sanitizeResponseContent(

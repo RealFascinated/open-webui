@@ -64,7 +64,7 @@
 		}
 	};
 
-	const getTextFragmentUrl = (doc: any): string | null => {
+	const getTextFragmentUrl = (doc: unknown): string | null => {
 		const { metadata, source, document: content } = doc ?? {};
 		const { file_id, page } = metadata ?? {};
 		const sourceUrl = source?.url;

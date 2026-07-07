@@ -143,8 +143,7 @@
 					<path
 						fill-rule="evenodd"
 						d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z"
-						clip-rule="evenodd"
-					/>
+						clip-rule="evenodd"></path>
 				</svg>
 			</button>
 		</Tooltip>
@@ -168,8 +167,7 @@
 					<path
 						fill-rule="evenodd"
 						d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 1 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
-						clip-rule="evenodd"
-					/>
+						clip-rule="evenodd"></path>
 				</svg>
 			</button>
 		</Tooltip>
@@ -191,8 +189,7 @@
 					<path
 						fill-rule="evenodd"
 						d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.451a.75.75 0 0 0 0-1.5H4.5a.75.75 0 0 0-.75.75v3.75a.75.75 0 0 0 1.5 0v-2.127l.13.13a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.624-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.75a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 .75-.75V3.42a.75.75 0 0 0-1.5 0v2.126l-.13-.129A7 7 0 0 0 3.239 8.555a.75.75 0 0 0 1.449.39Z"
-						clip-rule="evenodd"
-					/>
+						clip-rule="evenodd"></path>
 				</svg>
 			</button>
 		</Tooltip>
@@ -223,8 +220,7 @@
 					<path
 						fill-rule="evenodd"
 						d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Zm7.5-3.5a.75.75 0 0 0 0 1.5h2.69l-4.72 4.72a.75.75 0 0 0 1.06 1.06l4.72-4.72v2.69a.75.75 0 0 0 1.5 0v-5.25a.75.75 0 0 0-.75-.75h-5.25Z"
-						clip-rule="evenodd"
-					/>
+						clip-rule="evenodd"></path>
 				</svg>
 			</button>
 		</Tooltip>
@@ -243,8 +239,7 @@
 					class="size-3.5"
 				>
 					<path
-						d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"
-					/>
+						d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"></path>
 				</svg>
 			</button>
 		</Tooltip>
@@ -253,7 +248,7 @@
 	<!-- Loading bar -->
 	{#if isLoading}
 		<div class="h-0.5 bg-gray-100 dark:bg-gray-800 shrink-0 overflow-hidden">
-			<div class="h-full bg-blue-500 animate-loading-bar rounded-full" />
+			<div class="h-full bg-blue-500 animate-loading-bar rounded-full" ></div>
 		</div>
 	{/if}
 
@@ -269,8 +264,7 @@
 				title="Port {port} preview"
 				class="w-full h-full border-0 bg-white"
 				sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
-				on:load={onIframeLoad}
-			/>
+				on:load={onIframeLoad}></iframe>
 		{/key}
 	</div>
 </div>

@@ -20,8 +20,7 @@
 		   C10 11.7909 8.20914 10 6 10
 		   C3.79086 10 2 11.7909 2 14Z"
 		stroke-linecap="round"
-		stroke-linejoin="round"
-	/>
+		stroke-linejoin="round"></path>
 
 	<!-- Right lens -->
 	<path
@@ -31,15 +30,14 @@
 		   C22 11.7909 20.2091 10 18 10
 		   C15.7909 10 14 11.7909 14 14Z"
 		stroke-linecap="round"
-		stroke-linejoin="round"
-	/>
+		stroke-linejoin="round"></path>
 
 	<!-- Left temple (side-mounted) -->
-	<path d="M2 14L0.8 14.4" stroke-linecap="round" />
+	<path d="M2 14L0.8 14.4" stroke-linecap="round"></path>
 
 	<!-- Right temple (side-mounted) -->
-	<path d="M22 14L23.2 14.4" stroke-linecap="round" />
+	<path d="M22 14L23.2 14.4" stroke-linecap="round"></path>
 
 	<!-- Bridge -->
-	<path d="M14 14H10" stroke-linecap="round" stroke-linejoin="round" />
+	<path d="M14 14H10" stroke-linecap="round" stroke-linejoin="round"></path>
 </svg>

@@ -19,7 +19,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let saveHandler: Function;
+	export let saveHandler: (...args: unknown[]) => unknown;
 
 	let updateAvailable = false;
 	let version = {
@@ -211,6 +211,7 @@
 									</a>
 									{#if $config?.license_metadata?.html}
 										<div class="mt-0.5">
+											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 											{@html DOMPurify.sanitize($config?.license_metadata?.html)}
 										</div>
 									{/if}
@@ -401,6 +402,7 @@
 							</div>
 
 							<button
+								aria-label={$i18n.t('Add Banner')}
 								class="p-1 px-3 text-xs flex rounded-sm transition"
 								type="button"
 								on:click={() => {

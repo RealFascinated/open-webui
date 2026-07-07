@@ -154,12 +154,12 @@
 								class="text-sm w-full bg-transparent outline-hidden resize-none"
 								placeholder={$i18n.t('Prompt')}
 								rows="2"
-								bind:value={prompt.content}
-							/>
+								bind:value={prompt.content}></textarea>
 						</Tooltip>
 					</div>
 
 					<button
+						aria-label={$i18n.t('Delete')}
 						class="p-1 self-start"
 						type="button"
 						on:click={() => {
@@ -174,8 +174,7 @@
 							class="w-4 h-4"
 						>
 							<path
-								d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-							/>
+								d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"></path>
 						</svg>
 					</button>
 				</div>

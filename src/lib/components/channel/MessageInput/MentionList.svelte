@@ -14,8 +14,8 @@
 	export let command: (payload: { id: string; label: string }) => void;
 	export let selectedIndex = 0;
 
-	export let label = '';
-	export let triggerChar = '@';
+	export const label = '';
+	export const triggerChar = '@';
 
 	export let modelSuggestions = false;
 	export let userSuggestions = false;
@@ -93,7 +93,7 @@
 	};
 
 	// This method will be called from the suggestion renderer
-	// @ts-ignore
+	// @ts-expect-error -- legacy type workaround
 	export function _onKeyDown(event: KeyboardEvent) {
 		return onKeyDown(event);
 	}
@@ -131,7 +131,7 @@
 		};
 	});
 
-	const hasPublicReadGrant = (grants: any) =>
+	const hasPublicReadGrant = (grants: unknown) =>
 		Array.isArray(grants) &&
 		grants.some(
 			(grant) =>
@@ -140,7 +140,7 @@
 				grant?.permission === 'read'
 		);
 
-	const isPublicChannel = (channel: any): boolean => {
+	const isPublicChannel = (channel: unknown): boolean => {
 		if (channel?.type === 'group') {
 			if (typeof channel?.is_private === 'boolean') {
 				return !channel.is_private;

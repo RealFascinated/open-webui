@@ -5,6 +5,7 @@
 
 	import { getArtifacts, deleteArtifact } from '$lib/apis/artifacts';
 	import type { ArtifactItem } from '$lib/apis/artifacts';
+	import { artifactDisplayLabel } from '$lib/utils/artifact-render';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -97,8 +98,13 @@
 					</div>
 
 					<div class="flex items-center gap-2">
-						<span class="text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-							{artifact.type === 'iframe' ? 'HTML' : 'SVG'}
+						<span
+							class="text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded
+								{artifactDisplayLabel(artifact.type, artifact.meta) === 'React'
+								? 'bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400'
+								: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}"
+						>
+							{artifactDisplayLabel(artifact.type, artifact.meta)}
 						</span>
 						<span class="text-xs text-gray-400 dark:text-gray-500">
 							{formatDate(artifact.updated_at)}

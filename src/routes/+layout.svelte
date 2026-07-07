@@ -28,6 +28,8 @@
 		isLastActiveTab,
 		isApp,
 		appInfo,
+		appData,
+		models,
 		toolServers,
 		playingNotificationSound,
 		channels,
@@ -347,9 +349,9 @@
 			worker.removeEventListener('message', onMessage);
 			worker.removeEventListener('error', onError);
 
-			data['stdout'] && (stdout = data['stdout']);
-			data['stderr'] && (stderr = data['stderr']);
-			data['result'] && (result = data['result']);
+			if (data['stdout']) stdout = data['stdout'];
+			if (data['stderr']) stderr = data['stderr'];
+			if (data['result']) result = data['result'];
 
 			if (cb) {
 				cb(
@@ -575,6 +577,7 @@
 									const decoder = new TextDecoder();
 
 									const processStream = async () => {
+										// eslint-disable-next-line no-constant-condition -- SSE stream read loop
 										while (true) {
 											// Read data chunks from the response stream
 											const { done, value } = await reader.read();

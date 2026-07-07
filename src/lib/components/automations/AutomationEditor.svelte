@@ -101,7 +101,7 @@
 				isDirty = false;
 				toast.success($i18n.t('Automation updated'));
 			}
-		} catch (e: any) {
+		} catch (e: unknown) {
 			toast.error(e?.detail ?? `${e}` ?? 'Failed to save');
 		} finally {
 			saving = false;
@@ -280,8 +280,7 @@
 						class="size-3.5"
 					>
 						<path
-							d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.78a1.5 1.5 0 0 0 2.3 1.27l9.344-5.891a1.5 1.5 0 0 0 0-2.538L6.3 2.841Z"
-						/>
+							d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.78a1.5 1.5 0 0 0 2.3 1.27l9.344-5.891a1.5 1.5 0 0 0 0-2.538L6.3 2.841Z"></path>
 					</svg>
 					<div class="hidden md:block">{$i18n.t('Run now')}</div>
 					{#if loading}
@@ -306,8 +305,7 @@
 							class="w-full h-full text-sm bg-transparent outline-hidden resize-none placeholder:text-gray-300 dark:placeholder:text-gray-700"
 							bind:value={prompt}
 							on:input={markDirty}
-							placeholder={$i18n.t('Enter the prompt instructions for this automation...')}
-						/>
+							placeholder={$i18n.t('Enter the prompt instructions for this automation...')}></textarea>
 					</div>
 				</div>
 			</div>
@@ -409,8 +407,7 @@
 													><path
 														fill-rule="evenodd"
 														d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
-														clip-rule="evenodd"
-													/></svg
+														clip-rule="evenodd"></path></svg
 												>
 											{:else if run.status === 'error'}
 												<svg
@@ -421,8 +418,7 @@
 													><path
 														fill-rule="evenodd"
 														d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
-														clip-rule="evenodd"
-													/></svg
+														clip-rule="evenodd"></path></svg
 												>
 											{:else}
 												<svg
@@ -431,8 +427,7 @@
 													fill="currentColor"
 													class="size-3 text-blue-500"
 													><path
-														d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z"
-													/></svg
+														d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z"></path></svg
 												>
 											{/if}
 										</div>

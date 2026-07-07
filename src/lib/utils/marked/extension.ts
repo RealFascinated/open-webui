@@ -63,7 +63,11 @@ function detailsStart(src: string) {
 	return src.match(/^<details[\s>]/) ? 0 : -1;
 }
 
-function detailsRenderer(token: any) {
+	function detailsRenderer(token: {
+		attributes?: Record<string, string>;
+		summary?: string;
+		text?: string;
+	}) {
 	const attributesString = token.attributes
 		? Object.entries(token.attributes)
 				.map(([key, value]) => `${key}="${value}"`)

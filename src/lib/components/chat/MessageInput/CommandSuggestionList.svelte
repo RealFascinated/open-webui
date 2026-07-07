@@ -46,7 +46,7 @@
 	};
 
 	// This method will be called from the suggestion renderer
-	// @ts-ignore
+	// @ts-expect-error -- legacy type workaround
 	export function _onKeyDown(event: KeyboardEvent) {
 		return onKeyDown(event);
 	}

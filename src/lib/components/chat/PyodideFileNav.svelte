@@ -106,7 +106,7 @@
 		return worker;
 	}
 
-	function sendWorkerMessage(msg: any): Promise<any> {
+	function sendWorkerMessage(msg: unknown): Promise<unknown> {
 		const worker = ensureWorker();
 		const id = `fs-${++_reqId}`;
 		return new Promise((resolve, reject) => {
@@ -333,7 +333,9 @@
 	const onFilesChanged = async () => {
 		try {
 			await sendWorkerMessage({ type: 'fs:sync' });
-		} catch {}
+		} catch {
+			// intentionally empty
+		}
 		loadDir(currentPath);
 	};
 
@@ -386,7 +388,7 @@
 	{/if}
 
 	{#if overlay}
-		<div class="absolute inset-0 z-10 pointer-events-none" />
+		<div class="absolute inset-0 z-10 pointer-events-none" ></div>
 	{/if}
 
 	<!-- Toolbar (shared with FileNav) -->
@@ -402,7 +404,9 @@
 		onRefresh={async () => {
 			try {
 				await sendWorkerMessage({ type: 'fs:sync' });
-			} catch {}
+			} catch {
+			// intentionally empty
+		}
 			if (selectedFile) {
 				const name = selectedFile.split('/').pop() ?? '';
 				openEntry({ name, type: 'file', size: 0 });

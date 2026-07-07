@@ -188,7 +188,7 @@
 				obj[lang] = () => hljs.getLanguage(lang);
 				return obj;
 			},
-			{} as Record<string, any>
+			{} as Record<string, unknown>
 		)
 	);
 
@@ -283,7 +283,7 @@
 	export let showFormattingToolbar = true;
 
 	export let preserveBreaks = false;
-	export let generateAutoCompletion: Function = async () => null;
+	export let generateAutoCompletion: (...args: unknown[]) => unknown = async () => null;
 	export let autocomplete = false;
 	export let messageInput = false;
 	export let shiftEnter = false;
@@ -530,7 +530,7 @@
 				const text = node.text;
 				const replacedText = text.replace(/{{\s*([^|}]+)(?:\|[^}]*)?\s*}}/g, (match, varName) => {
 					const trimmedVarName = varName.trim();
-					return variables.hasOwnProperty(trimmedVarName)
+					return Object.hasOwn(variables, trimmedVarName)
 						? String(variables[trimmedVarName])
 						: match;
 				});
@@ -707,7 +707,7 @@
 			}
 
 			if (!raw) {
-				async function tryParse(value, attempts = 3, interval = 100) {
+				const tryParse = async (value, attempts = 3, interval = 100) => {
 					try {
 						// Try parsing the value
 						return marked.parse(value.replaceAll(`\n<br/>`, `<br/>`), {
@@ -722,7 +722,7 @@
 						await new Promise((resolve) => setTimeout(resolve, interval));
 						return tryParse(value, attempts - 1, interval); // Recursive call
 					}
-				}
+				};
 
 				// Usage example
 				content = await tryParse(value);
@@ -1039,8 +1039,7 @@
 							const { state } = view;
 							const { $head } = state.selection;
 
-							// Recursive function to check ancestors for specific node types
-							function isInside(nodeTypes: string[]): boolean {
+							const isInside = (nodeTypes: string[]): boolean => {
 								let currentNode = $head;
 								while (currentNode) {
 									if (nodeTypes.includes(currentNode.parent.type.name)) {
@@ -1050,7 +1049,7 @@
 									currentNode = state.doc.resolve(currentNode.before()); // Move to the parent node
 								}
 								return false;
-							}
+							};
 
 							// Handle Tab Key
 							if (event.key === 'Tab') {
@@ -1334,5 +1333,4 @@
 <div
 	bind:this={element}
 	dir="auto"
-	class="relative w-full min-w-full {className} {!editable ? 'cursor-not-allowed' : ''}"
-/>
+	class="relative w-full min-w-full {className} {!editable ? 'cursor-not-allowed' : ''}"></div>

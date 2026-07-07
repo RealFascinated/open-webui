@@ -98,7 +98,7 @@
 				chatDirection
 			);
 			const chats = res?.chats ?? [];
-			chatList = chats.map((c: any) => ({
+			chatList = chats.map((c: unknown) => ({
 				id: c.chat_id,
 				title: c.first_message || 'No preview',
 				updated_at: c.updated_at,
@@ -130,7 +130,7 @@
 				chatDirection
 			);
 			const chats = res?.chats ?? [];
-			const newChats = chats.map((c: any) => ({
+			const newChats = chats.map((c: unknown) => ({
 				id: c.chat_id,
 				title: c.first_message || 'No preview',
 				updated_at: c.updated_at,

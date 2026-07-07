@@ -31,7 +31,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let saveSettings: Function;
+	export let saveSettings: (...args: unknown[]) => unknown = () => {};
 
 	// Chats
 	let importFiles;
@@ -173,7 +173,7 @@
 	}}
 />
 
-<div id="tab-chats" class="flex flex-col h-full justify-between text-sm">
+<div id="tab-chats" class="flex flex-col h-full justify-between text-sm" data-save-settings={!!saveSettings}>
 	<div class="space-y-3 overflow-y-scroll max-h-[28rem] md:max-h-full">
 		<input
 			id="chat-import-input"

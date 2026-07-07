@@ -37,6 +37,7 @@
 		bind:this={panzoomRef}
 		className="flex h-full max-h-full justify-center items-center"
 	>
+		<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 		{@html DOMPurify.sanitize(svg, {
 			USE_PROFILES: { svg: true, svgFilters: true }, // allow <svg>, <defs>, <filter>, etc.
 			WHOLE_DOCUMENT: false,

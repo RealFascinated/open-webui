@@ -230,7 +230,7 @@
 					}
 				}
 
-				output['stderr'] && (stderr = output['stderr']);
+				if (output['stderr']) stderr = output['stderr'];
 			}
 
 			executing = false;
@@ -353,8 +353,8 @@
 				}
 			}
 
-			data['stderr'] && (stderr = data['stderr']);
-			data['result'] && (result = data['result']);
+			if (data['stderr']) stderr = data['stderr'];
+			if (data['result']) result = data['result'];
 
 			clearTimeout(timeoutId);
 			worker.removeEventListener('message', handler);
@@ -500,7 +500,7 @@
 			<!-- Chevron -->
 			<div class="shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors">
 				<svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+					<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"></path>
 				</svg>
 			</div>
 		</div>
@@ -609,13 +609,13 @@
 								stdout ||
 								stderr ||
 								result) &&
-								'border-bottom-left-radius: 0px; border-bottom-right-radius: 0px;'}"><code
-								class="language-{lang} rounded-t-none whitespace-pre text-sm"
-								>{#if lang && hljs.getLanguage(lang)}{@html hljs.highlight(code, {
+								'border-bottom-left-radius: 0px; border-bottom-right-radius: 0px;'}"
+						><code class="language-{lang} rounded-t-none whitespace-pre text-sm">
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+								{#if lang && hljs.getLanguage(lang)}{@html hljs.highlight(code, {
 										language: lang,
 										ignoreIllegals: true
-									}).value}{:else}{code}{/if}</code
-							></pre>
+									}).value}{:else}{code}{/if}</code></pre>
 					{/if}
 				{:else}
 					<div
@@ -633,8 +633,7 @@
 			{#if !collapsed}
 				<div
 					id="plt-canvas-{id}"
-					class="bg-gray-50 dark:bg-black dark:text-white max-w-full overflow-x-auto scrollbar-hidden"
-				/>
+					class="bg-gray-50 dark:bg-black dark:text-white max-w-full overflow-x-auto scrollbar-hidden"></div>
 
 				{#if executing || stdout || stderr || result || files}
 					<div

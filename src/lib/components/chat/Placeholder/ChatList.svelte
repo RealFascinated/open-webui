@@ -18,8 +18,9 @@
 	export let chatListLoading = false;
 	export let allChatsLoaded = false;
 
-	export let loadHandler: Function = null;
+	export let loadHandler: (...args: unknown[]) => unknown = null;
 	export let showOwnerInfo = false;
+	export let show = false;
 
 	let chatList = null;
 

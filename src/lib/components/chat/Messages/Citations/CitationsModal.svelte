@@ -14,7 +14,7 @@
 	export let showRelevance = true;
 
 	let showCitationModal = false;
-	let selectedCitation: any = null;
+	let selectedCitation: unknown = null;
 
 	export const showCitation = (citation) => {
 		selectedCitation = citation;

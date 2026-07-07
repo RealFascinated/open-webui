@@ -1,6 +1,5 @@
 <script>
-	import { onDestroy, onMount, tick, getContext } from 'svelte';
-	const i18n = getContext('i18n');
+	import { onDestroy, tick, getContext } from 'svelte';
 
 	import Markdown from './Markdown.svelte';
 	import StructuredOutputRenderer from './StructuredOutputRenderer.svelte';
@@ -29,6 +28,7 @@
 		const openTag = '<details';
 		const closeTag = '</details>';
 
+		// eslint-disable-next-line no-constant-condition -- intentional parse loop
 		while (true) {
 			const start = remaining.indexOf(openTag);
 			if (start === -1) {
@@ -73,11 +73,6 @@
 	/** @type {import('./structuredOutput').OutputItem[]} */
 	export let output = [];
 
-	export let history;
-	export let messageId;
-
-	export let selectedModels = [];
-
 	export let done = true;
 	export let model = null;
 	export let sources = null;
@@ -89,10 +84,10 @@
 	export let editCodeBlock = true;
 	export let topPadding = false;
 
-	export let onSave = (e) => {};
-	export let onSourceClick = (e) => {};
-	export let onTaskClick = (e) => {};
-	export let onSetInputText = (text) => {};
+	export let onSave = () => {};
+	export let onSourceClick = () => {};
+	export let onTaskClick = () => {};
+	export let onSetInputText = (_text) => {};
 
 	let contentContainerElement;
 	let floatingButtonsElement;

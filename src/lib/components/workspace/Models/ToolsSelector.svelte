@@ -15,7 +15,7 @@
 	export let tools: Tool[] = [];
 	export let selectedToolIds: string[] = [];
 
-	const i18n = getContext('i18n') as any;
+	const i18n = getContext('i18n') as unknown;
 
 	$: selectedTools = tools.filter((tool) => selectedToolIds.includes(tool.id));
 	$: availableTools = tools.filter((tool) => !selectedToolIds.includes(tool.id));

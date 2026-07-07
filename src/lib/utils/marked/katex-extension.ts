@@ -31,7 +31,7 @@ const inlinePatterns = [];
 const blockPatterns = [];
 
 function escapeRegex(string) {
-	return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+	return string.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
 }
 
 function generateRegexRules(delimiters) {
@@ -176,7 +176,7 @@ function katexTokenizer(src, tokens, displayMode: boolean) {
 	}
 }
 
-function inlineKatex(options) {
+function inlineKatex() {
 	return {
 		name: 'inlineKatex',
 		level: 'inline',
@@ -192,7 +192,7 @@ function inlineKatex(options) {
 	};
 }
 
-function blockKatex(options) {
+function blockKatex() {
 	return {
 		name: 'blockKatex',
 		level: 'block',

@@ -30,14 +30,14 @@
 
 	const i18n = getContext('i18n');
 
-	export let shareHandler: Function;
-	export let moveChatHandler: Function;
+	export let shareHandler: (...args: unknown[]) => unknown;
+	export let moveChatHandler: (...args: unknown[]) => unknown;
 
-	export let cloneChatHandler: Function;
-	export let archiveChatHandler: Function;
-	export let renameHandler: Function;
-	export let deleteHandler: Function;
-	export let onClose: Function;
+	export let cloneChatHandler: (...args: unknown[]) => unknown;
+	export let archiveChatHandler: (...args: unknown[]) => unknown;
+	export let renameHandler: (...args: unknown[]) => unknown;
+	export let deleteHandler: (...args: unknown[]) => unknown;
+	export let onClose: (...args: unknown[]) => unknown;
 
 	export let chatId = '';
 

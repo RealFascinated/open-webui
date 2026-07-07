@@ -26,19 +26,19 @@
 		write: { group_ids: string[]; user_ids: string[] };
 	};
 
-	export let onChange: Function = () => {};
+	export let onChange: (...args: unknown[]) => unknown = () => {};
 
 	export let accessRoles = ['read'];
-	export let accessGrants: AccessGrant[] | any = [];
-	export let accessControl: any = undefined;
+	export let accessGrants: AccessGrant[] | unknown[] = [];
+	export let accessControl: unknown = undefined;
 
 	export let share = true;
 	export let sharePublic = true;
 	export let shareUsers = true;
 
-	let groups: any[] = [];
+	let groups: unknown[] = [];
 	const resolvingGroupIds = new Set<string>();
-	let userById: Record<string, any> = {};
+	let userById: Record<string, unknown> = {};
 	const resolvingUserIds = new Set<string>();
 
 	let showAddAccessModal = false;
@@ -60,7 +60,7 @@
 		return Array.from(map.values());
 	};
 
-	const legacyAccessControlToGrants = (accessControl: any): AccessGrant[] => {
+	const legacyAccessControlToGrants = (accessControl: unknown): AccessGrant[] => {
 		if (accessControl === null) {
 			return [
 				{
@@ -133,7 +133,7 @@
 		return result;
 	};
 
-	const normalizeInputToGrants = (value: any): AccessGrant[] => {
+	const normalizeInputToGrants = (value: unknown): AccessGrant[] => {
 		if (value === null) {
 			return legacyAccessControlToGrants(null);
 		}
@@ -146,7 +146,7 @@
 		return [];
 	};
 
-	const stableStringify = (value: any): string => {
+	const stableStringify = (value: unknown): string => {
 		try {
 			return JSON.stringify(value ?? null);
 		} catch {

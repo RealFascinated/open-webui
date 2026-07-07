@@ -11,9 +11,9 @@
 	export let show = false;
 
 	export let onImport = (e) => {};
-	export let onClose = () => {};
+	export const onClose = () => {};
 
-	export let loadUrlHandler: Function = () => {};
+	export let loadUrlHandler: (...args: unknown[]) => unknown = () => {};
 	export let successMessage: string = '';
 
 	let loading = false;

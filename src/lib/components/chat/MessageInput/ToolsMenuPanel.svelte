@@ -20,7 +20,7 @@
 
 	export let active = false;
 	export let selectedToolIds: string[] = [];
-	export let onShowValves: Function;
+	export let onShowValves: (...args: unknown[]) => unknown;
 
 	let tools = null;
 
@@ -92,7 +92,7 @@
 			}}
 		>
 			{#if !(tools[toolId]?.authenticated ?? true)}
-				<div class="absolute inset-0 opacity-50 rounded-xl cursor-pointer z-10" />
+				<div class="absolute inset-0 opacity-50 rounded-xl cursor-pointer z-10"></div>
 			{/if}
 			<div class="flex-1 truncate">
 				<div class="flex flex-1 gap-2 items-center">

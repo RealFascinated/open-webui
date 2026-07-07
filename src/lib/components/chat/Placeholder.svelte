@@ -18,7 +18,8 @@
 		temporaryChatEnabled,
 		selectedFolder,
 		chats,
-		currentChatPage
+		currentChatPage,
+		type Model
 	} from '$lib/stores';
 	import { sanitizeResponseContent, extractCurlyBraceWords } from '$lib/utils';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
@@ -32,8 +33,8 @@
 
 	const i18n = getContext('i18n');
 
-	export let createMessagePair: Function;
-	export let stopResponse: Function;
+	export let createMessagePair: (...args: unknown[]) => unknown;
+	export let stopResponse: (...args: unknown[]) => unknown;
 
 	export let autoScroll = false;
 
@@ -57,10 +58,10 @@
 	export let codeInterpreterEnabled = false;
 	export let webSearchEnabled = false;
 
-	export let onUpload: Function = (e) => {};
+	export let onUpload: (...args: unknown[]) => unknown = (e) => {};
 	export let onSelect = (e) => {};
 	export let onChange = (e) => {};
-	export let onWebSearchToggle: Function = () => {};
+	export let onWebSearchToggle: (...args: unknown[]) => unknown = () => {};
 
 	export let toolServers = [];
 
@@ -143,6 +144,7 @@
 										>
 											<img
 												src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${model?.id}&lang=${$i18n.language}`}
+												alt={models[modelIdx]?.name ?? ''}
 												class="size-9 @sm:size-10 rounded-full border-[1px] border-gray-100 dark:border-none"
 												aria-hidden="true"
 												draggable="false"
@@ -182,6 +184,7 @@
 								<div
 									class="mt-0.5 px-2 text-sm font-normal text-gray-500 dark:text-gray-400 line-clamp-2 max-w-xl markdown"
 								>
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 									{@html DOMPurify.sanitize(
 										marked.parse(
 											sanitizeResponseContent(

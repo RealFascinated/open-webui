@@ -71,7 +71,7 @@ export class SocketIOCollaborationProvider {
 					})
 				];
 
-				// @ts-ignore
+				// @ts-expect-error -- legacy type workaround
 				plugins.push(yCursorPlugin(this.awareness));
 
 				return plugins;
@@ -267,11 +267,19 @@ export class SocketIOCollaborationProvider {
 }
 
 // Simple awareness implementation
+type AwarenessState = Record<string, unknown>;
+type AwarenessChangeEvent = {
+	added: number[];
+	updated: number[];
+	removed: number[];
+};
+type AwarenessChangeHandler = (event: AwarenessChangeEvent, origin: string) => void;
+
 class SimpleAwareness {
 	public readonly clientID: number;
-	private readonly _states: Map<number, any>;
-	private readonly _updateHandlers: any[];
-	private readonly _localState: any;
+	private readonly _states: Map<number, AwarenessState>;
+	private readonly _updateHandlers: AwarenessChangeHandler[];
+	private readonly _localState: AwarenessState;
 
 	public constructor(public readonly doc: Y.Doc) {
 		// Yjs awareness expects clientID (not clientId) property
@@ -284,11 +292,11 @@ class SimpleAwareness {
 		this._states.set(this.clientID, this._localState);
 	}
 
-	public on(event: string, handler: any) {
+	public on(event: string, handler: AwarenessChangeHandler) {
 		if (event === 'change') this._updateHandlers.push(handler);
 	}
 
-	public off(event: string, handler: any) {
+	public off(event: string, handler: AwarenessChangeHandler) {
 		if (event === 'change') {
 			const i = this._updateHandlers.indexOf(handler);
 			if (i !== -1) this._updateHandlers.splice(i, 1);
@@ -304,7 +312,7 @@ class SimpleAwareness {
 		return this._states;
 	}
 
-	public setLocalStateField(field: string, value: any) {
+	public setLocalStateField(field: string, value: unknown) {
 		let localState = this._states.get(this.clientID);
 		if (!localState) {
 			localState = {};
@@ -325,7 +333,7 @@ class SimpleAwareness {
 			const obj = JSON.parse(str);
 			// Should be a plain object: { clientID: state, ... }
 			for (const [k, v] of Object.entries(obj)) {
-				this._states.set(+k, v);
+				this._states.set(+k, v as AwarenessState);
 			}
 			for (const cb of this._updateHandlers) {
 				cb({ added: [], updated: Array.from(Object.keys(obj)).map(Number), removed: [] }, origin);
@@ -337,7 +345,7 @@ class SimpleAwareness {
 
 	public encodeUpdate(clients: number[]) {
 		// Encodes the states for the given clientIDs as Uint8Array (JSON)
-		const obj: Record<number, any> = {};
+		const obj: Record<number, AwarenessState> = {};
 		for (const id of clients || Array.from(this._states.keys())) {
 			const st = this._states.get(id);
 			if (st) obj[id] = st;

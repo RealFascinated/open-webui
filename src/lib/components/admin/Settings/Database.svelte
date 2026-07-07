@@ -12,7 +12,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let saveHandler: Function;
+	export let saveHandler: (...args: unknown[]) => unknown = () => {};
 
 	const exportAllUserChats = async () => {
 		let blob = new Blob([JSON.stringify(await getAllUserChats(localStorage.token))], {
@@ -49,7 +49,7 @@
 	});
 </script>
 
-<div class="flex flex-col h-full justify-between text-sm">
+<div class="flex flex-col h-full justify-between text-sm" data-save-handler={!!saveHandler}>
 	<div class="space-y-3 overflow-y-scroll scrollbar-hidden h-full">
 		<input
 			id="config-json-input"

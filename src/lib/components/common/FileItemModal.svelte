@@ -262,10 +262,10 @@
 			<div class="flex items-start justify-between">
 				<div>
 					<div class=" font-medium text-lg dark:text-gray-100">
-						<a
-							href="#"
-							class="hover:underline line-clamp-1"
-							on:click|preventDefault={() => {
+						<button
+							type="button"
+							class="hover:underline line-clamp-1 text-left font-medium text-lg dark:text-gray-100"
+							on:click={() => {
 								if (item.type === 'file' || item.url) {
 									let fileId = item?.id ?? item?.tempId;
 									window.open(
@@ -280,7 +280,7 @@
 							}}
 						>
 							{item?.name ?? 'File'}
-						</a>
+						</button>
 					</div>
 				</div>
 
@@ -511,8 +511,7 @@
 							src={`${WEBUI_API_BASE_URL}/files/${item.id}/content`}
 							class="w-full border-0 rounded-lg mb-2"
 							controls
-							playsinline
-						/>
+							playsinline></audio>
 					{:else if isPDF}
 						<PDFViewer
 							url={`${WEBUI_API_BASE_URL}/files/${item.id}/content`}
@@ -544,6 +543,7 @@
 
 							{#if excelHtml}
 								<div class="office-preview overflow-auto max-h-[60vh]">
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 									{@html excelHtml}
 								</div>
 							{:else}
@@ -574,6 +574,7 @@
 							<div
 								class="office-preview max-h-[60vh] overflow-auto p-4 prose dark:prose-invert max-w-full text-sm"
 							>
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 								{@html docxHtml}
 							</div>
 						{:else}
@@ -595,6 +596,7 @@
 								{#if pptxSlides.length > 1}
 									<div class="flex items-center justify-center gap-3 pb-3 text-sm text-gray-500">
 										<button
+											aria-label={$i18n.t('Previous slide')}
 											class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"
 											disabled={pptxCurrentSlide === 0}
 											on:click={() => (pptxCurrentSlide = Math.max(0, pptxCurrentSlide - 1))}
@@ -608,12 +610,12 @@
 												<path
 													fill-rule="evenodd"
 													d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z"
-													clip-rule="evenodd"
-												/>
+													clip-rule="evenodd"></path>
 											</svg>
 										</button>
 										<span>{pptxCurrentSlide + 1} / {pptxSlides.length}</span>
 										<button
+											aria-label={$i18n.t('Next slide')}
 											class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"
 											disabled={pptxCurrentSlide === pptxSlides.length - 1}
 											on:click={() =>
@@ -628,8 +630,7 @@
 												<path
 													fill-rule="evenodd"
 													d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
-													clip-rule="evenodd"
-												/>
+													clip-rule="evenodd"></path>
 											</svg>
 										</button>
 									</div>

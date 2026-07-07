@@ -13,7 +13,7 @@
 	type $$Props = NodeProps;
 	export let data: $$Props['data'];
 
-	const getMessageContent = (nodeData: any) =>
+	const getMessageContent = (nodeData: unknown) =>
 		getOutputText(nodeData?.message?.output) || nodeData?.message?.content || '';
 
 	$: messageContent = getMessageContent(data);

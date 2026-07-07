@@ -9,15 +9,33 @@
 		markers?: { lat: number; lng: number; label?: string }[];
 	} = {};
 
+	type LeafletMarker = {
+		addTo: (map: LeafletMap) => LeafletMarker;
+		bindPopup: (label: string) => void;
+	};
+
+	type LeafletMap = {
+		remove: () => void;
+		setView: (coords: [number, number], zoom: number) => LeafletMap;
+	};
+
+	type LeafletNamespace = {
+		map: (el: HTMLElement) => LeafletMap;
+		marker: (coords: [number, number]) => LeafletMarker;
+		tileLayer: (
+			url: string,
+			opts: Record<string, string | number>
+		) => { addTo: (map: LeafletMap) => void };
+	};
+
 	let mapContainer: HTMLDivElement;
-	let mapInstance: any = null;
-	let leafletLoaded = false;
+	let mapInstance: LeafletMap | null = null;
+
+	const getLeaflet = (): LeafletNamespace | undefined =>
+		(window as Window & { L?: LeafletNamespace }).L;
 
 	const loadLeaflet = async () => {
-		if ((window as any).L) {
-			leafletLoaded = true;
-			return;
-		}
+		if (getLeaflet()) return;
 
 		if (!document.querySelector('link[data-leaflet-css]')) {
 			const link = document.createElement('link');
@@ -37,15 +55,13 @@
 				document.head.appendChild(script);
 			});
 		}
-
-		leafletLoaded = true;
 	};
 
 	const initMap = async () => {
 		if (!mapContainer || map.lat == null || map.lng == null) return;
 
 		await loadLeaflet();
-		const L = (window as any).L;
+		const L = getLeaflet();
 		if (!L) return;
 
 		if (mapInstance) {

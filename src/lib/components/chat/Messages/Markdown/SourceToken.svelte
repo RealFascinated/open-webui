@@ -3,10 +3,10 @@
 	import { decodeString } from '$lib/utils';
 	import Source from './Source.svelte';
 
-	export let id;
+	export let id = '';
 	export let token;
 	export let sourceIds = [];
-	export let onClick: Function = () => {};
+	export let onClick: (...args: unknown[]) => unknown = () => {};
 
 	let containerElement;
 	let openPreview = false;
@@ -76,5 +76,5 @@
 		</LinkPreview.Root>
 	{/if}
 {:else}
-	<span>{token.raw}</span>
+	<span data-token-id={id}>{token.raw}</span>
 {/if}

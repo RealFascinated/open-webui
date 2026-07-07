@@ -12,7 +12,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let saveSettings: Function;
+	export let saveSettings: (...args: unknown[]) => unknown;
 
 	// Audio
 	let conversationMode = false;
@@ -129,7 +129,7 @@
 				const { KokoroTTS } = await import('kokoro-js');
 				TTSModel = await KokoroTTS.from_pretrained(model_id, {
 					dtype: TTSEngineConfig.dtype, // Options: "fp32", "fp16", "q8", "q4", "q4f16"
-					device: !!navigator?.gpu ? 'webgpu' : 'wasm', // Detect WebGPU
+					device: navigator?.gpu ? 'webgpu' : 'wasm', // Detect WebGPU
 					progress_callback: (e) => {
 						TTSModelProgress = e;
 						console.log(e);

@@ -21,7 +21,7 @@
 	let showCitations = false;
 	let showCitationModal = false;
 
-	let selectedCitation: any = null;
+	let selectedCitation: unknown = null;
 
 	export const showSourceModal = (sourceId) => {
 		let index;
@@ -71,7 +71,7 @@
 		}
 	};
 
-	function calculateShowRelevance(sources: any[]) {
+	function calculateShowRelevance(sources: unknown[]) {
 		const distances = sources.flatMap((citation) => citation.distances ?? []);
 		const inRange = distances.filter((d) => d !== undefined && d >= -1 && d <= 1).length;
 		const outOfRange = distances.filter((d) => d !== undefined && (d < -1 || d > 1)).length;
@@ -90,7 +90,7 @@
 		return true;
 	}
 
-	function shouldShowPercentage(sources: any[]) {
+	function shouldShowPercentage(sources: unknown[]) {
 		const distances = sources.flatMap((citation) => citation.distances ?? []);
 		return distances.every((d) => d !== undefined && d >= -1 && d <= 1);
 	}

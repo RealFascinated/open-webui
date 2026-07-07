@@ -69,7 +69,9 @@
 						});
 					}
 				}
-			} catch {}
+			} catch {
+			// intentionally empty
+		}
 		}
 		return result;
 	})();
@@ -110,7 +112,6 @@
 </script>
 
 <div {id} class="w-full">
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<button
 		class="w-fit text-left text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition cursor-pointer"
 		aria-label={$i18n.t('Toggle details')}

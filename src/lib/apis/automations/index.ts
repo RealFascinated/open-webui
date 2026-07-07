@@ -38,7 +38,7 @@ export type AutomationResponse = {
 	user_id: string;
 	name: string;
 	data: AutomationData;
-	meta: Record<string, any> | null;
+	meta: Record<string, unknown> | null;
 	is_active: boolean;
 	last_run_at: number | null;
 	next_run_at: number | null;

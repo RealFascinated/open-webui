@@ -11,7 +11,7 @@
 
 	export let id: string;
 	export let content: string;
-	export let files: any[] = [];
+	export let files: unknown[] = [];
 	export let onSendNow: (id: string) => void;
 	export let onEdit: (id: string) => void;
 	export let onDelete: (id: string) => void;
@@ -75,8 +75,7 @@
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18"
-					/>
+						d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18"></path>
 				</svg>
 			</button>
 		</Tooltip>

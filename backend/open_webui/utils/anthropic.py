@@ -371,8 +371,6 @@ def convert_anthropic_to_openai_payload(anthropic_payload: dict) -> dict:
                 'description': tool.get('description', ''),
                 'parameters': tool.get('input_schema', {}),
             }
-            if tool.get('defer_loading'):
-                function_dict['defer_loading'] = True
 
             openai_tools.append(
                 _copy_cache_control(
@@ -416,23 +414,8 @@ def _openai_message_content_to_text(content) -> str:
     return str(content) if content else ''
 
 
-def convert_openai_tools_to_anthropic(openai_tools: list, metadata: dict | None = None) -> list[dict]:
-    from open_webui.utils.deferred_tools import (
-        ANTHROPIC_TOOL_SEARCH_NAME,
-        ANTHROPIC_TOOL_SEARCH_TYPE,
-        TOOL_SEARCH_NAME,
-    )
-
-    metadata = metadata or {}
+def convert_openai_tools_to_anthropic(openai_tools: list) -> list[dict]:
     anthropic_tools: list[dict] = []
-
-    if metadata.get('deferred_loading_mode') == 'anthropic':
-        anthropic_tools.append(
-            {
-                'type': ANTHROPIC_TOOL_SEARCH_TYPE,
-                'name': ANTHROPIC_TOOL_SEARCH_NAME,
-            }
-        )
 
     for tool in openai_tools or []:
         if not isinstance(tool, dict) or tool.get('type') != 'function':
@@ -442,20 +425,17 @@ def convert_openai_tools_to_anthropic(openai_tools: list, metadata: dict | None 
         name = func.get('name', '')
         if not name:
             continue
-        if metadata.get('deferred_loading_mode') == 'anthropic' and name == TOOL_SEARCH_NAME:
-            continue
 
-        anthropic_tool = _copy_cache_control(
-            tool,
-            {
-                'name': name,
-                'description': func.get('description', ''),
-                'input_schema': func.get('parameters') or {'type': 'object', 'properties': {}},
-            },
+        anthropic_tools.append(
+            _copy_cache_control(
+                tool,
+                {
+                    'name': name,
+                    'description': func.get('description', ''),
+                    'input_schema': func.get('parameters') or {'type': 'object', 'properties': {}},
+                },
+            )
         )
-        if func.get('defer_loading'):
-            anthropic_tool['defer_loading'] = True
-        anthropic_tools.append(anthropic_tool)
 
     return anthropic_tools
 
@@ -572,7 +552,7 @@ def convert_openai_to_anthropic_payload(openai_payload: dict, metadata: dict | N
     anthropic_payload['messages'] = anthropic_messages
 
     if 'tools' in openai_payload:
-        anthropic_payload['tools'] = convert_openai_tools_to_anthropic(openai_payload.get('tools', []), metadata)
+        anthropic_payload['tools'] = convert_openai_tools_to_anthropic(openai_payload.get('tools', []))
 
     if openai_payload.get('stream'):
         anthropic_payload['stream'] = True
@@ -797,87 +777,12 @@ async def anthropic_stream_to_openai_stream(anthropic_stream_generator, model: s
 
 
 def apply_anthropic_request_headers(headers: dict, key: str, metadata: dict | None = None) -> dict:
-    from open_webui.utils.deferred_tools import ANTHROPIC_ADVANCED_TOOL_USE_BETA
-
     headers = dict(headers)
     headers.pop('Authorization', None)
     if key:
         headers['x-api-key'] = key
     headers['anthropic-version'] = headers.get('anthropic-version', '2023-06-01')
-
-    metadata = metadata or {}
-    if metadata.get('deferred_loading_mode') == 'anthropic':
-        existing = [part.strip() for part in headers.get('anthropic-beta', '').split(',') if part.strip()]
-        if ANTHROPIC_ADVANCED_TOOL_USE_BETA not in existing:
-            existing.append(ANTHROPIC_ADVANCED_TOOL_USE_BETA)
-        headers['anthropic-beta'] = ','.join(existing)
-
     return headers
-    """
-    Convert a non-streaming OpenAI Chat Completions response to Anthropic Messages format.
-    """
-    import uuid as _uuid
-
-    choice = {}
-    if openai_response.get('choices'):
-        choice = openai_response['choices'][0]
-
-    message = choice.get('message', {})
-    finish_reason = choice.get('finish_reason', 'stop')
-
-    # Map finish_reason to stop_reason
-    stop_reason_map = {
-        'stop': 'end_turn',
-        'length': 'max_tokens',
-        'tool_calls': 'tool_use',
-        'content_filter': 'end_turn',
-    }
-    stop_reason = stop_reason_map.get(finish_reason, 'end_turn')
-
-    # Build content blocks
-    content = []
-    message_content = message.get('content')
-    if message_content:
-        content.append({'type': 'text', 'text': message_content})
-
-    # Tool calls -> tool_use blocks
-    tool_calls = message.get('tool_calls') or []
-    for tool_call in tool_calls:
-        function = tool_call.get('function', {})
-        try:
-            tool_input = json.loads(function.get('arguments', '{}'))
-        except (json.JSONDecodeError, TypeError):
-            tool_input = {}
-        content.append(
-            {
-                'type': 'tool_use',
-                'id': tool_call.get('id', f'toolu_{_uuid.uuid4().hex[:24]}'),
-                'name': function.get('name', ''),
-                'input': tool_input,
-            }
-        )
-
-    # Usage
-    openai_usage = openai_response.get('usage', {})
-    usage = {
-        'input_tokens': openai_usage.get('prompt_tokens', 0),
-        'output_tokens': openai_usage.get('completion_tokens', 0),
-    }
-    if 'cache_creation_input_tokens' in openai_usage:
-        usage['cache_creation_input_tokens'] = openai_usage['cache_creation_input_tokens']
-    if 'cache_read_input_tokens' in openai_usage:
-        usage['cache_read_input_tokens'] = openai_usage['cache_read_input_tokens']
-
-    return {
-        'id': openai_response.get('id', f'msg_{_uuid.uuid4().hex[:24]}'),
-        'type': 'message',
-        'role': 'assistant',
-        'content': content,
-        'model': model or openai_response.get('model', ''),
-        'stop_reason': stop_reason,
-        'stop_sequence': None,
-        'usage': usage,
-    }
 
 
 async def openai_stream_to_anthropic_stream(openai_stream_generator, model: str = ''):

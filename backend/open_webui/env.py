@@ -982,11 +982,6 @@ def _parse_float_env(name: str, default: float) -> float:
         return default
 
 
-DEFERRED_TOOL_COUNT_THRESHOLD = int(os.getenv('DEFERRED_TOOL_COUNT_THRESHOLD', '15') or '15')
-DEFERRED_TOOL_CONTEXT_RATIO = _parse_float_env('DEFERRED_TOOL_CONTEXT_RATIO', 0.10)
-DEFERRED_TOOL_SEARCH_RESULT_LIMIT = int(os.getenv('DEFERRED_TOOL_SEARCH_RESULT_LIMIT', '5'))
-
-
 # WARNING: Experimental. Only enable if your upstream Responses API endpoint
 # supports stateful sessions (i.e. server-side response storage with
 # previous_response_id anchoring). Most proxies and third-party endpoints

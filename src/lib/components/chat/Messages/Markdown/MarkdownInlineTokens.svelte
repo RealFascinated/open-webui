@@ -25,8 +25,8 @@
 	export let done = true;
 	export let tokens: Token[];
 	export let sourceIds = [];
-	export let onSourceClick: Function = () => {};
-	export let onPreview: Function = () => {};
+	export let onSourceClick: (...args: unknown[]) => unknown = () => {};
+	export let onPreview: (...args: unknown[]) => unknown = () => {};
 
 	/**
 	 * Check if a URL is a same-origin note link and return the note ID if so.
@@ -122,12 +122,15 @@
 				try {
 					e.currentTarget.style.height =
 						e.currentTarget.contentWindow.document.body.scrollHeight + 20 + 'px';
-				} catch {}
+				} catch {
+			// intentionally empty
+		}
 			}}
 		></iframe>
 	{:else if token.type === 'mention'}
 		<MentionToken {token} />
 	{:else if token.type === 'footnote'}
+		<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 		{@html DOMPurify.sanitize(
 			`<sup class="footnote-ref footnote-ref-text">${token.escapedText}</sup>`
 		) || ''}

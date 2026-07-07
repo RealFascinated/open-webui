@@ -63,6 +63,7 @@
 </script>
 
 <script lang="ts">
+	import type { Token } from 'marked';
 	import Info from '$lib/components/icons/Info.svelte';
 	import Star from '$lib/components/icons/Star.svelte';
 	import LightBulb from '$lib/components/icons/LightBulb.svelte';
@@ -71,7 +72,7 @@
 	import MarkdownTokens from './MarkdownTokens.svelte';
 	import type { ComponentType } from 'svelte';
 
-	export let token: Token;
+	export let token: Token | undefined = undefined;
 	export let alert: AlertData;
 	export let id = '';
 	export let tokenIdx = 0;
@@ -99,7 +100,7 @@ Renders the following Markdown as alerts:
 > Example warning
 
 -->
-<div class={`border-l-4 pl-2.5 ${alertStyles[alert.type].border} my-0.5`}>
+<div class={`border-l-4 pl-2.5 ${alertStyles[alert.type].border} my-0.5`} data-token-ref={token?.type ?? ''}>
 	<div class="{alertStyles[alert.type].text} items-center flex gap-1 py-1.5">
 		<svelte:component this={alertStyles[alert.type].icon} className="inline-block size-4" />
 		<span class=" font-medium">{alert.type}</span>

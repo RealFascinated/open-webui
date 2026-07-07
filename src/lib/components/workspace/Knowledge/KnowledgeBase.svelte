@@ -102,10 +102,10 @@
 		data: {
 			file_ids: string[];
 		};
-		files: any[];
-		access_grants?: any[];
+		files: unknown[];
+		access_grants?: unknown[];
 		write_access?: boolean;
-		meta?: any;
+		meta?: unknown;
 	};
 
 	let id = null;
@@ -145,7 +145,7 @@
 	let externalTestQuery = '';
 	let externalTestResult: {
 		documents?: string[];
-		metadatas?: Record<string, any>[];
+		metadatas?: Record<string, unknown>[];
 		distances?: number[];
 	} | null = null;
 
@@ -239,7 +239,9 @@
 										pendingPollTimer = null;
 										init();
 									}
-								} catch {}
+								} catch {
+			// intentionally empty
+		}
 							}, 5000);
 						}
 					}
@@ -488,6 +490,25 @@
 	};
 
 	// Collect files from a directory without uploading.
+	const walkDirectoryHandle = async (
+		handle: Awaited<ReturnType<typeof window.showDirectoryPicker>>,
+		collected: DirectoryFileEntry[],
+		dirPath = ''
+	) => {
+		for await (const entry of handle.values()) {
+			if (entry.name.startsWith('.')) continue;
+			const entryPath = dirPath ? `${dirPath}/${entry.name}` : entry.name;
+			if (hasHiddenFolder(entryPath)) continue;
+
+			if (entry.kind === 'file') {
+				const file = await entry.getFile();
+				collected.push({ path: dirPath, filename: entry.name, file });
+			} else if (entry.kind === 'directory') {
+				await walkDirectoryHandle(entry, collected, entryPath);
+			}
+		}
+	};
+
 	const collectDirectoryFiles = async (): Promise<DirectoryFileEntry[] | null> => {
 		const isFileSystemAccessSupported = 'showDirectoryPicker' in window;
 
@@ -496,22 +517,7 @@
 				const dirHandle = await window.showDirectoryPicker();
 				const collected: DirectoryFileEntry[] = [];
 
-				async function traverse(handle: FileSystemDirectoryHandle, dirPath = '') {
-					for await (const entry of handle.values()) {
-						if (entry.name.startsWith('.')) continue;
-						const entryPath = dirPath ? `${dirPath}/${entry.name}` : entry.name;
-						if (hasHiddenFolder(entryPath)) continue;
-
-						if (entry.kind === 'file') {
-							const file = await entry.getFile();
-							collected.push({ path: dirPath, filename: entry.name, file });
-						} else if (entry.kind === 'directory') {
-							await traverse(entry, entryPath);
-						}
-					}
-				}
-
-				await traverse(dirHandle, dirHandle.name);
+				await walkDirectoryHandle(dirHandle, collected);
 				return collected;
 			} else {
 				// Firefox fallback
@@ -571,7 +577,7 @@
 		);
 	};
 
-	const createMissingDirectories = async (diff: any) => {
+	const createMissingDirectories = async (diff: unknown) => {
 		if (!knowledge) return {};
 
 		const directoryIdByPath: Record<string, string> = { ...(diff.directory_map || {}) };
@@ -686,8 +692,8 @@
 
 			// ── 4. Cleanup — remove deleted + stale modified files first ──
 			const staleFileIds = [
-				...diff.deleted.map((d: any) => d.file_id),
-				...diff.modified.map((m: any) => m.stale_file_id)
+				...diff.deleted.map((d: unknown) => d.file_id),
+				...diff.modified.map((m: unknown) => m.stale_file_id)
 			];
 
 			if (staleFileIds.length > 0 || diff.rmdir.length > 0) {
@@ -701,8 +707,8 @@
 			// ── 6. Upload added + modified files ──
 			const filesToUpload = manifest.filter(
 				(entry) =>
-					diff.added.some((a: any) => a.filename === entry.filename && a.path === entry.path) ||
-					diff.modified.some((m: any) => m.filename === entry.filename && m.path === entry.path)
+					diff.added.some((a: unknown) => a.filename === entry.filename && a.path === entry.path) ||
+					diff.modified.some((m: unknown) => m.filename === entry.filename && m.path === entry.path)
 			);
 
 			let uploadedCount = 0;
@@ -964,11 +970,12 @@
 		}
 	};
 
-	const readDirectoryEntries = async (reader: any) => {
-		const entries: any[] = [];
+	const readDirectoryEntries = async (reader: unknown) => {
+		const entries: unknown[] = [];
 
+		// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 		while (true) {
-			const batch = await new Promise<any[]>((resolve, reject) => {
+			const batch = await new Promise<unknown[]>((resolve, reject) => {
 				reader.readEntries(resolve, reject);
 			});
 
@@ -983,7 +990,7 @@
 	};
 
 	const collectDroppedEntryFiles = async (
-		entry: any,
+		entry: unknown,
 		entryPath = entry.name
 	): Promise<DirectoryFileEntry[]> => {
 		if (entry.name.startsWith('.') || hasHiddenFolder(entryPath)) {
@@ -1044,7 +1051,9 @@
 					const looseFiles: File[] = [];
 
 					for (const rawItem of Array.from(inputItems)) {
-						const item = rawItem as DataTransferItem & { webkitGetAsEntry?: () => any };
+						const item = rawItem as DataTransferItem & {
+							webkitGetAsEntry?: () => unknown;
+						};
 						const entry = item.webkitGetAsEntry?.();
 
 						if (entry?.isDirectory) {

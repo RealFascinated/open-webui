@@ -30,7 +30,7 @@
 	export let show = false;
 
 	export let title = 'Chats';
-	export let emptyPlaceholder = '';
+	export const emptyPlaceholder = '';
 	export let shareUrl = false;
 	export let showUserInfo = false;
 	export let showSearch = true;
@@ -54,9 +54,9 @@
 	export let onUpdate = () => {};
 	export let onDelete: (id: string) => void = () => {};
 
-	export let loadHandler: null | Function = null;
-	export let unarchiveHandler: null | Function = null;
-	export let unshareHandler: null | Function = null;
+	export let loadHandler: null | ((...args: unknown[]) => unknown) = null;
+	export let unarchiveHandler: null | ((...args: unknown[]) => unknown) = null;
+	export let unshareHandler: null | ((...args: unknown[]) => unknown) = null;
 
 	const setSortKey = (key) => {
 		if (orderBy === key) {
@@ -106,6 +106,7 @@
 				{/if}
 			</div>
 			<button
+				aria-label={$i18n.t('Close')}
 				class="self-center"
 				on:click={() => {
 					show = false;
@@ -311,6 +312,7 @@
 												{#if unarchiveHandler}
 													<Tooltip content={$i18n.t('Unarchive Chat')}>
 														<button
+															aria-label={$i18n.t('Unarchive Chat')}
 															class="self-center w-fit px-1 text-sm rounded-xl"
 															on:click={async (e) => {
 																e.stopImmediatePropagation();

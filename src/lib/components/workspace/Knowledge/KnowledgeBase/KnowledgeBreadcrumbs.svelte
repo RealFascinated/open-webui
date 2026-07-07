@@ -39,7 +39,9 @@
 			try {
 				const data = JSON.parse(fileRaw);
 				if (data.fileId) onMoveFile(data.fileId, targetDirId);
-			} catch {}
+			} catch {
+			// intentionally empty
+		}
 			return;
 		}
 		const dirRaw = e.dataTransfer?.getData('application/x-kb-dir-move');
@@ -47,7 +49,9 @@
 			try {
 				const data = JSON.parse(dirRaw);
 				if (data.dirId) onMoveDir(data.dirId, targetDirId);
-			} catch {}
+			} catch {
+			// intentionally empty
+		}
 		}
 	};
 </script>

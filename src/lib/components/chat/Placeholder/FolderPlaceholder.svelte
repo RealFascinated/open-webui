@@ -2,7 +2,7 @@
 	import { getContext, onMount } from 'svelte';
 	import type { Writable } from 'svelte/store';
 
-	const i18n: Writable<any> = getContext('i18n');
+	const i18n: Writable<unknown> = getContext('i18n');
 
 	import { user } from '$lib/stores';
 
@@ -14,13 +14,13 @@
 	import { getChatListByFolderId } from '$lib/apis/chats';
 	import { getSharedFolderChats } from '$lib/apis/folders';
 
-	export let folder: any = null;
+	export let folder: unknown = null;
 
 	let selectedTab = 'chats';
 
 	let page = 1;
 
-	let chats: any[] | null = null;
+	let chats: unknown[] | null = null;
 	let chatListLoading = false;
 	let allChatsLoaded = false;
 

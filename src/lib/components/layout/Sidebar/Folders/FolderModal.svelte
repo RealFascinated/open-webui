@@ -16,7 +16,7 @@
 	const i18n = getContext('i18n');
 
 	export let show = false;
-	export let onSubmit: Function = (e) => {};
+	export let onSubmit: (...args: unknown[]) => unknown = (e) => {};
 
 	export let folderId = null;
 	export let parentId = null;

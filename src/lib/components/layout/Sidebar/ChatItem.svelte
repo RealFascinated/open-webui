@@ -124,6 +124,7 @@
 	let confirmEdit = false;
 
 	let chatTitle = title;
+	let draggable = true;
 
 	const editChatTitle = async (id, title) => {
 		if (title === '') {
@@ -363,12 +364,12 @@
 		const history = chatContent?.history;
 		let messages = [];
 		if (history?.messages && history?.currentId) {
-			messages = createMessagesList(history, history.currentId).map((message: any) => ({
+			messages = createMessagesList(history, history.currentId).map((message: unknown) => ({
 				role: message.role,
 				content: getOutputText(message.output) || message.content || ''
 			}));
 		} else {
-			messages = (chatContent?.messages ?? []).map((message: any) => ({
+			messages = (chatContent?.messages ?? []).map((message: unknown) => ({
 				role: message.role,
 				content: getOutputText(message.output) || message.content || ''
 			}));
@@ -383,7 +384,9 @@
 		if (id === $chatId) {
 			try {
 				model = JSON.parse(sessionStorage.selectedModels || '[]').find((m) => m) ?? '';
-			} catch {}
+			} catch {
+			// intentionally empty
+		}
 		}
 
 		if (!model && history?.messages && history?.currentId) {
@@ -566,7 +569,7 @@
 			<div class="flex self-center flex-1 w-full min-w-0">
 				{#if unread}
 					<div class="shrink-0 self-center pr-2.5 flex transition-opacity duration-300">
-						<div class="size-1.5 bg-sky-500 rounded-full" />
+						<div class="size-1.5 bg-sky-500 rounded-full" ></div>
 					</div>
 				{/if}
 				<div
@@ -709,6 +712,7 @@
 						<button
 							id="delete-chat-button"
 							class="hidden"
+							aria-label={$i18n.t('Delete')}
 							on:click={() => {
 								showDeleteConfirm = true;
 							}}

@@ -68,7 +68,7 @@
 				show = false;
 				dispatch('save', { id: created?.id });
 			}
-		} catch (e: any) {
+		} catch (e: unknown) {
 			toast.error(e?.detail ?? `${e}` ?? 'Failed to save');
 		} finally {
 			loading = false;
@@ -133,8 +133,7 @@
 				class="w-full text-sm bg-transparent outline-hidden placeholder:text-gray-300 dark:placeholder:text-gray-700 resize-none min-h-[12rem]"
 				bind:value={prompt}
 				rows={8}
-				placeholder={$i18n.t('Enter prompt here.')}
-			/>
+				placeholder={$i18n.t('Enter prompt here.')}></textarea>
 		</div>
 
 		<!-- Bottom toolbar -->

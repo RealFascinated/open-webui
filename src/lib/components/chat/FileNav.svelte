@@ -1,6 +1,6 @@
 <script context="module">
 	// Persists across mount/unmount cycles (module-level, not per-instance)
-	let savedPath = '/';
+	const fileNavState = { savedPath: '/' };
 </script>
 
 <script lang="ts">
@@ -49,7 +49,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let onAttach: ((blob: Blob, name: string, contentType: string) => void) | null = null;
+	export const onAttach: ((blob: Blob, name: string, contentType: string) => void) | null = null;
 	export let overlay = false;
 	export let chatId: string | null = null;
 
@@ -89,7 +89,7 @@
 	};
 
 	// ── Directory state ──────────────────────────────────────────────────
-	let currentPath = savedPath;
+	let currentPath = fileNavState.savedPath;
 	let fileRoot: TerminalFileRoot | null = null;
 	let entries: FileEntry[] = [];
 	let loading = false;
@@ -255,7 +255,9 @@
 	let prevChatId = chatId;
 	let mounted = false;
 	$: {
-		($selectedTerminalId, $terminalServers, $settings);
+		void $selectedTerminalId;
+		void $terminalServers;
+		void $settings;
 		const terminal = getTerminal();
 		selectedTerminal = terminal;
 
@@ -270,7 +272,7 @@
 			if (chatChanged && chatId && !oldChatId) {
 				// Chat just got created (null → real ID): persist the current
 				// browsed path as the new session's cwd — don't re-fetch.
-				setCwd(terminal.url, terminal.key, savedPath, chatId);
+				setCwd(terminal.url, terminal.key, fileNavState.savedPath, chatId);
 			} else if (terminalChanged || chatChanged) {
 				// Terminal switched, new chat started, or switched between
 				// existing chats — re-fetch the session cwd.
@@ -283,8 +285,8 @@
 						terminalEnabled = config?.features?.terminal !== false;
 					}
 
-					savedPath = applyCwd(await getCwd(terminal.url, terminal.key, chatId ?? undefined));
-					loadDir(savedPath);
+					fileNavState.savedPath = applyCwd(await getCwd(terminal.url, terminal.key, chatId ?? undefined));
+					loadDir(fileNavState.savedPath);
 				})();
 			}
 		}
@@ -402,7 +404,7 @@
 		clearFilePreview();
 		clearSelection();
 		currentPath = directory;
-		savedPath = directory;
+		fileNavState.savedPath = directory;
 		pushNavHistory(directory);
 
 		const result = await listFiles(terminal.url, terminal.key, directory, chatId ?? undefined);
@@ -887,12 +889,12 @@
 			const config = await getTerminalConfig(terminal.url, terminal.key);
 			terminalEnabled = config?.features?.terminal !== false;
 
-			if (chatId || savedPath === '/') {
+			if (chatId || fileNavState.savedPath === '/') {
 				// Fetch session-specific cwd from the server (or global default for new chats)
-				savedPath = applyCwd(await getCwd(terminal.url, terminal.key, chatId ?? undefined));
+				fileNavState.savedPath = applyCwd(await getCwd(terminal.url, terminal.key, chatId ?? undefined));
 			}
-			savedPath = clampToFileRoot(savedPath);
-			loadDir(savedPath);
+			fileNavState.savedPath = clampToFileRoot(fileNavState.savedPath);
+			loadDir(fileNavState.savedPath);
 		}
 
 		mounted = true;
@@ -984,8 +986,7 @@
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
-					/>
+						d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"></path>
 				</svg>
 				<span class="text-xs text-gray-400 dark:text-gray-500">{currentPath}</span>
 			</div>
@@ -1062,13 +1063,11 @@
 									<path
 										stroke-linecap="round"
 										stroke-linejoin="round"
-										d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
-									/>
+										d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"></path>
 									<path
 										stroke-linecap="round"
 										stroke-linejoin="round"
-										d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-									/>
+										d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"></path>
 								</svg>
 							{:else}
 								<svg
@@ -1082,8 +1081,7 @@
 									<path
 										stroke-linecap="round"
 										stroke-linejoin="round"
-										d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"
-									/>
+										d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"></path>
 								</svg>
 							{/if}
 						</button>
@@ -1110,8 +1108,7 @@
 										<path
 											fill-rule="evenodd"
 											d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-											clip-rule="evenodd"
-										/>
+											clip-rule="evenodd"></path>
 									</svg>
 								{/if}
 							</button>
@@ -1138,8 +1135,7 @@
 										<path
 											fill-rule="evenodd"
 											d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-											clip-rule="evenodd"
-										/>
+											clip-rule="evenodd"></path>
 									</svg>
 								{/if}
 							</button>
@@ -1166,8 +1162,7 @@
 										<path
 											fill-rule="evenodd"
 											d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-											clip-rule="evenodd"
-										/>
+											clip-rule="evenodd"></path>
 									</svg>
 								{/if}
 							</button>
@@ -1186,8 +1181,7 @@
 									class="size-3.5"
 								>
 									<path
-										d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"
-									/>
+										d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"></path>
 								</svg>
 							</button>
 						</Tooltip>
@@ -1210,8 +1204,7 @@
 										<path
 											fill-rule="evenodd"
 											d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-											clip-rule="evenodd"
-										/>
+											clip-rule="evenodd"></path>
 									</svg>
 								{/if}
 							</button>
@@ -1250,8 +1243,7 @@
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
-									d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9.75a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"
-								/>
+									d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9.75a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"></path>
 							</svg>
 						</button>
 					</Tooltip>
@@ -1273,8 +1265,7 @@
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
-								d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"
-							/>
+								d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"></path>
 						</svg>
 					</button>
 				</Tooltip>
@@ -1299,8 +1290,17 @@
 		<!-- Content -->
 		<div
 			class="flex-1 overflow-y-auto min-h-0 min-w-0"
+			role="button"
+			tabindex="0"
+			aria-label={$i18n.t('Clear selection')}
 			on:click={(e) => {
 				if (e.target === e.currentTarget && selectedCount > 0) clearSelection();
+			}}
+			on:keydown={(e) => {
+				if ((e.key === 'Enter' || e.key === ' ') && selectedCount > 0) {
+					e.preventDefault();
+					clearSelection();
+				}
 			}}
 		>
 			{#if previewPort !== null}
@@ -1471,9 +1471,8 @@
 					<!-- svelte-ignore a11y-no-static-element-interactions -->
 					<div class="relative cursor-row-resize group" on:mousedown={onHandleMouseDown}>
 						<div
-							class="h-px bg-transparent group-hover:bg-black/10 dark:group-hover:bg-white/10 transition"
-						/>
-						<div class="absolute inset-x-0 -top-1.5 -bottom-1.5" />
+							class="h-px bg-transparent group-hover:bg-black/10 dark:group-hover:bg-white/10 transition"></div>
+						<div class="absolute inset-x-0 -top-1.5 -bottom-1.5" ></div>
 					</div>
 				{/if}
 
@@ -1491,8 +1490,7 @@
 						<path
 							fill-rule="evenodd"
 							d="M3.25 3A2.25 2.25 0 0 0 1 5.25v9.5A2.25 2.25 0 0 0 3.25 17h13.5A2.25 2.25 0 0 0 19 14.75v-9.5A2.25 2.25 0 0 0 16.75 3H3.25Zm.943 8.752a.75.75 0 0 1 .055-1.06L6.128 9l-1.88-1.693a.75.75 0 1 1 1.004-1.114l2.5 2.25a.75.75 0 0 1 0 1.114l-2.5 2.25a.75.75 0 0 1-1.06-.055ZM9.75 10.25a.75.75 0 0 0 0 1.5h2.5a.75.75 0 0 0 0-1.5h-2.5Z"
-							clip-rule="evenodd"
-						/>
+							clip-rule="evenodd"></path>
 					</svg>
 					<span class="font-medium">{$i18n.t('Terminal')}</span>
 
@@ -1502,8 +1500,7 @@
 								? 'bg-emerald-500'
 								: terminalConnecting
 									? 'bg-yellow-500 animate-pulse'
-									: 'bg-gray-400'}"
-						/>
+									: 'bg-gray-400'}"></div>
 					{/if}
 
 					<svg
@@ -1515,8 +1512,7 @@
 						<path
 							fill-rule="evenodd"
 							d="M9.47 6.47a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 1 1-1.06 1.06L10 8.06l-3.72 3.72a.75.75 0 0 1-1.06-1.06l4.25-4.25Z"
-							clip-rule="evenodd"
-						/>
+							clip-rule="evenodd"></path>
 					</svg>
 				</button>
 

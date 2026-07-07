@@ -10,8 +10,8 @@
 	export let aggregateWeekly = false;
 
 	let chartCanvas: HTMLCanvasElement;
-	let chartInstance: any = null;
-	let Chart: any = null;
+	let chartInstance: unknown = null;
+	let Chart: unknown = null;
 
 	const createChart = async () => {
 		if (!chartCanvas || !history.length) return;
@@ -115,7 +115,7 @@
 						boxWidth: 8,
 						boxHeight: 8,
 						callbacks: {
-							label: function (context: any) {
+							label: function (context: unknown) {
 								const value = Math.abs(context.raw);
 								return `${context.dataset.label}: ${value}`;
 							}

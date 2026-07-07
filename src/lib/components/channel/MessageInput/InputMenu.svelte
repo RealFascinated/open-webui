@@ -16,10 +16,10 @@
 
 	const i18n = getContext('i18n');
 
-	export let screenCaptureHandler: Function;
-	export let uploadFilesHandler: Function;
+	export let screenCaptureHandler: (...args: unknown[]) => unknown;
+	export let uploadFilesHandler: (...args: unknown[]) => unknown;
 
-	export let onClose: Function = () => {};
+	export let onClose: (...args: unknown[]) => unknown = () => {};
 
 	let show = false;
 

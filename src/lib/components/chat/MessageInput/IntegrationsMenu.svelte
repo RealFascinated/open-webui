@@ -17,8 +17,8 @@
 	export let imageGenerationEnabled = false;
 	export let showCodeInterpreterButton = false;
 	export let codeInterpreterEnabled = false;
-	export let onShowValves: Function;
-	export let onClose: Function = () => {};
+	export let onShowValves: (...args: unknown[]) => unknown;
+	export let onClose: (...args: unknown[]) => unknown = () => {};
 
 	let show = false;
 	let tab = '';

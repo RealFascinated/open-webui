@@ -51,7 +51,7 @@
 	let showSettings = false;
 	let showControls = false;
 
-	let params: Record<string, any> = {};
+	let params: Record<string, unknown> = {};
 
 	let system = '';
 
@@ -142,6 +142,7 @@
 				.pipeThrough(splitStream('\n'))
 				.getReader();
 
+			// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 			while (true) {
 				const { value, done } = await reader.read();
 				if (done || stopResponseFlag) {
@@ -217,7 +218,7 @@
 		const now = Math.floor(Date.now() / 1000);
 
 		// Convert flat messages array to history map format
-		const messagesMap: Record<string, any> = {};
+		const messagesMap: Record<string, unknown> = {};
 		let currentId: string | null = null;
 		let parentId: string | null = null;
 
@@ -380,7 +381,7 @@
 									resizeSystemTextarea();
 								}}
 								rows="4"
-							/>
+							></textarea>
 						</div>
 					</div>
 				</Collapsible>
@@ -465,7 +466,7 @@
 								e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
 							}}
 							rows="2"
-						/>
+						></textarea>
 					</div>
 
 					<div

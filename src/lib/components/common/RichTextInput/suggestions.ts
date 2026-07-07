@@ -1,18 +1,30 @@
-import { mount, unmount } from 'svelte';
+import type { Component } from 'svelte';
 import { createClassComponent } from 'svelte/legacy';
+import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion';
 
-import tippy from 'tippy.js';
+import tippy, { type Instance as TippyInstance } from 'tippy.js';
 
-export function getSuggestionRenderer(Component: any, ComponentProps = {}) {
+type SuggestionCommandItem = { id: string; label: string };
+
+type LegacySvelteComponent = {
+	$set: (props: Record<string, unknown>) => void;
+	$destroy: () => void;
+	_onKeyDown?: (event: KeyboardEvent) => boolean;
+};
+
+export function getSuggestionRenderer(
+	Component: Component,
+	ComponentProps: Record<string, unknown> = {}
+) {
 	return function suggestionRenderer() {
-		let component = null;
+		let component: LegacySvelteComponent | null = null;
 		let container: HTMLDivElement | null = null;
 
 		let popup: TippyInstance | null = null;
 		let refEl: HTMLDivElement | null = null; // dummy reference
 
 		return {
-			onStart: (props: any) => {
+			onStart: (props: SuggestionProps<SuggestionCommandItem, SuggestionCommandItem>) => {
 				container = document.createElement('div');
 				container.className = 'suggestion-list-container';
 				document.body.appendChild(container);
@@ -29,7 +41,7 @@ export function getSuggestionRenderer(Component: any, ComponentProps = {}) {
 						},
 						...ComponentProps
 					},
-					context: new Map<string, any>([['i18n', ComponentProps?.i18n]])
+					context: new Map<string, unknown>([['i18n', ComponentProps?.i18n]])
 				});
 
 				// Create a tiny reference element so outside taps are truly "outside"
@@ -44,7 +56,7 @@ export function getSuggestionRenderer(Component: any, ComponentProps = {}) {
 				document.body.appendChild(refEl);
 
 				popup = tippy(refEl, {
-					getReferenceClientRect: props.clientRect as any,
+					getReferenceClientRect: props.clientRect ?? undefined,
 					appendTo: () => document.body,
 					content: container,
 					interactive: true,
@@ -82,7 +94,7 @@ export function getSuggestionRenderer(Component: any, ComponentProps = {}) {
 				popup?.show();
 			},
 
-			onUpdate: (props: any) => {
+			onUpdate: (props: SuggestionProps<SuggestionCommandItem, SuggestionCommandItem>) => {
 				if (!component) return;
 
 				component.$set({
@@ -93,14 +105,14 @@ export function getSuggestionRenderer(Component: any, ComponentProps = {}) {
 				});
 
 				if (props.clientRect && popup) {
-					popup.setProps({ getReferenceClientRect: props.clientRect as any });
+					popup.setProps({ getReferenceClientRect: props.clientRect });
 				}
 			},
 
-			onKeyDown: (props: any) => {
+			onKeyDown: (props: SuggestionKeyDownProps) => {
 				// forward to the Svelte component’s handler
 				// (expose this from component as `export function onKeyDown(evt)`)
-				// @ts-ignore
+				// @ts-expect-error -- legacy type workaround
 				return component?._onKeyDown?.(props.event) ?? false;
 			},
 

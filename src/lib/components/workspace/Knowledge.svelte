@@ -37,7 +37,7 @@
 		description?: string;
 		updated_at: number;
 		write_access?: boolean;
-		meta?: any;
+		meta?: unknown;
 		user?: {
 			name?: string;
 			email?: string;

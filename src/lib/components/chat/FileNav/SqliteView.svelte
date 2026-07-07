@@ -6,7 +6,7 @@
 
 	export let data: ArrayBuffer;
 
-	let db: any = null;
+	let db: unknown = null;
 	let loading = true;
 	let error: string | null = null;
 
@@ -64,7 +64,7 @@
 			// Get columns
 			const info = db.exec(`PRAGMA table_info("${selectedTable}")`);
 			if (info.length > 0) {
-				columns = info[0].values.map((r: any[]) => r[1] as string);
+				columns = info[0].values.map((r: unknown[]) => r[1] as string);
 			}
 
 			// Get total count
@@ -77,7 +77,7 @@
 			const offset = page * pageSize;
 			const result = db.exec(`SELECT * FROM "${selectedTable}" LIMIT ${pageSize} OFFSET ${offset}`);
 			if (result.length > 0) {
-				rows = result[0].values.map((r: any[]) => r.map((v: any) => formatValue(v)));
+				rows = result[0].values.map((r: unknown[]) => r.map((v: unknown) => formatValue(v)));
 			} else {
 				rows = [];
 			}
@@ -93,7 +93,7 @@
 			const result = db.exec(queryText);
 			if (result.length > 0) {
 				queryColumns = result[0].columns;
-				queryRows = result[0].values.map((r: any[]) => r.map((v: any) => formatValue(v)));
+				queryRows = result[0].values.map((r: unknown[]) => r.map((v: unknown) => formatValue(v)));
 			} else {
 				queryColumns = [];
 				queryRows = [];
@@ -105,7 +105,7 @@
 		}
 	};
 
-	const formatValue = (v: any): string => {
+	const formatValue = (v: unknown): string => {
 		if (v === null) return 'NULL';
 		if (v instanceof Uint8Array) return `[BLOB ${v.length}B]`;
 		return String(v);
@@ -113,13 +113,15 @@
 
 	$: totalPages = Math.ceil(totalRows / pageSize);
 
-	$: data && init();
+	$: if (data) init();
 
 	onDestroy(() => {
 		if (db) {
 			try {
 				db.close();
-			} catch {}
+			} catch {
+			// intentionally empty
+		}
 			db = null;
 		}
 	});
@@ -256,6 +258,7 @@
 					<button
 						class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"
 						disabled={page === 0}
+						aria-label={$i18n.t('Previous page')}
 						on:click={() => {
 							page--;
 							loadPage();
@@ -270,14 +273,14 @@
 							<path
 								fill-rule="evenodd"
 								d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z"
-								clip-rule="evenodd"
-							/>
+								clip-rule="evenodd"></path>
 						</svg>
 					</button>
 					<span>{page + 1} / {totalPages} ({totalRows.toLocaleString()} rows)</span>
 					<button
 						class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"
 						disabled={page >= totalPages - 1}
+						aria-label={$i18n.t('Next page')}
 						on:click={() => {
 							page++;
 							loadPage();
@@ -292,8 +295,7 @@
 							<path
 								fill-rule="evenodd"
 								d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
-								clip-rule="evenodd"
-							/>
+								clip-rule="evenodd"></path>
 						</svg>
 					</button>
 				</div>

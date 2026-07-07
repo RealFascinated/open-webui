@@ -42,7 +42,7 @@
 
 	export let showWebSearchButton = false;
 	export let webSearchEnabled = false;
-	export let onWebSearchToggle: Function = () => {};
+	export let onWebSearchToggle: (...args: unknown[]) => unknown = () => {};
 
 	export let showTerminalButton = false;
 
@@ -56,7 +56,7 @@
 	export let imageGenerationEnabled = false;
 	export let showCodeInterpreterButton = false;
 	export let codeInterpreterEnabled = false;
-	export let onShowValves: Function = () => {};
+	export let onShowValves: (...args: unknown[]) => unknown = () => {};
 
 	$: showExtrasSection = showIntegrationsButton || showTerminalButton || showWebSearchButton;
 
@@ -88,15 +88,15 @@
 		selectedDirectTerminal?.url?.replace(/^https?:\/\//, '') ||
 		'';
 
-	export let screenCaptureHandler: Function;
-	export let uploadFilesHandler: Function;
-	export let inputFilesHandler: Function;
+	export let screenCaptureHandler: (...args: unknown[]) => unknown;
+	export let uploadFilesHandler: (...args: unknown[]) => unknown;
+	export let inputFilesHandler: (...args: unknown[]) => unknown;
 
-	export let uploadGoogleDriveHandler: Function;
-	export let uploadOneDriveHandler: Function;
+	export let uploadGoogleDriveHandler: (...args: unknown[]) => unknown;
+	export let uploadOneDriveHandler: (...args: unknown[]) => unknown;
 
-	export let onUpload: Function;
-	export let onClose: Function;
+	export let onUpload: (...args: unknown[]) => unknown;
+	export let onClose: (...args: unknown[]) => unknown;
 
 	let show = false;
 	let tab = '';
@@ -570,7 +570,7 @@
 					{/if}
 
 					{#if showExtrasSection}
-						<div class="my-1 mx-2 border-t border-gray-100 dark:border-gray-800" />
+						<div class="my-1 mx-2 border-t border-gray-100 dark:border-gray-800" ></div>
 					{/if}
 
 					{#if showIntegrationsNavSection}
@@ -594,15 +594,12 @@
 					{/if}
 
 					{#if showTerminalButton}
-						<div
-							bind:this={terminalTriggerElement}
-							class="relative"
-							on:mouseenter={openTerminalFlyout}
-							on:mouseleave={closeTerminalFlyout}
-						>
+						<div bind:this={terminalTriggerElement} class="relative">
 							<button
 								class="flex gap-2 w-full items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl"
 								type="button"
+								on:mouseenter={openTerminalFlyout}
+								on:mouseleave={closeTerminalFlyout}
 								on:click={toggleTerminalFlyout}
 							>
 								<Cloud className="size-4" strokeWidth="2" />
@@ -641,7 +638,7 @@
 
 					{#if showBooleanTogglesSection}
 						{#if showNavigationExtrasSection}
-							<div class="my-1 mx-2 border-t border-gray-100 dark:border-gray-800" />
+							<div class="my-1 mx-2 border-t border-gray-100 dark:border-gray-800" ></div>
 						{/if}
 
 						{#if showIntegrationsTogglesSection}

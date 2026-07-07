@@ -36,8 +36,8 @@
 
 	const i18n = getContext('i18n');
 
-	export let onSubmit: Function;
-	export let onBack: null | Function = null;
+	export let onSubmit: (...args: unknown[]) => unknown;
+	export let onBack: null | ((...args: unknown[]) => unknown) = null;
 
 	export let model = null;
 	export let edit = false;
@@ -113,8 +113,8 @@
 	export let suggestionTags: { name: string }[] = [];
 	let voices: { id: string; name?: string }[] = [];
 
-	const getBaseModelItems = (models: any[] = []) => {
-		const currentModelId = (model as any)?.id;
+	const getBaseModelItems = (models: unknown[] = []) => {
+		const currentModelId = (model as unknown)?.id;
 
 		return models
 			.filter(
@@ -441,8 +441,7 @@
 					<path
 						fill-rule="evenodd"
 						d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
-						clip-rule="evenodd"
-					/>
+						clip-rule="evenodd"></path>
 				</svg>
 			</div>
 			<div class=" self-center text-sm font-medium">{$i18n.t('Back')}</div>
@@ -462,7 +461,7 @@
 					let originalImageUrl = `${event.target?.result}`;
 
 					// For animated formats (gif, webp), skip resizing to preserve animation
-					const fileType = (inputFiles[0] as any)?.['type'];
+					const fileType = inputFiles[0]?.type;
 					if (fileType === 'image/gif' || fileType === 'image/webp') {
 						info.meta.profile_image_url = originalImageUrl;
 						inputFiles = null;
@@ -516,12 +515,12 @@
 					inputFiles &&
 					inputFiles.length > 0 &&
 					['image/gif', 'image/webp', 'image/jpeg', 'image/png', 'image/svg+xml'].includes(
-						(inputFiles[0] as any)?.['type']
+						inputFiles[0].type
 					)
 				) {
 					reader.readAsDataURL(inputFiles[0]);
 				} else {
-					console.log(`Unsupported File Type '${(inputFiles[0] as any)?.['type']}'.`);
+					console.log(`Unsupported File Type '${inputFiles[0]?.type}'.`);
 					inputFiles = null;
 				}
 			}}
@@ -577,8 +576,7 @@
 													<path
 														fill-rule="evenodd"
 														d="M2 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4Zm10.5 5.707a.5.5 0 0 0-.146-.353l-1-1a.5.5 0 0 0-.708 0L9.354 9.646a.5.5 0 0 1-.708 0L6.354 7.354a.5.5 0 0 0-.708 0l-2 2a.5.5 0 0 0-.146.353V12a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9.707ZM12 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"
-														clip-rule="evenodd"
-													/>
+														clip-rule="evenodd"></path>
 												</svg>
 											</div>
 										</div>
@@ -696,8 +694,7 @@
 									<Textarea
 										className=" text-sm w-full bg-transparent outline-hidden resize-none overflow-y-hidden "
 										placeholder={$i18n.t('Add a short description about what this model does')}
-										bind:value={info.meta.description}
-									/>
+										bind:value={info.meta.description}></Textarea>
 								{/if}
 							</div>
 
@@ -741,8 +738,7 @@
 											'Write your model system prompt content here\ne.g.) You are Mario from Super Mario Bros, acting as an assistant.'
 										)}
 										rows={4}
-										bind:value={system}
-									/>
+										bind:value={system}></Textarea>
 								</div>
 							</div>
 
@@ -956,8 +952,7 @@
 									rows="10"
 									value={JSON.stringify(info, null, 2)}
 									disabled
-									readonly
-								/>
+									readonly></textarea>
 							</div>
 						{/if}
 					</div>

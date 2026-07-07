@@ -202,7 +202,7 @@
 		loading = false;
 	};
 
-	let debounceTimeout: NodeJS.Timeout | null = null;
+	let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	const changeDebounceHandler = () => {
 		if (debounceTimeout) {
@@ -558,34 +558,38 @@ ${content}
 		}
 
 		if (file['type'].startsWith('image/')) {
-			const uploadImagePromise = new Promise(async (resolve, reject) => {
-				let reader = new FileReader();
-				reader.onload = async (event) => {
-					try {
-						let imageUrl = event.target.result;
-						imageUrl = await compressImageHandler(imageUrl, $settings, $config);
+			const reader = new FileReader();
+			const sourceFile = file['type'] === 'image/heic' ? await convertHeicToJpeg(file) : file;
 
-						const fileId = uuidv4();
-						const fileItem = {
-							id: fileId,
-							type: 'image',
-							url: `${imageUrl}`
-						};
-						files = [...files, fileItem];
-						note.data.files = files;
-						editor.storage.files = files;
+			const fileItem = await new Promise<typeof files[number]>((resolve, reject) => {
+				reader.onload = (event) => {
+					void (async () => {
+						try {
+							let imageUrl = event.target?.result as string;
+							imageUrl = await compressImageHandler(imageUrl, $settings, $config);
 
-						changeDebounceHandler();
-						resolve(fileItem);
-					} catch (err) {
-						reject(err);
-					}
+							const fileId = uuidv4();
+							const item = {
+								id: fileId,
+								type: 'image',
+								url: `${imageUrl}`
+							};
+							files = [...files, item];
+							note.data.files = files;
+							editor.storage.files = files;
+
+							changeDebounceHandler();
+							resolve(item);
+						} catch (err) {
+							reject(err);
+						}
+					})();
 				};
-
-				reader.readAsDataURL(file['type'] === 'image/heic' ? await convertHeicToJpeg(file) : file);
+				reader.onerror = () => reject(reader.error);
+				reader.readAsDataURL(sourceFile);
 			});
 
-			return await uploadImagePromise;
+			return fileItem;
 		} else {
 			return await uploadFileHandler(file);
 		}
@@ -688,6 +692,7 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 				.pipeThrough(splitStream('\n'))
 				.getReader();
 
+			// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 			while (true) {
 				const { value, done } = await reader.read();
 				if (done || stopResponseFlag) {

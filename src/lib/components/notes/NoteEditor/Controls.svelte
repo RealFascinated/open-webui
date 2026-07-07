@@ -12,7 +12,7 @@
 	export let selectedModelId = '';
 	export let files = [];
 
-	export let onUpdate = (files: any[]) => {
+	export let onUpdate = (files: unknown[]) => {
 		// Default no-op function
 	};
 </script>

@@ -40,6 +40,7 @@ from open_webui.models.groups import Groups
 from open_webui.models.models import Models
 from open_webui.models.users import UserModel
 from open_webui.utils.access_control import check_model_access, has_connection_access, has_permission
+from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.anthropic import (
     anthropic_stream_to_openai_stream,
     apply_anthropic_request_headers,
@@ -48,7 +49,8 @@ from open_webui.utils.anthropic import (
     get_anthropic_models,
     is_anthropic_url,
 )
-from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.socket.main import get_event_emitter
+from open_webui.utils.llamacpp_tokens import compute_context_breakdown, normalize_llamacpp_base
 from open_webui.utils.headers import get_custom_headers, include_user_info_headers
 from open_webui.utils.misc import (
     convert_logit_bias_input_to_json,
@@ -716,11 +718,51 @@ async def get_models(request: Request, url_idx: int | None = None, user=Depends(
 
 
 def _normalize_llamacpp_base(url: str) -> str:
-    normalized = (url or '').strip().rstrip('/')
-    for suffix in ('/openai/v1', '/v1'):
-        if normalized.endswith(suffix):
-            normalized = normalized[: -len(suffix)]
-    return normalized.rstrip('/')
+    return normalize_llamacpp_base(url)
+
+
+async def _attach_llamacpp_context_breakdown(
+    request: Request,
+    *,
+    payload: dict,
+    metadata: dict | None,
+    api_config: dict,
+    url: str,
+    url_idx: int,
+    headers: dict,
+    cookies: dict | None,
+) -> None:
+    if api_config.get('provider') != 'llama.cpp':
+        return
+    if not metadata or not metadata.get('chat_id') or not metadata.get('message_id'):
+        return
+
+    snapshots = metadata.get('context_snapshots')
+    if not isinstance(snapshots, dict):
+        return
+
+    breakdown = await compute_context_breakdown(
+        snapshots=snapshots,
+        tools=payload.get('tools'),
+        tools_dict=metadata.get('tools') if isinstance(metadata.get('tools'), dict) else {},
+        model_id=payload.get('model', ''),
+        base_url=normalize_llamacpp_base(url),
+        url_idx=url_idx,
+        headers=headers,
+        cookies=cookies,
+    )
+    if not breakdown:
+        return
+
+    request.state.context_breakdown = breakdown
+    event_emitter = await get_event_emitter(metadata, update_db=False)
+    if event_emitter:
+        await event_emitter(
+            {
+                'type': 'chat:completion',
+                'data': {'usage': {'context_breakdown': breakdown}},
+            }
+        )
 
 
 def _n_ctx_from_props(data: dict | None) -> int | None:
@@ -1376,6 +1418,18 @@ async def generate_chat_completion(
                 message['content'] = ''.join(
                     part.get('text', '') for part in message['content'] if part.get('type') in ('input_text', 'text')
                 )
+
+    if not is_responses and not is_anthropic and api_config.get('provider') == 'llama.cpp':
+        await _attach_llamacpp_context_breakdown(
+            request,
+            payload=payload,
+            metadata=request_metadata,
+            api_config=api_config,
+            url=url,
+            url_idx=idx,
+            headers=headers,
+            cookies=cookies,
+        )
 
     payload = json.dumps(payload)
 

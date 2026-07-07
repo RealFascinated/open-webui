@@ -632,7 +632,7 @@
 								>
 									<Tooltip
 										content={marked.parse(
-											!!model?.meta?.description
+											model?.meta?.description
 												? model?.meta?.description
 												: model?.ollama?.digest
 													? `${model?.ollama?.digest} **(${model?.ollama?.modified_at})**`
@@ -668,7 +668,7 @@
 										class=" text-xs overflow-hidden text-ellipsis line-clamp-1 flex items-center gap-1 text-gray-500"
 									>
 										<span class=" line-clamp-1">
-											{!!model?.meta?.description
+											{model?.meta?.description
 												? model?.meta?.description
 												: model?.ollama?.digest
 													? `${model.id} (${model?.ollama?.digest})`
@@ -696,6 +696,7 @@
 									</Tooltip>
 								{:else}
 									<button
+										aria-label={$i18n.t('Edit')}
 										class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 										type="button"
 										on:click={() => {

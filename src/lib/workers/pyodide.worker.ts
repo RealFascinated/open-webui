@@ -4,14 +4,20 @@ declare global {
 	interface Window {
 		stdout: string | null;
 		stderr: string | null;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		result: any;
+		result: unknown;
 		pyodide: PyodideInterface;
 		packages: string[];
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		[key: string]: any;
 	}
 }
+
+type PyodideFSExtended = PyodideInterface['FS'] & {
+	syncfs: (populate: boolean, callback: (err: Error | null) => void) => void;
+	readFile: (path: string) => Uint8Array;
+};
+
+type PyodideProxy = {
+	toJs: () => unknown;
+};
 
 // ---------------------------------------------------------------------------
 // Pyodide bootstrap
@@ -53,7 +59,7 @@ async function loadPyodideAndPackages(packages: string[] = []) {
 
 	// Load persisted files from IndexedDB
 	await new Promise<void>((resolve) => {
-		(self.pyodide.FS as any).syncfs(true, (err: Error | null) => {
+		(self.pyodide.FS as PyodideFSExtended).syncfs(true, (err: Error | null) => {
 			if (err) {
 				console.error('Error syncing from IndexedDB:', err);
 			}
@@ -95,7 +101,7 @@ async function ensurePyodide(packages: string[] = []) {
  */
 function persistFS() {
 	if (!self.pyodide) return;
-	(self.pyodide.FS as any).syncfs(false, (err: Error | null) => {
+	(self.pyodide.FS as PyodideFSExtended).syncfs(false, (err: Error | null) => {
 		if (err) {
 			console.error('Error syncing to IndexedDB:', err);
 		} else {
@@ -144,7 +150,7 @@ function fsList(path: string) {
 }
 
 function fsRead(path: string): ArrayBuffer {
-	const data: Uint8Array = (self.pyodide.FS as any).readFile(path) as Uint8Array;
+	const data = (self.pyodide.FS as PyodideFSExtended).readFile(path);
 	return data.buffer as ArrayBuffer;
 }
 
@@ -307,7 +313,7 @@ self.onmessage = async (event) => {
 
 		case 'fs:sync': {
 			// Re-read from IndexedDB into memory to pick up externally written files
-			(self.pyodide.FS as any).syncfs(true, (err: Error | null) => {
+			(self.pyodide.FS as PyodideFSExtended).syncfs(true, (err: Error | null) => {
 				if (err) {
 					console.error('Error syncing from IndexedDB:', err);
 				}
@@ -325,7 +331,7 @@ self.onmessage = async (event) => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function processResult(result: any): any {
+function processResult(result: unknown): unknown {
 	// Catch and always return JSON-safe string representations
 	try {
 		if (result == null) {
@@ -344,16 +350,21 @@ function processResult(result: any): any {
 			// If it's an array, recursively process items
 			return result.map((item) => processResult(item));
 		}
-		if (typeof result.toJs === 'function') {
+		if (
+			typeof result === 'object' &&
+			result !== null &&
+			'toJs' in result &&
+			typeof (result as PyodideProxy).toJs === 'function'
+		) {
 			// If it's a Pyodide proxy object (e.g., Pandas DF, Numpy Array), convert to JS and process recursively
-			return processResult(result.toJs());
+			return processResult((result as PyodideProxy).toJs());
 		}
-		if (typeof result === 'object') {
+		if (typeof result === 'object' && result !== null) {
 			// Convert JS objects to a recursively serialized representation
-			const processedObject: { [key: string]: any } = {};
+			const processedObject: Record<string, unknown> = {};
 			for (const key in result) {
 				if (Object.prototype.hasOwnProperty.call(result, key)) {
-					processedObject[key] = processResult(result[key]);
+					processedObject[key] = processResult((result as Record<string, unknown>)[key]);
 				}
 			}
 			return processedObject;

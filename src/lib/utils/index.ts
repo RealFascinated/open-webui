@@ -833,7 +833,7 @@ const convertOpenAIMessages = (convo) => {
 					? Math.floor(message['message']['create_time'])
 					: undefined;
 
-				const new_chat: Record<string, any> = {
+				const new_chat: Record<string, unknown> = {
 					id: message_id,
 					parentId: lastId,
 					childrenIds: message['children'] || [],
@@ -946,7 +946,7 @@ export const isValidHttpUrl = (string: string) => {
 
 	try {
 		url = new URL(string);
-	} catch (_) {
+	} catch {
 		return false;
 	}
 
@@ -1086,6 +1086,7 @@ export const extractSentences = (text: string) => {
 	// Restore code blocks and process sentences
 	sentences = sentences.map((sentence) => {
 		// Check if the sentence includes a placeholder for a code block
+		// eslint-disable-next-line no-control-regex -- intentional null-char code-block placeholders
 		return sentence.replace(/\u0000(\d+)\u0000/g, (_, idx) => codeBlocks[idx]);
 	});
 
@@ -1109,6 +1110,7 @@ export const extractParagraphsForAudio = (text: string) => {
 	// Restore code blocks and process paragraphs
 	paragraphs = paragraphs.map((paragraph) => {
 		// Check if the paragraph includes a placeholder for a code block
+		// eslint-disable-next-line no-control-regex -- intentional null-char code-block placeholders
 		return paragraph.replace(/\u0000(\d+)\u0000/g, (_, idx) => codeBlocks[idx]);
 	});
 
@@ -1465,7 +1467,7 @@ function resolveSchema(schemaRef, components, resolvedSchemas = new Set()) {
 	}
 
 	// Handle schemas that only have composition keywords without an explicit type
-	const compositionObj: Record<string, any> = {};
+	const compositionObj: Record<string, unknown> = {};
 	let hasComposition = false;
 	for (const keyword of ['oneOf', 'anyOf', 'allOf']) {
 		if (Array.isArray(schemaRef[keyword])) {
@@ -1506,37 +1508,39 @@ export const convertOpenApiToToolPayload = (openApiSpec) => {
 		return toolPayload;
 	}
 
-	for (const [path, methods] of Object.entries(openApiSpec.paths)) {
+	for (const [, methods] of Object.entries(openApiSpec.paths)) {
 		if (!methods || typeof methods !== 'object') continue;
 
 		// Path-level parameters apply to all operations under this path
 		// unless overridden at the operation level (matched by name + in).
-		const pathLevelParams: any[] = Array.isArray((methods as any).parameters)
-			? (methods as any).parameters
+		const methodsRecord = methods as Record<string, unknown>;
+		const pathLevelParams = Array.isArray(methodsRecord.parameters)
+			? (methodsRecord.parameters as Record<string, unknown>[])
 			: [];
 
-		for (const [method, operation] of Object.entries(methods)) {
+		for (const [method, operation] of Object.entries(methodsRecord)) {
 			if (!OPENAPI_HTTP_METHODS.has(method)) continue;
 			if (!operation || typeof operation !== 'object') continue;
-			if ((operation as any)?.operationId) {
+			const operationRecord = operation as Record<string, unknown>;
+			if (operationRecord?.operationId) {
 				const tool = {
-					name: (operation as any).operationId,
+					name: operationRecord.operationId as string,
 					description:
-						(operation as any).description ||
-						(operation as any).summary ||
+						(operationRecord.description as string) ||
+						(operationRecord.summary as string) ||
 						'No description available.',
 					parameters: {
 						type: 'object',
-						properties: {},
-						required: []
+						properties: {} as Record<string, unknown>,
+						required: [] as string[]
 					}
 				};
 
 				// Merge path-level and operation-level parameters.
 				// Operation-level params override path-level params with the
 				// same (name, in) pair per the OpenAPI spec.
-				const opParams: any[] = Array.isArray((operation as any).parameters)
-					? (operation as any).parameters
+				const opParams = Array.isArray(operationRecord.parameters)
+					? (operationRecord.parameters as Record<string, unknown>[])
 					: [];
 				const mergedParams = new Map();
 				for (const param of pathLevelParams) {
@@ -1566,8 +1570,9 @@ export const convertOpenApiToToolPayload = (openApiSpec) => {
 				}
 
 				// Extract and recursively resolve requestBody if available
-				if ((operation as any).requestBody) {
-					const content = (operation as any).requestBody.content;
+				if (operationRecord.requestBody) {
+					const requestBody = operationRecord.requestBody as Record<string, unknown>;
+					const content = requestBody.content as Record<string, Record<string, { schema?: unknown }>>;
 					if (content && content['application/json']) {
 						const requestSchema = content['application/json'].schema;
 						const resolvedRequestSchema = resolveSchema(requestSchema, openApiSpec.components);
@@ -1629,10 +1634,10 @@ export const nameToId = (name: string): string => {
 		.toLowerCase();
 };
 
-export const extractInputVariables = (text: string): Record<string, any> => {
+export const extractInputVariables = (text: string): Record<string, unknown> => {
 	const regex = /{{\s*([^|}\s]+)\s*\|\s*([^}]+)\s*}}/g;
 	const regularRegex = /{{\s*([^|}\s]+)\s*}}/g;
-	const variables: Record<string, any> = {};
+	const variables: Record<string, unknown> = {};
 	let match;
 	// Use exec() loop instead of matchAll() for better compatibility
 	while ((match = regex.exec(text)) !== null) {
@@ -1644,7 +1649,7 @@ export const extractInputVariables = (text: string): Record<string, any> => {
 	while ((match = regularRegex.exec(text)) !== null) {
 		const varName = match[1].trim();
 		// Only add if not already processed as custom variable
-		if (!variables.hasOwnProperty(varName)) {
+		if (!Object.hasOwn(variables, varName)) {
 			variables[varName] = { type: 'text' }; // Default type for regular variables
 		}
 	}
@@ -1703,7 +1708,7 @@ export const splitProperties = (str: string, delimiter: string): string[] => {
 	return result;
 };
 
-export const parseVariableDefinition = (definition: string): Record<string, any> => {
+export const parseVariableDefinition = (definition: string): Record<string, unknown> => {
 	// Use splitProperties for the main colon delimiter to handle quoted strings
 	const parts = splitProperties(definition, ':');
 	const [firstPart, ...propertyParts] = parts;
@@ -1739,19 +1744,19 @@ export const parseVariableDefinition = (definition: string): Record<string, any>
 				[propertyName.trim()]: parseJsonValue(propertyValueRaw.trim())
 			};
 		},
-		{} as Record<string, any>
+		{} as Record<string, unknown>
 	);
 
 	return { type, ...properties };
 };
-export const parseJsonValue = (value: string): any => {
+export const parseJsonValue = (value: string): unknown => {
 	// Remove surrounding quotes if present (for string values)
 	if (value.startsWith('"') && value.endsWith('"')) {
 		return value.slice(1, -1);
 	}
 
 	// Check if it starts with square or curly brackets (JSON)
-	if (/^[\[{]/.test(value)) {
+	if (/^[[{]/.test(value)) {
 		try {
 			return JSON.parse(value);
 		} catch {
@@ -1839,7 +1844,7 @@ export const extractContentFromFile = async (file: File) => {
 		for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
 			const page = await pdf.getPage(pageNum);
 			const content = await page.getTextContent();
-			const strings = content.items.map((item: any) => item.str);
+			const strings = content.items.map((item: { str?: string }) => item.str ?? '');
 			allText += strings.join(' ') + '\n';
 		}
 		return allText;
@@ -1888,7 +1893,7 @@ export const extractContentFromFile = async (file: File) => {
 	// Fallback: try to read as text, if decodable
 	try {
 		return await readAsText(file);
-	} catch (err) {
+	} catch {
 		throw new Error('Unsupported or non-text file type: ' + (file.name || type));
 	}
 };
@@ -1909,8 +1914,8 @@ export const convertHeicToJpeg = async (file: File) => {
 	const { default: heic2any } = await import('heic2any');
 	try {
 		return await heic2any({ blob: file, toType: 'image/jpeg' });
-	} catch (err: any) {
-		if (err?.message?.includes('already browser readable')) {
+	} catch (err: unknown) {
+		if (err instanceof Error && err.message.includes('already browser readable')) {
 			return file;
 		}
 		throw err;
@@ -1920,7 +1925,7 @@ export const convertHeicToJpeg = async (file: File) => {
 export const decodeString = (str: string) => {
 	try {
 		return decodeURIComponent(str);
-	} catch (e) {
+	} catch {
 		return str;
 	}
 };
@@ -2003,7 +2008,7 @@ export const renderMermaidDiagram = async (
 	}
 };
 
-export const renderVegaVisualization = async (spec: string, lang: string = '', i18n?: any) => {
+export const renderVegaVisualization = async (spec: string, lang: string = '') => {
 	const vega = await import('vega');
 	const parsedSpec = JSON.parse(spec);
 	const hasVegaLiteKeys =
@@ -2044,14 +2049,14 @@ export const getCodeBlockContents = (content: string): object => {
 
 	const codeBlockContents = content.match(/```[\s\S]*?```/g);
 
-	let codeBlocks = [];
+	const codeBlocks = [];
 
 	// Groups of related HTML/CSS/JS blocks. Each HTML block starts a new group;
 	// CSS and JS blocks attach to the current (most recent) group.
 	// This preserves the existing behaviour for "dumb" models that output
 	// separate html/css/js blocks meant to form a single page, while also
 	// allowing multiple distinct HTML blocks to produce separate artifacts.
-	let htmlGroups: Array<{ html: string; css: string; js: string }> = [];
+	const htmlGroups: Array<{ html: string; css: string; js: string }> = [];
 
 	const initDefaultGroup = () => {
 		if (htmlGroups.length === 0) {

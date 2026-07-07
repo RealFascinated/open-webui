@@ -29,8 +29,8 @@
 		name: string;
 		provider: string;
 		endpoint: string;
-		config?: Record<string, any>;
-		capabilities?: Record<string, any>;
+		config?: Record<string, unknown>;
+		capabilities?: Record<string, unknown>;
 		enabled?: boolean;
 		auth_configured?: boolean;
 	};
@@ -39,14 +39,14 @@
 		id: string;
 		name: string;
 		description?: string;
-		access_grants?: any[];
+		access_grants?: unknown[];
 		meta?: {
 			external?: {
 				connection_id?: string;
 				provider?: string;
 				source?: {
 					name?: string;
-					config?: Record<string, any>;
+					config?: Record<string, unknown>;
 				};
 			};
 		};
@@ -60,10 +60,10 @@
 	let items: ExternalKnowledgeItem[] = [];
 	let editingItem: ExternalKnowledgeItem | null = null;
 	let editingConnection: ExternalKnowledgeConnection | null = null;
-	let accessGrants: any[] = [];
+	let accessGrants: unknown[] = [];
 	let testResult: {
 		documents?: string[];
-		metadatas?: Record<string, any>[];
+		metadatas?: Record<string, unknown>[];
 		distances?: number[];
 	} | null = null;
 

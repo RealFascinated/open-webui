@@ -7,9 +7,9 @@ export type CalendarModel = {
 	color: string | null;
 	is_default: boolean;
 	is_system: boolean;
-	data: Record<string, any> | null;
-	meta: Record<string, any> | null;
-	access_grants: any[];
+	data: Record<string, unknown> | null;
+	meta: Record<string, unknown> | null;
+	access_grants: { target_type: string; target_id: string; permission: string }[];
 	created_at: number;
 	updated_at: number;
 };
@@ -19,7 +19,7 @@ export type CalendarEventAttendeeModel = {
 	event_id: string;
 	user_id: string;
 	status: string;
-	meta: Record<string, any> | null;
+	meta: Record<string, unknown> | null;
 	created_at: number;
 	updated_at: number;
 };
@@ -36,8 +36,8 @@ export type CalendarEventModel = {
 	rrule: string | null;
 	color: string | null;
 	location: string | null;
-	data: Record<string, any> | null;
-	meta: Record<string, any> | null;
+	data: Record<string, unknown> | null;
+	meta: Record<string, unknown> | null;
 	is_cancelled: boolean;
 	attendees: CalendarEventAttendeeModel[];
 	created_at: number;
@@ -56,16 +56,16 @@ export type CalendarEventForm = {
 	rrule?: string;
 	color?: string;
 	location?: string | null;
-	data?: Record<string, any>;
-	meta?: Record<string, any>;
+	data?: Record<string, unknown>;
+	meta?: Record<string, unknown>;
 	attendees?: { user_id: string; status?: string }[];
 };
 
 export type CalendarForm = {
 	name: string;
 	color?: string;
-	data?: Record<string, any>;
-	meta?: Record<string, any>;
+	data?: Record<string, unknown>;
+	meta?: Record<string, unknown>;
 	access_grants?: { target_type: string; target_id: string; permission: string }[];
 };
 

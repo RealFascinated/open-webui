@@ -54,12 +54,14 @@
 	export let selectionOnly = false;
 	export let includeHidden = false;
 
+	import type { Model } from '$lib/stores';
+
 	export let items: {
 		label: string;
 		value: string;
 		model: Model;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		[key: string]: any;
+		[key: string]: unknown;
 	}[] = [];
 
 	export let className = 'w-[32rem]';
@@ -311,6 +313,7 @@
 				}
 			});
 
+			// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 			while (true) {
 				try {
 					const { value, done } = await reader.read();
@@ -362,11 +365,9 @@
 					}
 				} catch (error) {
 					console.log(error);
-					if (typeof error !== 'string') {
-						error = error.message;
-					}
+					const message = typeof error === 'string' ? error : error.message;
 
-					toast.error(`${error}`);
+					toast.error(`${message}`);
 					// opts.callback({ success: false, error, modelName: opts.modelName });
 					break;
 				}
@@ -449,9 +450,9 @@
 	};
 
 	let showDeleteConfirm = false;
-	let deleteModelTarget: any = null;
+	let deleteModelTarget: unknown = null;
 
-	const deleteModelHandler = async (model: any) => {
+	const deleteModelHandler = async (model: unknown) => {
 		deleteModelTarget = model;
 		showDeleteConfirm = true;
 	};
@@ -531,6 +532,14 @@
 		type="button"
 		{disabled}
 		on:click={toggleOpen}
+		on:mouseenter={async () => {
+			models.set(
+				await getModels(
+					localStorage.token,
+					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
+				)
+			);
+		}}
 	>
 		<div
 			class="flex text-left px-0.5 bg-transparent {truncateTrigger
@@ -541,14 +550,6 @@
 			false)
 				? 'dark:placeholder-gray-100 placeholder-gray-800'
 				: 'placeholder-gray-400'}"
-			on:mouseenter={async () => {
-				models.set(
-					await getModels(
-						localStorage.token,
-						$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-					)
-				);
-			}}
 		>
 			{#if selectedModel}
 				<span class={truncateTrigger ? 'truncate' : ''}>{selectedModel.label}</span>
@@ -747,7 +748,6 @@
 								</div>
 							{/if}
 						{:else}
-							<!-- svelte-ignore a11y-no-static-element-interactions -->
 							<div
 								class="max-h-64 overflow-y-auto"
 								role="listbox"
@@ -757,7 +757,7 @@
 									listScrollTop = listContainer.scrollTop;
 								}}
 							>
-								<div style="height: {visibleStart * ITEM_HEIGHT}px;" />
+								<div style="height: {visibleStart * ITEM_HEIGHT}px;" ></div>
 								{#each filteredItems.slice(visibleStart, visibleEnd) as item, i (item.value)}
 									{@const index = visibleStart + i}
 									<ModelItem
@@ -777,7 +777,7 @@
 										}}
 									/>
 								{/each}
-								<div style="height: {(filteredItems.length - visibleEnd) * ITEM_HEIGHT}px;" />
+								<div style="height: {(filteredItems.length - visibleEnd) * ITEM_HEIGHT}px;" ></div>
 							</div>
 						{/if}
 
@@ -868,8 +868,8 @@
 
 					<div class="pb-2.5"></div>
 
-					<div class="hidden w-[42rem]" />
-					<div class="hidden w-[32rem]" />
+					<div class="hidden w-[42rem]" ></div>
+					<div class="hidden w-[32rem]" ></div>
 				{/if}
 
 				{#if $$slots.footer}

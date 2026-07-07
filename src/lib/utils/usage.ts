@@ -70,7 +70,8 @@ const HIDDEN_USAGE_KEYS = new Set([
 	'tokens_cached',
 	'tokens_evaluated',
 	'cache_read_input_tokens',
-	'cache_creation_input_tokens'
+	'cache_creation_input_tokens',
+	'context_breakdown'
 ]);
 
 export const formatUsageNumber = (value: number): string => {
@@ -414,6 +415,119 @@ export type UsageDetailRow = {
 	label: string;
 	value: string;
 };
+
+export type ContextBreakdown = {
+	verified: boolean;
+	source?: string;
+	total: number;
+	system: number;
+	conversation: number;
+	tools: number;
+	memory: number;
+	skills: number;
+	files: number;
+	knowledge: number;
+	tools_detail?: {
+		user?: number;
+		builtin?: number;
+		mcp?: number;
+		external?: number;
+		terminal?: number;
+	};
+};
+
+export type ContextBreakdownRow = {
+	id: string;
+	label: string;
+	value: number;
+	percent: number;
+	nested?: boolean;
+	color: string;
+};
+
+const CONTEXT_BREAKDOWN_COLORS: Record<string, string> = {
+	system: 'bg-slate-400',
+	memory: 'bg-violet-400',
+	skills: 'bg-fuchsia-400',
+	files: 'bg-cyan-400',
+	knowledge: 'bg-amber-400',
+	tools: 'bg-blue-500',
+	conversation: 'bg-emerald-500',
+	'tools-builtin': 'bg-blue-400',
+	'tools-mcp': 'bg-indigo-400',
+	'tools-user': 'bg-sky-400',
+	'tools-external': 'bg-blue-300',
+	'tools-terminal': 'bg-teal-400'
+};
+
+export const getContextBreakdown = (usage: UsageRecord): ContextBreakdown | null => {
+	const raw = usage.context_breakdown;
+	if (!raw || typeof raw !== 'object') return null;
+	const breakdown = raw as ContextBreakdown;
+	if (!breakdown.verified || typeof breakdown.total !== 'number' || breakdown.total <= 0) {
+		return null;
+	}
+	return breakdown;
+};
+
+export const getContextBreakdownRows = (
+	breakdown: ContextBreakdown,
+	labels: Record<string, string>
+): ContextBreakdownRow[] => {
+	const total = breakdown.total;
+	const percent = (value: number) => (total > 0 ? Math.round((value / total) * 100) : 0);
+
+	const topLevel: Array<{ id: string; value: number }> = [
+		{ id: 'system', value: breakdown.system },
+		{ id: 'memory', value: breakdown.memory },
+		{ id: 'skills', value: breakdown.skills },
+		{ id: 'files', value: breakdown.files },
+		{ id: 'knowledge', value: breakdown.knowledge },
+		{ id: 'tools', value: breakdown.tools },
+		{ id: 'conversation', value: breakdown.conversation }
+	];
+
+	const rows: ContextBreakdownRow[] = [];
+
+	for (const entry of topLevel) {
+		if (entry.value <= 0) continue;
+		rows.push({
+			id: entry.id,
+			label: labels[entry.id] ?? entry.id,
+			value: entry.value,
+			percent: percent(entry.value),
+			color: CONTEXT_BREAKDOWN_COLORS[entry.id] ?? 'bg-gray-400'
+		});
+
+		if (entry.id !== 'tools' || !breakdown.tools_detail) continue;
+
+		const toolParts: Array<{ id: string; value: number }> = [
+			{ id: 'tools-builtin', value: breakdown.tools_detail.builtin ?? 0 },
+			{ id: 'tools-mcp', value: breakdown.tools_detail.mcp ?? 0 },
+			{ id: 'tools-user', value: breakdown.tools_detail.user ?? 0 },
+			{ id: 'tools-external', value: breakdown.tools_detail.external ?? 0 },
+			{ id: 'tools-terminal', value: breakdown.tools_detail.terminal ?? 0 }
+		];
+
+		for (const toolEntry of toolParts) {
+			if (toolEntry.value <= 0) continue;
+			const toolKey = toolEntry.id.replace('tools-', '');
+			rows.push({
+				id: toolEntry.id,
+				label: labels[`tools_${toolKey}`] ?? toolKey,
+				value: toolEntry.value,
+				percent: percent(toolEntry.value),
+				nested: true,
+				color: CONTEXT_BREAKDOWN_COLORS[toolEntry.id] ?? 'bg-blue-300'
+			});
+		}
+	}
+
+	return rows;
+};
+
+export const getContextBreakdownBarSegments = (rows: ContextBreakdownRow[]) =>
+	rows.filter((row) => !row.nested);
 
 export const getAdditionalUsageRows = (usage: UsageRecord): UsageDetailRow[] => {
 	const rows: UsageDetailRow[] = [];

@@ -89,7 +89,9 @@
 			try {
 				const data = JSON.parse(fileRaw);
 				onFileDrop(data.fileId, directory.id);
-			} catch {}
+			} catch {
+			// intentionally empty
+		}
 			return;
 		}
 		const dirRaw = e.dataTransfer?.getData('application/x-kb-dir-move');
@@ -99,7 +101,9 @@
 				if (data.dirId !== directory.id) {
 					onDirDrop(data.dirId, directory.id);
 				}
-			} catch {}
+			} catch {
+			// intentionally empty
+		}
 		}
 	}}
 >

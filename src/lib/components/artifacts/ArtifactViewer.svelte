@@ -17,12 +17,18 @@
 	import { config, settings } from '$lib/stores';
 	import { injectCsp } from '$lib/utils/csp';
 	import { injectStorageBridge } from '$lib/utils/artifact-storage-bridge';
-	import { artifactEditableSource, artifactPreviewHtml } from '$lib/utils/artifact-render';
+	import {
+		artifactEditableSource,
+		artifactPreviewHtml,
+		artifactDisplayLabel,
+		artifactIsMarkdown
+	} from '$lib/utils/artifact-render';
 	import { copyToClipboard } from '$lib/utils';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
+	import Markdown from '$lib/components/chat/Messages/Markdown.svelte';
 	import Download from '$lib/components/icons/Download.svelte';
 	import ArrowsPointingOut from '$lib/components/icons/ArrowsPointingOut.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
@@ -38,6 +44,7 @@
 	let iframeElement: HTMLIFrameElement;
 
 	let editingTitle = false;
+	let titleInput: HTMLInputElement;
 	let titleDraft = '';
 	let showDeleteConfirm = false;
 	let copied = false;
@@ -59,8 +66,6 @@
 	onDestroy(() => {
 		window.removeEventListener('message', handleStorageMessage);
 	});
-
-	// ── Storage bridge (parent side) ────────────────────────────────
 
 	async function handleStorageMessage(e: MessageEvent) {
 		if (!iframeElement || e.source !== iframeElement.contentWindow) return;
@@ -90,30 +95,36 @@
 			}
 
 			iframeElement.contentWindow?.postMessage({ _owsRequestId: reqId, result }, '*');
-		} catch (err: any) {
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : 'Storage error';
 			iframeElement.contentWindow?.postMessage(
-				{ _owsRequestId: reqId, error: err?.message ?? 'Storage error' },
+				{ _owsRequestId: reqId, error: message },
 				'*'
 			);
 		}
 	}
 
-	// ── Computed src doc ─────────────────────────────────────────────
+	$: editableSource = artifact
+		? artifactEditableSource(artifact.code, artifact.meta, artifact.type)
+		: null;
+
+	$: isMarkdown = artifact ? artifactIsMarkdown(artifact.type, artifact.meta) : false;
+	$: isIframe = artifact ? artifact.type === 'iframe' && !isMarkdown : false;
+	$: isSvg = artifact?.type === 'svg';
+
+	$: displayLabel = artifact ? artifactDisplayLabel(artifact.type, artifact.meta) : '';
 
 	$: srcdoc = (() => {
-		if (!artifact) return '';
+		if (!artifact || isMarkdown || isSvg) return '';
 		let html = artifactPreviewHtml(artifact.code, artifact.meta, artifact.type);
-		// Inject storage bridge before CSP so bridge script runs first
 		html = injectStorageBridge(html, id);
 		html = injectCsp(html, $config?.ui?.iframe_csp ?? '');
 		return html;
 	})();
 
-	$: editableSource = artifact
-		? artifactEditableSource(artifact.code, artifact.meta, artifact.type)
-		: null;
-
-	// ── Actions ──────────────────────────────────────────────────────
+	$: if (editingTitle && titleInput) {
+		titleInput.focus();
+	}
 
 	async function saveTitle() {
 		if (!artifact) return;
@@ -137,12 +148,20 @@
 	}
 
 	function download() {
-		if (!artifact) return;
-		const blob = new Blob([artifact.code], { type: 'text/html' });
+		if (!artifact || !editableSource) return;
+		const mime =
+			editableSource.extension === 'jsx'
+				? 'text/javascript'
+				: editableSource.extension === 'md'
+					? 'text/markdown'
+					: editableSource.extension === 'svg'
+						? 'image/svg+xml'
+						: 'text/html';
+		const blob = new Blob([editableSource.content], { type: mime });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `${artifact.title ?? 'artifact'}.html`;
+		a.download = `${artifact.title ?? 'artifact'}.${editableSource.extension}`;
 		document.body.appendChild(a);
 		a.click();
 		document.body.removeChild(a);
@@ -162,19 +181,17 @@
 	</div>
 {:else if artifact}
 	<div class="flex flex-col h-full w-full">
-		<!-- Toolbar -->
 		<div class="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 shrink-0">
-			<!-- Title -->
 			<div class="flex items-center gap-2 min-w-0">
 				{#if editingTitle}
 					<input
+						bind:this={titleInput}
 						class="text-sm font-medium bg-transparent border-b border-gray-400 dark:border-gray-500 outline-none text-gray-900 dark:text-white px-0.5 min-w-0 w-48"
 						bind:value={titleDraft}
 						on:keydown={(e) => {
 							if (e.key === 'Enter') saveTitle();
 							if (e.key === 'Escape') editingTitle = false;
 						}}
-						autofocus
 					/>
 					<button
 						class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-green-500"
@@ -205,12 +222,16 @@
 					</Tooltip>
 				{/if}
 
-				<span class="text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 shrink-0">
-					{artifact.type === 'iframe' ? 'HTML' : 'SVG'}
+				<span
+					class="text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded shrink-0
+						{displayLabel === 'React'
+						? 'bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400'
+						: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}"
+				>
+					{displayLabel}
 				</span>
 			</div>
 
-			<!-- Actions -->
 			<div class="flex items-center gap-1">
 				<button
 					class="text-xs px-2 py-1 rounded-md bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 transition text-gray-700 dark:text-gray-300"
@@ -232,7 +253,7 @@
 					</button>
 				</Tooltip>
 
-				{#if artifact.type === 'iframe'}
+				{#if isIframe}
 					<Tooltip content={$i18n.t('Full screen')}>
 						<button
 							class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition"
@@ -254,9 +275,14 @@
 			</div>
 		</div>
 
-		<!-- Content -->
 		<div class="flex-1 min-h-0 w-full">
-			{#if artifact.type === 'iframe'}
+			{#if isMarkdown}
+				<div class="w-full h-full overflow-y-auto px-6 py-5">
+					<div class="prose dark:prose-invert max-w-3xl mx-auto">
+						<Markdown id="library-artifact-md" content={artifact.code} done={true} />
+					</div>
+				</div>
+			{:else if isIframe}
 				<iframe
 					bind:this={iframeElement}
 					title={artifact.title ?? 'Artifact'}
@@ -266,9 +292,9 @@
 						? ' allow-forms'
 						: ''}"
 				></iframe>
-			{:else}
+			{:else if isSvg}
 				<div class="w-full h-full overflow-auto p-4">
-					<!-- svelte-ignore a11y-missing-attribute -->
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 					{@html artifact.code}
 				</div>
 			{/if}

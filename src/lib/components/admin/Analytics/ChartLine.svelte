@@ -49,6 +49,8 @@
 		viewBox="0 0 {w} {height - 20}"
 		class="h-[calc(100%-20px)] w-full"
 		preserveAspectRatio="none"
+		role="img"
+		aria-label="Analytics chart"
 		onmousemove={onMove}
 		onmouseleave={() => (hoveredIdx = null)}
 	>
@@ -58,8 +60,7 @@
 				fill="none"
 				stroke={colorMap.get(m)}
 				stroke-width="1.5"
-				class={hovered && !hovered.models?.[m] ? 'opacity-20' : ''}
-			/>
+				class={hovered && !hovered.models?.[m] ? 'opacity-20' : ''}></path>
 		{/each}
 		{#if hoveredIdx !== null}
 			<line
@@ -68,12 +69,11 @@
 				x2={getX(hoveredIdx)}
 				y2={ch + pad.t}
 				stroke="#ddd"
-				stroke-width="1"
-			/>
+				stroke-width="1"></line>
 			{#each models as m}
 				{@const v = hovered?.models?.[m] || 0}
 				{#if v > 0}
-					<circle cx={getX(hoveredIdx)} cy={getY(v)} r="3" fill={colorMap.get(m)} />
+					<circle cx={getX(hoveredIdx)} cy={getY(v)} r="3" fill={colorMap.get(m)}></circle>
 				{/if}
 			{/each}
 		{/if}

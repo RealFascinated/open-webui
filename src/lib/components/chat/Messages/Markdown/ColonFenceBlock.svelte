@@ -9,14 +9,14 @@
 	import DocumentDuplicate from '$lib/components/icons/DocumentDuplicate.svelte';
 
 	export let id: string = '';
-	export let token: any;
+	export let token: unknown;
 	export let tokenIdx: number = 0;
 
 	export let done: boolean = true;
 	export let editCodeBlock: boolean = true;
 	export let sourceIds: string[] = [];
-	export let onTaskClick: Function = () => {};
-	export let onSourceClick: Function = () => {};
+	export let onTaskClick: (...args: unknown[]) => unknown = () => {};
+	export let onSourceClick: (...args: unknown[]) => unknown = () => {};
 
 	const fenceType: string = token.fenceType ?? 'default';
 

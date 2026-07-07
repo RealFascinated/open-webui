@@ -36,7 +36,7 @@
 				: ''} hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg p-1.5 transition-all"
 			type="button"
 		>
-			<H1 />
+			<H1 ></H1>
 		</button>
 	</Tooltip>
 
@@ -48,7 +48,7 @@
 				: ''} hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg p-1.5 transition-all"
 			type="button"
 		>
-			<H2 />
+			<H2 ></H2>
 		</button>
 	</Tooltip>
 
@@ -60,7 +60,7 @@
 				: ''} hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg p-1.5 transition-all"
 			type="button"
 		>
-			<H3 />
+			<H3 ></H3>
 		</button>
 	</Tooltip>
 

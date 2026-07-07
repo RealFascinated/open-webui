@@ -15,8 +15,8 @@
 
 	const i18n = getContext('i18n');
 
-	export let output: any[] = [];
-	export let onChange: (output: any[]) => void = () => {};
+	export let output: unknown[] = [];
+	export let onChange: (output: unknown[]) => void = () => {};
 
 	let viewMode: 'visual' | 'json' = 'visual';
 	let jsonError = '';
@@ -92,13 +92,13 @@
 	interface DisplayItem {
 		type: 'message' | 'reasoning' | 'function_call' | 'code_interpreter' | 'openai_tool';
 		indices: number[];
-		item: any;
-		outputItem?: any;
+		item: unknown;
+		outputItem?: unknown;
 	}
 
-	function buildDisplayItems(items: any[]): DisplayItem[] {
+	function buildDisplayItems(items: unknown[]): DisplayItem[] {
 		const result: DisplayItem[] = [];
-		const outputByCallId: Record<string, { item: any; index: number }> = {};
+		const outputByCallId: Record<string, { item: unknown; index: number }> = {};
 
 		for (let i = 0; i < items.length; i++) {
 			if (items[i]?.type === 'function_call_output') {
@@ -136,27 +136,27 @@
 
 	// --- Helpers ---
 
-	function getMessageText(item: any): string {
+	function getMessageText(item: unknown): string {
 		return (item.content ?? [])
-			.filter((p: any) => p.type === 'output_text' || 'text' in p)
-			.map((p: any) => p.text ?? '')
+			.filter((p: unknown) => p.type === 'output_text' || 'text' in p)
+			.map((p: unknown) => p.text ?? '')
 			.join('\n');
 	}
 
 	function updateMessageText(idx: number, text: string) {
 		const next = [...output];
 		const item = { ...next[idx] };
-		const parts = (item.content ?? []).filter((p: any) => p.type === 'output_text' || 'text' in p);
+		const parts = (item.content ?? []).filter((p: unknown) => p.type === 'output_text' || 'text' in p);
 		item.content = [{ ...(parts[0] ?? { type: 'output_text' }), text }];
 		next[idx] = item;
 		output = next;
 		onChange(output);
 	}
 
-	function getReasoningText(item: any): string {
+	function getReasoningText(item: unknown): string {
 		return (item.summary ?? item.content ?? [])
-			.filter((p: any) => 'text' in p)
-			.map((p: any) => p.text ?? '')
+			.filter((p: unknown) => 'text' in p)
+			.map((p: unknown) => p.text ?? '')
 			.join('');
 	}
 
@@ -176,7 +176,7 @@
 		onChange(output);
 	}
 
-	function formatArgs(args: any): string {
+	function formatArgs(args: unknown): string {
 		if (!args) return '';
 		try {
 			return typeof args === 'string' ? args : JSON.stringify(args, null, 2);
@@ -246,8 +246,7 @@
 	{#if viewMode === 'json'}
 		<div
 			bind:this={cmContainer}
-			class="w-full rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800"
-		/>
+			class="w-full rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800"></div>
 		{#if jsonError}
 			<div class="text-xs text-red-500 mt-1.5 px-1">{jsonError}</div>
 		{/if}
@@ -278,7 +277,7 @@
 								}}
 								placeholder={$i18n.t('Message text...')}
 								rows="1"
-							/>
+							></textarea>
 						{:else if di.type === 'reasoning'}
 							<textarea
 								use:fitContent
@@ -290,7 +289,7 @@
 								}}
 								placeholder={$i18n.t('Reasoning text...')}
 								rows="1"
-							/>
+							></textarea>
 						{:else if di.type === 'function_call'}
 							<div class="text-sm p-1.5 text-gray-500 dark:text-gray-400">
 								{#if di.item.arguments}
@@ -335,6 +334,7 @@
 					<!-- Delete -->
 					<div class="pt-1.5">
 						<button
+							aria-label={$i18n.t('Delete')}
 							class="invisible group-hover:visible p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition rounded-lg"
 							on:click={() => deleteIndices(di.indices)}
 						>
@@ -349,8 +349,7 @@
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
-									d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-								/>
+									d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"></path>
 							</svg>
 						</button>
 					</div>

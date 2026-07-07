@@ -2,8 +2,8 @@ import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 type FolderForm = {
 	name?: string;
-	data?: Record<string, any>;
-	meta?: Record<string, any>;
+	data?: Record<string, unknown>;
+	meta?: Record<string, unknown>;
 	parent_id?: string | null;
 };
 
@@ -235,7 +235,7 @@ export const deleteFolderById = async (token: string, id: string, deleteContents
 	return res;
 };
 
-export const updateFolderAccessById = async (token: string, id: string, accessGrants: any[]) => {
+export const updateFolderAccessById = async (token: string, id: string, accessGrants: object[]) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/${id}/access/update`, {

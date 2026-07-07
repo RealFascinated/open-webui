@@ -44,22 +44,22 @@
 	export let placeholder = $i18n.t('Type here...');
 	export let chatInputElement;
 
-	export let id = null;
+	export const id = null;
 	export let channel = null;
 
 	export let typingUsers = [];
 	export let inputLoading = false;
 
-	export let onSubmit: Function = (e) => {};
-	export let onChange: Function = (e) => {};
-	export let onStop: Function = (e) => {};
+	export let onSubmit: (...args: unknown[]) => unknown = (e) => {};
+	export let onChange: (...args: unknown[]) => unknown = (e) => {};
+	export let onStop: (...args: unknown[]) => unknown = (e) => {};
 
 	export let scrollEnd = true;
-	export let scrollToBottom: Function = () => {};
+	export let scrollToBottom: (...args: unknown[]) => unknown = () => {};
 
 	export let disabled = false;
 	export let acceptFiles = true;
-	export let showFormattingToolbar = true;
+	export const showFormattingToolbar = true;
 
 	export let userSuggestions = false;
 	export let channelSuggestions = false;
@@ -79,8 +79,8 @@
 	let inputFiles;
 
 	let showInputVariablesModal = false;
-	let inputVariablesModalCallback: (variableValues: Record<string, any>) => void;
-	let inputVariables: Record<string, any> = {};
+	let inputVariablesModalCallback: (variableValues: Record<string, unknown>) => void;
+	let inputVariables: Record<string, unknown> = {};
 	let inputVariableValues = {};
 
 	const inputVariableHandler = async (text: string): Promise<string> => {
@@ -222,7 +222,7 @@
 		return text;
 	};
 
-	const replaceVariables = (variables: Record<string, any>) => {
+	const replaceVariables = (variables: Record<string, unknown>) => {
 		console.log('Replacing variables:', variables);
 
 		const chatInput = document.getElementById('chat-input');
@@ -722,6 +722,7 @@
 								class=" absolute -top-12 left-0 right-0 flex justify-center z-30 pointer-events-none"
 							>
 								<button
+									aria-label={$i18n.t('Scroll to bottom')}
 									class=" bg-white border border-gray-100 dark:border-none dark:bg-white/20 p-1.5 rounded-full pointer-events-auto"
 									on:click={() => {
 										scrollEnd = true;
@@ -849,6 +850,7 @@
 												</div>
 												<div class=" absolute -top-1 -right-1">
 													<button
+														aria-label={$i18n.t('Remove')}
 														class=" bg-white text-black border border-white rounded-full group-hover:visible invisible transition"
 														type="button"
 														on:click={() => {
@@ -1067,6 +1069,7 @@
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Stop')}>
 													<button
+														aria-label={$i18n.t('Stop')}
 														class="bg-white hover:bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5"
 														on:click={() => {
 															onStop();
@@ -1091,6 +1094,7 @@
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Send message')}>
 													<button
+														aria-label={$i18n.t('Send message')}
 														id="send-message-button"
 														class="{content !== '' || files.length !== 0
 															? 'bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 '

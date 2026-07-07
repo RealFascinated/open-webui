@@ -8,11 +8,11 @@
 
 	const i18n = getContext('i18n');
 
-	export let editHandler: Function;
-	export let cloneHandler: Function;
-	export let runHandler: Function = () => {};
-	export let deleteHandler: Function;
-	export let onClose: Function = () => {};
+	export let editHandler: (...args: unknown[]) => unknown;
+	export let cloneHandler: (...args: unknown[]) => unknown;
+	export let runHandler: (...args: unknown[]) => unknown = () => {};
+	export let deleteHandler: (...args: unknown[]) => unknown;
+	export let onClose: (...args: unknown[]) => unknown = () => {};
 
 	let show = false;
 </script>
@@ -52,8 +52,7 @@
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
-					/>
+						d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"></path>
 				</svg>
 
 				<div class="flex items-center">{$i18n.t('Edit')}</div>
@@ -90,8 +89,7 @@
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"
-					/>
+						d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"></path>
 				</svg>
 
 				<div class="flex items-center">{$i18n.t('Run Now')}</div>

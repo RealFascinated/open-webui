@@ -98,6 +98,7 @@
 					.pipeThrough(splitStream('\n'))
 					.getReader();
 
+				// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 				while (true) {
 					try {
 						const { value, done } = await reader.read();
@@ -194,6 +195,7 @@
 				}
 			});
 
+			// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 			while (true) {
 				try {
 					const { value, done } = await reader.read();
@@ -244,11 +246,9 @@
 				} catch (err) {
 					if (err.name !== 'AbortError') {
 						console.error(err);
-						if (typeof err !== 'string') {
-							err = err.message;
-						}
+						const message = typeof err === 'string' ? err : err.message;
 
-						toast.error(`${err}`);
+						toast.error(`${message}`);
 						// opts.callback({ success: false, error, modelName: opts.modelName });
 					} else {
 						break;
@@ -320,6 +320,7 @@
 				.pipeThrough(splitStream('\n'))
 				.getReader();
 
+			// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 			while (true) {
 				const { value, done } = await reader.read();
 				if (done) break;
@@ -371,6 +372,7 @@
 					.pipeThrough(splitStream('\n'))
 					.getReader();
 
+				// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 				while (true) {
 					const { value, done } = await reader.read();
 					if (done) break;
@@ -515,6 +517,7 @@
 				.pipeThrough(splitStream('\n'))
 				.getReader();
 
+			// eslint-disable-next-line no-constant-condition -- intentional stream read loop
 			while (true) {
 				const { value, done } = await reader.read();
 				if (done) break;
@@ -616,6 +619,7 @@
 						<div>
 							<Tooltip content="Update All Models" placement="top">
 								<button
+									aria-label={$i18n.t('Update All Models')}
 									class="flex gap-2 items-center bg-transparent rounded-lg transition"
 									on:click={() => {
 										updateModelsHandler();
@@ -628,11 +632,9 @@
 										class="w-4 h-4"
 									>
 										<path
-											d="M7 1a.75.75 0 0 1 .75.75V6h-1.5V1.75A.75.75 0 0 1 7 1ZM6.25 6v2.94L5.03 7.72a.75.75 0 0 0-1.06 1.06l2.5 2.5a.75.75 0 0 0 1.06 0l2.5-2.5a.75.75 0 1 0-1.06-1.06L7.75 8.94V6H10a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.25Z"
-										/>
+											d="M7 1a.75.75 0 0 1 .75.75V6h-1.5V1.75A.75.75 0 0 1 7 1ZM6.25 6v2.94L5.03 7.72a.75.75 0 0 0-1.06 1.06l2.5 2.5a.75.75 0 0 0 1.06 0l2.5-2.5a.75.75 0 1 0-1.06-1.06L7.75 8.94V6H10a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.25Z"></path>
 										<path
-											d="M4.268 14A2 2 0 0 0 6 15h6a2 2 0 0 0 2-2v-3a2 2 0 0 0-1-1.732V11a3 3 0 0 1-3 3H4.268Z"
-										/>
+											d="M4.268 14A2 2 0 0 0 6 15h6a2 2 0 0 0 2-2v-3a2 2 0 0 0-1-1.732V11a3 3 0 0 1-3 3H4.268Z"></path>
 									</svg>
 								</button>
 							</Tooltip>
@@ -678,12 +680,10 @@
 											</style>
 											<path
 												d="M12,1A11,11,0,1,0,23,12,11,11,0,0,0,12,1Zm0,19a8,8,0,1,1,8-8A8,8,0,0,1,12,20Z"
-												opacity=".25"
-											/>
+												opacity=".25"></path>
 											<path
 												d="M10.14,1.16a11,11,0,0,0-9,8.92A1.59,1.59,0,0,0,2.46,12,1.52,1.52,0,0,0,4.11,10.7a8,8,0,0,1,6.66-6.61A1.42,1.42,0,0,0,12,2.69h0A1.57,1.57,0,0,0,10.14,1.16Z"
-												class="spinner_ajPY"
-											/>
+												class="spinner_ajPY"></path>
 										</svg>
 									</div>
 								{:else}
@@ -694,11 +694,9 @@
 										class="w-4 h-4"
 									>
 										<path
-											d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z"
-										/>
+											d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z"></path>
 										<path
-											d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z"
-										/>
+											d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z"></path>
 									</svg>
 								{/if}
 							</button>
@@ -720,6 +718,7 @@
 
 							<Tooltip content={$i18n.t('Cancel')}>
 								<button
+									aria-label={$i18n.t('Cancel')}
 									class="text-gray-800 dark:text-gray-100"
 									on:click={() => {
 										cancelUpdateModelHandler(updateModelId);
@@ -739,8 +738,7 @@
 											stroke-linecap="round"
 											stroke-linejoin="round"
 											stroke-width="2"
-											d="M6 18 17.94 6M18 18 6.06 6"
-										/>
+											d="M6 18 17.94 6M18 18 6.06 6"></path>
 									</svg>
 								</button>
 							</Tooltip>
@@ -768,6 +766,7 @@
 
 											<Tooltip content={$i18n.t('Cancel')}>
 												<button
+													aria-label={$i18n.t('Cancel')}
 													class="text-gray-800 dark:text-gray-100"
 													on:click={() => {
 														cancelModelPullHandler(model);
@@ -787,8 +786,7 @@
 															stroke-linecap="round"
 															stroke-linejoin="round"
 															stroke-width="2"
-															d="M6 18 17.94 6M18 18 6.06 6"
-														/>
+															d="M6 18 17.94 6M18 18 6.06 6"></path>
 													</svg>
 												</button>
 											</Tooltip>
@@ -827,6 +825,7 @@
 						</div>
 						<Tooltip content={$i18n.t('Delete Model')} placement="top">
 							<button
+								aria-label={$i18n.t('Delete Model')}
 								class="px-2.5 bg-gray-50 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
 								on:click={() => {
 									showModelDeleteConfirm = true;
@@ -842,8 +841,7 @@
 									<path
 										fill-rule="evenodd"
 										d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z"
-										clip-rule="evenodd"
-									/>
+										clip-rule="evenodd"></path>
 								</svg>
 							</button>
 						</Tooltip>
@@ -868,13 +866,13 @@
 								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-100 dark:bg-gray-850 outline-hidden resize-none scrollbar-hidden"
 								rows="6"
 								placeholder={`e.g. {"model": "my-modelfile", "from": "ollama:7b"})`}
-								disabled={createModelLoading}
-							/>
+								disabled={createModelLoading}></textarea>
 						</div>
 
 						<div class="flex self-start">
 							<Tooltip content={$i18n.t('Create Model')} placement="top">
 								<button
+									aria-label={$i18n.t('Create Model')}
 									class="px-2.5 py-2.5 bg-gray-50 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition disabled:cursor-not-allowed"
 									on:click={() => {
 										createModelHandler();
@@ -890,11 +888,9 @@
 										class="size-4"
 									>
 										<path
-											d="M7.25 10.25a.75.75 0 0 0 1.5 0V4.56l2.22 2.22a.75.75 0 1 0 1.06-1.06l-3.5-3.5a.75.75 0 0 0-1.06 0l-3.5 3.5a.75.75 0 0 0 1.06 1.06l2.22-2.22v5.69Z"
-										/>
+											d="M7.25 10.25a.75.75 0 0 0 1.5 0V4.56l2.22 2.22a.75.75 0 1 0 1.06-1.06l-3.5-3.5a.75.75 0 0 0-1.06 0l-3.5 3.5a.75.75 0 0 0 1.06 1.06l2.22-2.22v5.69Z"></path>
 										<path
-											d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z"
-										/>
+											d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z"></path>
 									</svg>
 								</button>
 							</Tooltip>
@@ -903,7 +899,7 @@
 
 					{#if createModelDigest !== ''}
 						<div class="flex flex-col mt-1">
-							<div class="font-medium mb-1">{createModelTag}</div>
+							<div class="font-medium mb-1">{createModelName}</div>
 							<div class="">
 								<div class="flex flex-row justify-between space-x-4 pr-2">
 									<div class=" flex-1">
@@ -1042,12 +1038,10 @@
 													</style>
 													<path
 														d="M12,1A11,11,0,1,0,23,12,11,11,0,0,0,12,1Zm0,19a8,8,0,1,1,8-8A8,8,0,0,1,12,20Z"
-														opacity=".25"
-													/>
+														opacity=".25"></path>
 													<path
 														d="M10.14,1.16a11,11,0,0,0-9,8.92A1.59,1.59,0,0,0,2.46,12,1.52,1.52,0,0,0,4.11,10.7a8,8,0,0,1,6.66-6.61A1.42,1.42,0,0,0,12,2.69h0A1.57,1.57,0,0,0,10.14,1.16Z"
-														class="spinner_ajPY"
-													/>
+														class="spinner_ajPY"></path>
 												</svg>
 											</div>
 										{:else}
@@ -1058,11 +1052,9 @@
 												class="w-4 h-4"
 											>
 												<path
-													d="M7.25 10.25a.75.75 0 0 0 1.5 0V4.56l2.22 2.22a.75.75 0 1 0 1.06-1.06l-3.5-3.5a.75.75 0 0 0-1.06 0l-3.5 3.5a.75.75 0 0 0 1.06 1.06l2.22-2.22v5.69Z"
-												/>
+													d="M7.25 10.25a.75.75 0 0 0 1.5 0V4.56l2.22 2.22a.75.75 0 1 0 1.06-1.06l-3.5-3.5a.75.75 0 0 0-1.06 0l-3.5 3.5a.75.75 0 0 0 1.06 1.06l2.22-2.22v5.69Z"></path>
 												<path
-													d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z"
-												/>
+													d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z"></path>
 											</svg>
 										{/if}
 									</button>
@@ -1079,8 +1071,7 @@
 									<textarea
 										bind:value={modelFileContent}
 										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-100 dark:bg-gray-850 outline-hidden resize-none"
-										rows="6"
-									/>
+										rows="6"></textarea>
 								</div>
 							</div>
 						{/if}

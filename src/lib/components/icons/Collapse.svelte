@@ -15,27 +15,23 @@
 		stroke="currentColor"
 		stroke-width="1.5"
 		stroke-linecap="round"
-		stroke-linejoin="round"
-	/>
+		stroke-linejoin="round"></path>
 	<path
 		d="M4 20L9 15M9 15V19M9 15H5"
 		stroke="currentColor"
 		stroke-width="1.5"
 		stroke-linecap="round"
-		stroke-linejoin="round"
-	/>
+		stroke-linejoin="round"></path>
 	<path
 		d="M20 4L15 9M15 9V5M15 9H19"
 		stroke="currentColor"
 		stroke-width="1.5"
 		stroke-linecap="round"
-		stroke-linejoin="round"
-	/>
+		stroke-linejoin="round"></path>
 	<path
 		d="M4 4L9 9M9 9V5M9 9H5"
 		stroke="currentColor"
 		stroke-width="1.5"
 		stroke-linecap="round"
-		stroke-linejoin="round"
-	/>
+		stroke-linejoin="round"></path>
 </svg>

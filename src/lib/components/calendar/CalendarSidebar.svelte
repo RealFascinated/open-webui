@@ -111,6 +111,7 @@
 				<button
 					class="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition"
 					on:click={() => navigateMini(-1)}
+					aria-label={$i18n.t('Previous month')}
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -122,13 +123,13 @@
 						><path
 							stroke-linecap="round"
 							stroke-linejoin="round"
-							d="M15.75 19.5 8.25 12l7.5-7.5"
-						/></svg
+							d="M15.75 19.5 8.25 12l7.5-7.5"></path></svg
 					>
 				</button>
 				<button
 					class="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition"
 					on:click={() => navigateMini(1)}
+					aria-label={$i18n.t('Next month')}
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -140,8 +141,7 @@
 						><path
 							stroke-linecap="round"
 							stroke-linejoin="round"
-							d="m8.25 4.5 7.5 7.5-7.5 7.5"
-						/></svg
+							d="m8.25 4.5 7.5 7.5-7.5 7.5"></path></svg
 					>
 				</button>
 			</div>
@@ -191,7 +191,7 @@
 					stroke-width="2"
 					stroke="currentColor"
 					class="size-3 text-gray-400 dark:text-gray-500"
-					><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg
+					><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"></path></svg
 				>
 			</button>
 		</div>
@@ -237,7 +237,7 @@
 								stroke="currentColor"
 								class="size-3"
 							>
-								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"></path>
 							</svg>
 						</span>
 					{/if}

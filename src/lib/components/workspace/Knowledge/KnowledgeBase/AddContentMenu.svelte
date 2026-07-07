@@ -15,11 +15,11 @@
 
 	const i18n = getContext('i18n');
 
-	export let onClose: Function = () => {};
+	export let onClose: (...args: unknown[]) => unknown = () => {};
 
-	export let onSync: Function = () => {};
-	export let onUpload: Function = (data) => {};
-	export let onReset: Function = () => {};
+	export let onSync: (...args: unknown[]) => unknown = () => {};
+	export let onUpload: (...args: unknown[]) => unknown = (data) => {};
+	export let onReset: (...args: unknown[]) => unknown = () => {};
 
 	let show = false;
 </script>
@@ -36,6 +36,7 @@
 	<Tooltip content={$i18n.t('Add Content')}>
 		<button
 			class=" p-1.5 rounded-xl hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition font-medium text-sm flex items-center space-x-1"
+			aria-label={$i18n.t('Add Content')}
 			on:click={(e) => {
 				e.stopPropagation();
 				show = true;
@@ -48,8 +49,7 @@
 				class="w-4 h-4"
 			>
 				<path
-					d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"
-				/>
+					d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path>
 			</svg>
 		</button>
 	</Tooltip>

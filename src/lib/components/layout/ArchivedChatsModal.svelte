@@ -1,5 +1,5 @@
 <script lang="ts">
-	// @ts-ignore
+	// @ts-expect-error -- legacy type workaround
 	import fileSaver from 'file-saver';
 	import type { Writable } from 'svelte/store';
 	const { saveAs } = fileSaver;
@@ -18,14 +18,14 @@
 	import UnarchiveAllConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import Spinner from '../common/Spinner.svelte';
 
-	const i18n: Writable<any> = getContext('i18n');
+	const i18n: Writable<unknown> = getContext('i18n');
 
 	export let show = false;
 	export let onUpdate = () => {};
 	export let onDelete: (id: string) => void = () => {};
 
 	let loading = false;
-	let chatList: any[] | null = null;
+	let chatList: unknown[] | null = null;
 	let chatCount: number | null = null;
 	let page = 1;
 
@@ -35,11 +35,11 @@
 
 	let allChatsLoaded = false;
 	let chatListLoading = false;
-	let searchDebounceTimeout: any;
+	let searchDebounceTimeout: unknown;
 
 	let showUnarchiveAllConfirmDialog = false;
 
-	let filter: any = {};
+	let filter: unknown = {};
 	$: filter = {
 		...(query ? { query } : {}),
 		...(orderBy ? { order_by: orderBy } : {}),

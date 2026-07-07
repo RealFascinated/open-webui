@@ -205,12 +205,12 @@
 		let msgList = [];
 
 		if (history?.messages && history?.currentId) {
-			msgList = createMessagesList(history, history.currentId).map((m: any) => ({
+			msgList = createMessagesList(history, history.currentId).map((m: unknown) => ({
 				role: m.role,
 				content: getOutputText(m.output) || m.content || ''
 			}));
 		} else {
-			msgList = (chatContent?.messages ?? []).map((m: any) => ({
+			msgList = (chatContent?.messages ?? []).map((m: unknown) => ({
 				role: m.role,
 				content: getOutputText(m.output) || m.content || ''
 			}));

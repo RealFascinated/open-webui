@@ -16,7 +16,7 @@
 
 	import AddConnectionModal from '$lib/components/AddConnectionModal.svelte';
 
-	export let saveSettings: Function;
+	export let saveSettings: (...args: unknown[]) => unknown;
 
 	let config = null;
 

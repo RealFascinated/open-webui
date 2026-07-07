@@ -131,7 +131,9 @@
 						const data = JSON.parse(raw);
 						const paths = data.paths || (data.path ? [data.path] : []);
 						for (const p of paths) onMove(p, crumb.path);
-					} catch {}
+					} catch {
+			// intentionally empty
+		}
 				}}
 			>
 				{crumb.label}

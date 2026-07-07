@@ -65,9 +65,13 @@ const sandboxScript = String.raw`
 					const stat = pyodide.FS.stat(path + '/' + name);
 					const isDir = pyodide.FS.isDir(stat.mode);
 					entries.push({ name: name, type: isDir ? 'directory' : 'file', size: isDir ? 0 : stat.size });
-				} catch {}
+				} catch {
+			// intentionally empty
+		}
 			}
-		} catch {}
+		} catch {
+			// intentionally empty
+		}
 		return entries;
 	}
 
@@ -83,7 +87,9 @@ const sandboxScript = String.raw`
 			});
 			for (const name of names) remove(path + '/' + name);
 			pyodide.FS.rmdir(path);
-		} catch {}
+		} catch {
+			// intentionally empty
+		}
 	}
 
 	function clean(value) {

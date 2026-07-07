@@ -138,15 +138,12 @@
 		}))}
 	>
 		<svelte:fragment slot="footer">
-			<div
-				bind:this={effortTriggerElement}
-				class="relative"
-				on:mouseenter={openEffortPanel}
-				on:mouseleave={closeEffortPanel}
-			>
+			<div bind:this={effortTriggerElement} class="relative">
 				<button
 					class="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
 					type="button"
+					on:mouseenter={openEffortPanel}
+					on:mouseleave={closeEffortPanel}
 					on:click={toggleEffortPanel}
 				>
 					<span class="flex-1 text-left font-medium">{$i18n.t('Effort')}</span>
@@ -160,6 +157,7 @@
 						class="absolute bottom-0 z-[60] flex {effortOpensLeft
 							? 'right-full pr-3'
 							: 'left-full pl-3'}"
+						role="presentation"
 						on:mouseenter={openEffortPanel}
 						on:mouseleave={closeEffortPanel}
 					>

@@ -6,6 +6,9 @@
 		formatUsageNumber,
 		getAdditionalUsageRows,
 		getCachedPercent,
+		getContextBreakdown,
+		getContextBreakdownBarSegments,
+		getContextBreakdownRows,
 		getContextUsagePercent,
 		getContextUsedTokens,
 		getContextWindowSize,
@@ -42,6 +45,23 @@
 	$: progressPercent = contextPercent ?? 0;
 	$: strokeDashoffset = circumference - (progressPercent / 100) * circumference;
 	$: additionalRows = getAdditionalUsageRows(usage);
+	$: contextBreakdown = getContextBreakdown(usage);
+	$: breakdownLabels = {
+		system: $i18n.t('System'),
+		memory: $i18n.t('Memory'),
+		skills: $i18n.t('Skills'),
+		files: $i18n.t('Files'),
+		knowledge: $i18n.t('Knowledge'),
+		tools: $i18n.t('Tools'),
+		conversation: $i18n.t('Conversation'),
+		tools_builtin: $i18n.t('Builtin tools'),
+		tools_mcp: $i18n.t('MCP tools'),
+		tools_user: $i18n.t('User tools'),
+		tools_external: $i18n.t('Tool servers'),
+		tools_terminal: $i18n.t('Terminal tools')
+	};
+	$: breakdownRows = contextBreakdown ? getContextBreakdownRows(contextBreakdown, breakdownLabels) : [];
+	$: breakdownBarSegments = getContextBreakdownBarSegments(breakdownRows);
 
 	$: usageLevel =
 		contextPercent === null ? 'none' : contextPercent >= 70 ? 'crit' : contextPercent >= 25 ? 'warn' : 'ok';
@@ -150,6 +170,36 @@
 							class="h-full rounded-full transition-all duration-300 {progressClass}"
 							style:width="{Math.max(contextPercent > 0 ? 2 : 0, contextPercent)}%"
 						></div>
+					</div>
+				</div>
+			{/if}
+
+			{#if breakdownRows.length > 0}
+				<div class="px-3.5 py-3 border-b border-gray-100 dark:border-gray-800/80">
+					<div class="text-[10px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">
+						{$i18n.t('Context breakdown')}
+					</div>
+
+					<div class="mb-2.5 flex h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+						{#each breakdownBarSegments as segment (segment.id)}
+							<div
+								class="{segment.color} h-full"
+								style:width="{Math.max(segment.percent > 0 ? 1 : 0, segment.percent)}%"
+								title="{segment.label} ({segment.percent}%)"
+							></div>
+						{/each}
+					</div>
+
+					<div class="space-y-1.5 text-xs">
+						{#each breakdownRows as row (row.id)}
+							<div class="flex items-center justify-between gap-3 {row.nested ? 'pl-3' : ''}">
+								<span class="text-gray-500 dark:text-gray-400 truncate">{row.label}</span>
+								<span class="text-gray-900 dark:text-white tabular-nums shrink-0">
+									{formatUsageNumber(row.value)}
+									<span class="text-gray-400 dark:text-gray-500">({row.percent}%)</span>
+								</span>
+							</div>
+						{/each}
 					</div>
 				</div>
 			{/if}

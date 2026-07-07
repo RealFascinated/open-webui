@@ -21,7 +21,7 @@
 
 	let chat = null;
 	let shareUrl = null;
-	let accessGrants: any[] = [];
+	let accessGrants: unknown[] = [];
 	const i18n = getContext('i18n');
 
 	const shareLocalChat = async () => {

@@ -73,8 +73,8 @@ export const tools = writable(null);
 export const skills = writable(null);
 export const functions = writable(null);
 
-export const toolServers: Writable<any[]> = writable([]);
-export const terminalServers: Writable<any[]> = writable([]);
+export const toolServers: Writable<ToolServerData[]> = writable([]);
+export const terminalServers: Writable<TerminalServerConnection[]> = writable([]);
 export const terminalServersLoaded = writable(false);
 
 // Persistent Pyodide worker for code interpreter FS
@@ -86,7 +86,7 @@ export const settings: Writable<Settings> = writable({});
 
 export const audioQueue = writable<AudioQueue | null>(null);
 export const chatRequestQueues: Writable<
-	Record<string, { id: string; prompt: string; files: any[] }[]>
+	Record<string, { id: string; prompt: string; files: Record<string, unknown>[] }[]>
 > = writable({});
 
 export const sidebarWidth = writable(260);
@@ -129,6 +129,9 @@ export type ArtifactContent = {
 };
 export const artifactContents: Writable<ArtifactContent[] | null> = writable(null);
 
+/** identifier or `title:<title>` → published artifact id for the active chat */
+export const publishedArtifactIdMap: Writable<Record<string, string>> = writable({});
+
 export const embed = writable(null);
 
 export const temporaryChatEnabled = writable(false);
@@ -138,7 +141,7 @@ export const temporaryChatEnabled = writable(false);
 export type DesktopEventFile = { name: string; mimeType: string; dataUrl: string };
 export type DesktopEvent = {
 	type: string;
-	data?: any;
+	data?: unknown;
 };
 export const desktopEvent: Writable<DesktopEvent | null> = writable(null);
 export const scrollPaginationEnabled = writable(false);
@@ -200,10 +203,42 @@ type OllamaModelDetails = {
 	quantization_level: string;
 };
 
+type ToolServerConnection = {
+	url?: string;
+	key?: string;
+	auth_type?: string;
+	path?: string;
+	spec_type?: string;
+	spec?: string;
+	config?: { enable?: boolean };
+	[key: string]: unknown;
+};
+
+export type ToolServerData = {
+	url?: string;
+	openapi?: { info?: { title?: string; version?: string; description?: string } };
+	info?: Record<string, unknown>;
+	specs?: Record<string, unknown>[];
+	system_prompt?: string;
+	error?: string;
+	id?: string;
+	[key: string]: unknown;
+};
+
+type TerminalServerConnection = {
+	url: string;
+	key?: string;
+	auth_type?: string;
+	name?: string;
+	enabled?: boolean;
+	id?: string;
+	path?: string;
+};
+
 type Settings = {
 	pinnedModels?: never[];
-	toolServers?: any[];
-	terminalServers?: any[];
+	toolServers?: ToolServerConnection[];
+	terminalServers?: TerminalServerConnection[];
 	showUpdateToast?: boolean;
 	showChangelog?: boolean;
 	showEmojiInCall?: boolean;
@@ -213,23 +248,23 @@ type Settings = {
 	notificationSound?: boolean;
 	notificationSoundAlways?: boolean;
 	stylizedPdfExport?: boolean;
-	notifications?: any;
+	notifications?: Record<string, unknown>;
 	imageCompression?: boolean;
-	imageCompressionSize?: any;
+	imageCompressionSize?: number;
 	textScale?: number;
 	widescreenMode?: null;
 	largeTextAsFile?: boolean;
 	promptAutocomplete?: boolean;
 	hapticFeedback?: boolean;
-	responseAutoCopy?: any;
+	responseAutoCopy?: boolean;
 	richTextInput?: boolean;
-	params?: any;
-	userLocation?: any;
-	webSearch?: any;
+	params?: Record<string, unknown>;
+	userLocation?: boolean | Record<string, unknown>;
+	webSearch?: boolean | string | null;
 	memory?: boolean;
 	autoTags?: boolean;
 	autoFollowUps?: boolean;
-	splitLargeChunks?(body: any, splitLargeChunks: any): unknown;
+	splitLargeChunks?(body: unknown, splitLargeChunks: unknown): unknown;
 	backgroundImageUrl?: null;
 	landingPageMode?: string;
 	iframeSandboxAllowForms?: boolean;
@@ -276,8 +311,8 @@ type ModelOptions = {
 };
 
 type AudioSettings = {
-	stt: any;
-	tts: any;
+	stt: Record<string, unknown>;
+	tts: Record<string, unknown>;
 	STTEngine?: string;
 	TTSEngine?: string;
 	speaker?: string;
@@ -300,7 +335,7 @@ type Document = {
 };
 
 type Config = {
-	license_metadata: any;
+	license_metadata: Record<string, unknown> | null;
 	status: boolean;
 	name: string;
 	version: string;
@@ -349,7 +384,7 @@ type PromptSuggestion = {
 };
 
 export type SessionUser = {
-	permissions: any;
+	permissions: Record<string, unknown>;
 	id: string;
 	email: string;
 	name: string;

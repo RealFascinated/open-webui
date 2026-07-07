@@ -57,7 +57,7 @@
 		});
 
 		// legacy {{TOOL:toolId}} pattern (for backward compatibility)
-		let toolIdPattern = /\{\{TOOL:([^\}]+)\}\}/g;
+		let toolIdPattern = /\{\{TOOL:([^}]+)\}\}/g;
 
 		// Remove all TOOL placeholders from the prompt
 		prompt = prompt.replace(toolIdPattern, '');

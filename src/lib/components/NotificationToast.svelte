@@ -9,7 +9,7 @@
 
 	const dispatch = createEventDispatcher();
 
-	export let onClick: Function = () => {};
+	export let onClick: (...args: unknown[]) => unknown = () => {};
 	export let title: string = 'HI';
 	export let content: string;
 
@@ -83,7 +83,8 @@
 </script>
 
 <div
-	role="status"
+	role="button"
+	tabindex="0"
 	aria-live="polite"
 	class="group relative flex gap-2.5 text-left min-w-[var(--width)] w-full dark:bg-gray-850 dark:text-white bg-white text-black border border-gray-100 dark:border-gray-800 rounded-3xl px-4 py-3.5 cursor-pointer select-none"
 	on:dragstart|preventDefault
@@ -118,6 +119,7 @@
 		{/if}
 
 		<div class=" line-clamp-2 text-xs self-center dark:text-gray-300 font-normal">
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 			{@html DOMPurify.sanitize(marked(DOMPurify.sanitize(content, { ALLOWED_TAGS: [] })))}
 		</div>
 	</div>

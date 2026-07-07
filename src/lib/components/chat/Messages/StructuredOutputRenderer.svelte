@@ -24,14 +24,14 @@
 	export let topPadding = false;
 	export let sourceIds: string[] = [];
 	export let formatMessageContent: (content: string) => string = (content) => content;
-	export let onSave: any = () => {};
-	export let onSourceClick: any = () => {};
-	export let onTaskClick: any = () => {};
-	export let onUpdate: any = () => {};
-	export let onPreview: any = () => {};
+	export let onSave: unknown = () => {};
+	export let onSourceClick: unknown = () => {};
+	export let onTaskClick: unknown = () => {};
+	export let onUpdate: unknown = () => {};
+	export let onPreview: unknown = () => {};
 
-	const getDetailTitle = (detailToken: OutputDetailToken): any => detailToken.summary;
-	const getDetailAttributes = (detailToken: OutputDetailToken): any => detailToken.attributes;
+	const getDetailTitle = (detailToken: OutputDetailToken): unknown => detailToken.summary;
+	const getDetailAttributes = (detailToken: OutputDetailToken): unknown => detailToken.attributes;
 
 	$: displayItems = buildOutputDisplayItems(output, content) as OutputDisplayItem[];
 </script>

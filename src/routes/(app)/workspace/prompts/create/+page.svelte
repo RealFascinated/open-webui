@@ -13,7 +13,7 @@
 		command: string;
 		content: string;
 		tags: string[];
-		access_grants: any[];
+		access_grants: unknown[];
 	} | null = null;
 
 	let clone = false;

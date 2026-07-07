@@ -15,7 +15,7 @@
 
 	export let show = false;
 	export let accessGrants: AccessGrant[] = [];
-	export let accessControl: any = undefined;
+	export let accessControl: unknown = undefined;
 	export let accessRoles = ['read'];
 
 	export let share = true;

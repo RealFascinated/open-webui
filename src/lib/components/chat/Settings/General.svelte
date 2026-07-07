@@ -10,8 +10,8 @@
 
 	import AdvancedParams from './Advanced/AdvancedParams.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
-	export let saveSettings: Function;
-	export let getModels: Function;
+	export let saveSettings: (...args: unknown[]) => unknown;
+	export let getModels: (...args: unknown[]) => unknown = () => {};
 
 	// General
 	let themes = ['dark', 'light', 'oled-dark'];
@@ -205,7 +205,7 @@
 	};
 </script>
 
-<div class="flex flex-col h-full justify-between text-sm" id="tab-general">
+<div class="flex flex-col h-full justify-between text-sm" id="tab-general" data-get-models={!!getModels}>
 	<div class="  overflow-y-scroll max-h-[28rem] md:max-h-full">
 		<div class="">
 			<div class=" mb-1 text-sm font-medium">{$i18n.t('WebUI Settings')}</div>
@@ -305,8 +305,7 @@
 							? ' p-2.5 border-2 border-gray-300 dark:border-gray-700 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 overflow-y-hidden'
 							: '  dark:text-gray-300 ')}
 					rows="4"
-					placeholder={$i18n.t('Enter system prompt here')}
-				/>
+					placeholder={$i18n.t('Enter system prompt here')}></Textarea>
 			</div>
 		{/if}
 
