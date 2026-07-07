@@ -204,22 +204,26 @@ async def compute_context_breakdown(
     url_idx: int | str,
     headers: dict | None,
     cookies: dict | None,
+    payload_messages: list | None = None,
 ) -> dict | None:
     cached_capability = _is_capability_cached(url_idx, base_url)
     if cached_capability is False:
         return None
 
-    final_messages = snapshots.get('final')
+    middleware_final = snapshots.get('final')
     base_messages = snapshots.get('base')
-    if not final_messages or base_messages is None:
+    if not middleware_final or base_messages is None:
         return None
+
+    # Model params system prompt is applied in openai.py after middleware snapshots.
+    send_messages = payload_messages if payload_messages is not None else middleware_final
 
     tools_list = list(tools or [])
     specs_by_source = collect_tool_specs_by_source(tools_dict or {}, tools_list)
 
     jobs: list[tuple[str, list, list | None]] = [
-        ('total', final_messages, tools_list or None),
-        ('no_tools', final_messages, None),
+        ('total', send_messages, tools_list or None),
+        ('no_tools', send_messages, None),
         ('conversation', non_system_messages(base_messages), None),
     ]
 
@@ -238,6 +242,7 @@ async def compute_context_breakdown(
     if 'pre_rag' in snapshots:
         active_layers.append('knowledge')
         jobs.append(('knowledge_pre', snapshots['pre_rag'], tools_list or None))
+        jobs.append(('knowledge_post', middleware_final, tools_list or None))
 
     tool_categories = [key for key in TOOL_SOURCE_KEYS if specs_by_source.get(key)]
     remaining_tools = list(tools_list)
@@ -245,9 +250,9 @@ async def compute_context_breakdown(
         if category not in tool_categories:
             continue
         category_tools = specs_by_source.get(category) or []
-        jobs.append((f'tools_with_{category}', final_messages, remaining_tools or None))
+        jobs.append((f'tools_with_{category}', send_messages, remaining_tools or None))
         remaining_tools = _tools_without_category(remaining_tools, category_tools)
-        jobs.append((f'tools_without_{category}', final_messages, remaining_tools or None))
+        jobs.append((f'tools_without_{category}', send_messages, remaining_tools or None))
 
     try:
         timeout = aiohttp.ClientTimeout(total=BREAKDOWN_TIMEOUT_SECONDS)
@@ -282,7 +287,7 @@ async def compute_context_breakdown(
     if 'files' in active_layers:
         files = int(counts['files_post']) - int(counts['files_pre'])  # type: ignore[arg-type]
     if 'knowledge' in active_layers:
-        knowledge = total - int(counts['knowledge_pre'])  # type: ignore[arg-type]
+        knowledge = int(counts['knowledge_post']) - int(counts['knowledge_pre'])  # type: ignore[arg-type]
 
     tools_detail: dict[str, int] = {key: 0 for key in TOOL_SOURCE_KEYS}
     remaining_tools = list(tools_list)

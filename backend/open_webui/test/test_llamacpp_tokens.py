@@ -142,6 +142,7 @@ async def test_compute_context_breakdown_partition_sums_to_total():
             'files_pre': 385,
             'files_post': 395,
             'knowledge_pre': 345,
+            'knowledge_post': 360,
             'tools_with_mcp': 360,
             'tools_without_mcp': 355,
             'tools_with_builtin': 355,
@@ -251,6 +252,61 @@ async def test_compute_context_breakdown_returns_none_when_count_fails():
         )
 
     assert breakdown is None
+
+
+@pytest.mark.asyncio
+async def test_compute_context_breakdown_uses_payload_messages_for_total():
+    snapshots = _sample_snapshots()
+    payload_messages = copy.deepcopy(snapshots['final'])
+    payload_messages.insert(
+        0,
+        {'role': 'system', 'content': 'Large custom model system prompt'},
+    )
+
+    async def fake_count_many(session, base_url, model_id, headers, cookies, jobs):
+        counts = {}
+        for key, messages, job_tools in jobs:
+            system_chars = sum(
+                len(m.get('content', ''))
+                for m in messages
+                if m.get('role') == 'system' and isinstance(m.get('content'), str)
+            )
+            base = 300 + system_chars + len(job_tools or []) * 5
+            if key == 'conversation':
+                counts[key] = 100
+            elif key == 'no_tools':
+                counts[key] = base - len(job_tools or []) * 5
+            else:
+                counts[key] = base
+        return counts
+
+    with patch('open_webui.utils.llamacpp_tokens._count_many', side_effect=fake_count_many):
+        without_payload = await compute_context_breakdown(
+            snapshots=snapshots,
+            tools=[],
+            tools_dict={},
+            model_id='test-model',
+            base_url='http://localhost:8080',
+            url_idx=3,
+            headers=None,
+            cookies=None,
+        )
+        with_payload = await compute_context_breakdown(
+            snapshots=snapshots,
+            tools=[],
+            tools_dict={},
+            model_id='test-model',
+            base_url='http://localhost:8080',
+            url_idx=4,
+            headers=None,
+            cookies=None,
+            payload_messages=payload_messages,
+        )
+
+    assert without_payload is not None
+    assert with_payload is not None
+    assert with_payload['total'] > without_payload['total']
+    assert with_payload['system'] > without_payload['system']
 
 
 def test_merge_usage_preserves_latest_context_breakdown():

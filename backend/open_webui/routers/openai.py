@@ -750,6 +750,7 @@ async def _attach_llamacpp_context_breakdown(
         url_idx=url_idx,
         headers=headers,
         cookies=cookies,
+        payload_messages=payload.get('messages'),
     )
     if not breakdown:
         return
