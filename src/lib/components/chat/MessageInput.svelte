@@ -105,7 +105,7 @@
 	import QueuedMessageItem from './MessageInput/QueuedMessageItem.svelte';
 	import TaskList from './Messages/ResponseMessage/TaskList.svelte';
 	import UsageMenu from './MessageInput/UsageMenu.svelte';
-	import ThinkingMenu from './MessageInput/ThinkingMenu.svelte';
+	import ModelThinkingMenu from './MessageInput/ModelThinkingMenu.svelte';
 	import { getLatestConversationUsage, resolveUsageModel } from '$lib/utils/usage';
 
 	const i18n = getContext('i18n');
@@ -2066,12 +2066,12 @@
 												<TerminalMenu bind:show={showTerminalMenu} />
 											{/if}
 
-											{#if conversationUsage}
-												<UsageMenu usage={conversationUsage} model={usageModel} />
+											{#if atSelectedModel === undefined}
+												<ModelThinkingMenu bind:selectedModels />
 											{/if}
 
-											{#if currentModel}
-												<ThinkingMenu />
+											{#if conversationUsage}
+												<UsageMenu usage={conversationUsage} model={usageModel} />
 											{/if}
 
 											{#if $_user?.role === 'admin' || ($_user?.permissions?.chat?.stt ?? true)}

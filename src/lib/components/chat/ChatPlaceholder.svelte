@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import { WEBUI_API_BASE_URL } from '$lib/constants';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 
@@ -37,39 +37,6 @@
 
 {#key mounted}
 	<div class="m-auto w-full max-w-6xl px-8 lg:px-20">
-		<div class="flex justify-start">
-			<div class="flex -space-x-4 mb-0.5" in:fade={{ duration: 200 }}>
-				{#each models as model, modelIdx}
-					<button
-						on:click={() => {
-							selectedModelIdx = modelIdx;
-						}}
-					>
-						<Tooltip
-							content={DOMPurify.sanitize(
-								marked.parse(
-									sanitizeResponseContent(
-										models[selectedModelIdx]?.info?.meta?.description ?? ''
-									).replaceAll('\n', '<br>')
-								)
-							)}
-							placement="right"
-						>
-							<img
-								src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${model?.id}&lang=${$i18n.language}`}
-								class=" size-[2.7rem] rounded-full border-[1px] border-gray-100 dark:border-none"
-								alt="logo"
-								draggable="false"
-								on:error={(e) => {
-									e.currentTarget.src = '/favicon.png';
-								}}
-							/>
-						</Tooltip>
-					</button>
-				{/each}
-			</div>
-		</div>
-
 		{#if $temporaryChatEnabled}
 			<Tooltip
 				content={$i18n.t("This chat won't appear in history and your messages will not be saved.")}
@@ -85,13 +52,43 @@
 		<div
 			class=" mt-2 mb-4 text-3xl text-gray-800 dark:text-gray-100 text-left flex items-center gap-4 font-primary"
 		>
+			{#if models.length > 0}
+				<div class="flex -space-x-4 shrink-0" in:fade={{ duration: 200 }}>
+					{#each models as model, modelIdx}
+						<button
+							type="button"
+							on:click={() => {
+								selectedModelIdx = modelIdx;
+							}}
+						>
+							<Tooltip
+								content={DOMPurify.sanitize(
+									marked.parse(
+										sanitizeResponseContent(
+											models[selectedModelIdx]?.info?.meta?.description ?? ''
+										).replaceAll('\n', '<br>')
+									)
+								)}
+								placement="right"
+							>
+								<img
+									src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${model?.id}&lang=${$i18n.language}`}
+									class="size-[2.7rem] rounded-full border-[1px] border-gray-100 dark:border-none"
+									alt=""
+									draggable="false"
+									on:error={(e) => {
+										e.currentTarget.src = '/favicon.png';
+									}}
+								/>
+							</Tooltip>
+						</button>
+					{/each}
+				</div>
+			{/if}
+
 			<div>
 				<div class=" capitalize line-clamp-1" in:fade={{ duration: 200 }}>
-					{#if models[selectedModelIdx]?.name}
-						{models[selectedModelIdx]?.name}
-					{:else}
-						{$i18n.t('Hello, {{name}}', { name: $user?.name })}
-					{/if}
+					{$i18n.t('Hello, {{name}}', { name: $user?.name })}
 				</div>
 
 				<div in:fade={{ duration: 200, delay: 200 }}>

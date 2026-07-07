@@ -41,6 +41,11 @@
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
+	const selectValue = (newValue: string) => {
+		value = newValue;
+		dispatch('change', newValue);
+	};
+
 	export let id = '';
 	export let value: string | null = '';
 	export let placeholder = $i18n.t('Select a model');
@@ -59,8 +64,14 @@
 
 	export let className = 'w-[32rem]';
 	export let triggerClassName = 'text-lg';
+	export let openTriggerClassName = '';
+	export let containerClassName = 'relative w-full';
+	export let suffix = '';
+	export let placement: 'top' | 'bottom' = 'bottom';
 
 	export let pinModelHandler: (modelId: string) => void = () => {};
+	export let disabled = false;
+	export let truncateTrigger = true;
 
 	let tagsContainerElement;
 
@@ -82,7 +93,8 @@
 		if (!show || !triggerElement) return;
 		const rect = triggerElement.getBoundingClientRect();
 		dropdownPosition = {
-			top: rect.bottom + 2,
+			top: placement === 'bottom' ? rect.bottom + 8 : 0,
+			bottom: placement === 'top' ? window.innerHeight - rect.top + 8 : 0,
 			left: $mobile ? 8 : rect.left,
 			width: $mobile ? window.innerWidth - 16 : 0
 		};
@@ -460,7 +472,7 @@
 
 			// If the deleted model was selected, clear the selection
 			if (value === model.id) {
-				value = '';
+				selectValue('');
 			}
 
 			models.set(
@@ -504,10 +516,10 @@
 	on:resize={updatePosition}
 />
 
-<div class="relative w-full">
+<div class={containerClassName}>
 	<button
 		bind:this={triggerElement}
-		class="relative w-full {($settings?.highContrastMode ?? false)
+		class="relative {truncateTrigger ? 'w-full' : 'w-auto'} {($settings?.highContrastMode ?? false)
 			? ''
 			: 'outline-hidden focus:outline-hidden'}"
 		aria-label={selectedModel
@@ -517,10 +529,15 @@
 		aria-expanded={show}
 		id="model-selector-{id}-button"
 		type="button"
+		{disabled}
 		on:click={toggleOpen}
 	>
 		<div
-			class="flex w-full text-left px-0.5 bg-transparent truncate {triggerClassName} justify-between {($settings?.highContrastMode ??
+			class="flex text-left px-0.5 bg-transparent {truncateTrigger
+				? 'w-full truncate'
+				: 'w-auto whitespace-nowrap'} {triggerClassName}{show && openTriggerClassName
+				? ` ${openTriggerClassName}`
+				: ''} justify-between {($settings?.highContrastMode ??
 			false)
 				? 'dark:placeholder-gray-100 placeholder-gray-800'
 				: 'placeholder-gray-400'}"
@@ -534,7 +551,10 @@
 			}}
 		>
 			{#if selectedModel}
-				{selectedModel.label}
+				<span class={truncateTrigger ? 'truncate' : ''}>{selectedModel.label}</span>
+				{#if suffix}
+					<span class="shrink-0 ml-2 text-gray-500 dark:text-gray-400 font-normal">{suffix}</span>
+				{/if}
 			{:else}
 				{placeholder}
 			{/if}
@@ -546,17 +566,21 @@
 		<div
 			use:portal
 			bind:this={contentElement}
-			style="position: fixed; z-index: 9999; top: {dropdownPosition.top}px; left: {dropdownPosition.left}px;{$mobile
+			style="position: fixed; z-index: 9999; {placement === 'top'
+				? `bottom: ${dropdownPosition.bottom}px;`
+				: `top: ${dropdownPosition.top}px;`} left: {dropdownPosition.left}px;{$mobile
 				? ` width: ${dropdownPosition.width}px;`
 				: ''}"
 		>
 			<div
 				class="z-40 {$mobile
 					? `w-full`
-					: `${className}`} max-w-[calc(100vw-1rem)] justify-start rounded-2xl bg-white dark:bg-gray-850 dark:text-white shadow-lg outline-hidden"
+					: `${className}`} max-w-[calc(100vw-1rem)] justify-start rounded-2xl bg-white dark:bg-gray-850 dark:text-white shadow-lg outline-hidden overflow-visible"
 				transition:flyAndScale
 			>
-				<slot>
+				{#if $$slots.default}
+					<slot />
+				{:else}
 					{#if searchEnabled}
 						<div class="flex items-center gap-2.5 px-4.5 pt-3.5 mb-1.5">
 							<Search className="size-4" strokeWidth="2.5" />
@@ -570,7 +594,7 @@
 								aria-label={$i18n.t('Search In Models')}
 								on:keydown={(e) => {
 									if (e.code === 'Enter' && filteredItems.length > 0) {
-										value = filteredItems[selectedModelIdx].value;
+										selectValue(filteredItems[selectedModelIdx].value);
 										show = false;
 										return; // dont need to scroll on selection
 									} else if (e.code === 'ArrowDown') {
@@ -746,7 +770,7 @@
 										{deleteModelHandler}
 										{selectionOnly}
 										onClick={() => {
-											value = item.value;
+											selectValue(item.value);
 											selectedModelIdx = index;
 
 											show = false;
@@ -846,7 +870,15 @@
 
 					<div class="hidden w-[42rem]" />
 					<div class="hidden w-[32rem]" />
-				</slot>
+				{/if}
+
+				{#if $$slots.footer}
+					<div class="overflow-visible border-t border-gray-100 dark:border-gray-800 mx-2.5 mt-1 pt-1">
+						<slot name="footer" />
+					</div>
+				{/if}
+
+				<div class="pb-2.5"></div>
 			</div>
 		</div>
 	{/if}

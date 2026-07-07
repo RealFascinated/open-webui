@@ -11,10 +11,16 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 __pycache__
 .idea
+.git
+build
 venv
+**/venv
+.venv
+**/.venv
 _old
 uploads
 .ipynb_checkpoints
 **/*.db
 _test
 backend/data/*
+backend/venv

@@ -3202,6 +3202,7 @@
 					<Navbar
 						bind:this={navbarElement}
 						{readOnly}
+						showModelSelector={false}
 						chat={{
 							id: $chatId,
 							chat: {
