@@ -4,12 +4,8 @@
 
 	import { user, tools as _tools, skills as _skills, toolServers } from '$lib/stores';
 
-	import { initiateOAuthRedirect } from '$lib/apis/configs';
-	import { deleteOAuthSession } from '$lib/apis/auths';
 	import { getTools } from '$lib/apis/tools';
 	import { getSkills } from '$lib/apis/skills';
-
-	import { toast } from 'svelte-sonner';
 
 	import Knobs from '$lib/components/icons/Knobs.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -22,13 +18,16 @@
 	import Terminal from '$lib/components/icons/Terminal.svelte';
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 	import ChevronLeft from '$lib/components/icons/ChevronLeft.svelte';
-	import LinkSlash from '$lib/components/icons/LinkSlash.svelte';
+	import MenuFlyoutPanel from './MenuFlyoutPanel.svelte';
+	import ToolsMenuPanel from './ToolsMenuPanel.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let tab = '';
 	export let rootOnly = false;
+	export let rootSection: 'all' | 'nav' | 'toggles' = 'all';
 	export let active = false;
+	export let activeSubmenu: string | null = null;
 
 	export let selectedToolIds: string[] = [];
 	export let selectedSkillIds: string[] = [];
@@ -47,6 +46,46 @@
 
 	let tools = null;
 	let skills = null;
+
+	let toolsTriggerElement: HTMLElement | null = null;
+	let toolsFlyoutPanel: MenuFlyoutPanel | null = null;
+	let toolsCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+	$: toolsFlyoutOpen = activeSubmenu === 'tools';
+	$: toolsMenuCount =
+		($_tools ?? []).length + ($toolServers ?? []).filter((server) => server.info).length;
+	$: showToolsNavButton = toolsMenuCount > 0 || tools !== null;
+
+	$: if (!active) {
+		if (activeSubmenu === 'tools') activeSubmenu = null;
+	}
+
+	const openToolsFlyout = () => {
+		if (toolsCloseTimer) {
+			clearTimeout(toolsCloseTimer);
+			toolsCloseTimer = null;
+		}
+		activeSubmenu = 'tools';
+		toolsFlyoutPanel?.updatePlacement();
+	};
+
+	const closeToolsFlyout = () => {
+		if (toolsCloseTimer) clearTimeout(toolsCloseTimer);
+		toolsCloseTimer = setTimeout(() => {
+			if (activeSubmenu === 'tools') activeSubmenu = null;
+			toolsCloseTimer = null;
+		}, 120);
+	};
+
+	const toggleToolsFlyout = () => {
+		if (toolsFlyoutOpen) {
+			if (toolsCloseTimer) clearTimeout(toolsCloseTimer);
+			toolsCloseTimer = null;
+			activeSubmenu = null;
+		} else {
+			openToolsFlyout();
+		}
+	};
 
 	$: if (active) {
 		init();
@@ -108,28 +147,51 @@
 
 {#if rootOnly && tab === ''}
 	<div in:fly={{ x: -20, duration: 150 }}>
-		{#if tools}
-			{#if Object.keys(tools).length > 0}
-				<button
-					class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
-					type="button"
-					on:click={() => {
-						tab = 'tools';
-					}}
+		{#if rootSection === 'all' || rootSection === 'nav'}
+			{#if showToolsNavButton}
+				<div
+					bind:this={toolsTriggerElement}
+					class="relative"
+					on:mouseenter={openToolsFlyout}
+					on:mouseleave={closeToolsFlyout}
 				>
-					<Wrench />
+					<button
+						class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
+						type="button"
+						on:click={toggleToolsFlyout}
+					>
+						<Wrench />
 
-					<div class="flex items-center w-full justify-between">
-						<div class="line-clamp-1">
-							{$i18n.t('Tools')}
-							<span class="ml-0.5 text-gray-500">{Object.keys(tools).length}</span>
-						</div>
+						<div class="flex items-center w-full justify-between">
+							<div class="line-clamp-1">
+								{$i18n.t('Tools')}
+								<span class="ml-0.5 text-gray-500">{toolsMenuCount}</span>
+							</div>
 
-						<div class="text-gray-500">
-							<ChevronRight />
+							<div class="text-gray-500">
+								<ChevronRight />
+							</div>
 						</div>
-					</div>
-				</button>
+					</button>
+
+					<MenuFlyoutPanel
+						bind:this={toolsFlyoutPanel}
+						show={toolsFlyoutOpen}
+						anchor={toolsTriggerElement}
+						onMouseEnter={openToolsFlyout}
+						onMouseLeave={closeToolsFlyout}
+					>
+						<ToolsMenuPanel
+							active={toolsFlyoutOpen && active}
+							bind:selectedToolIds
+							{onShowValves}
+						/>
+					</MenuFlyoutPanel>
+				</div>
+			{:else if tools === null && (rootSection === 'all' || rootSection === 'nav')}
+				<div class="py-4">
+					<Spinner />
+				</div>
 			{/if}
 
 			{#if skills && Object.keys(skills).length > 0}
@@ -137,6 +199,7 @@
 					class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
 					type="button"
 					on:click={() => {
+						activeSubmenu = null;
 						tab = 'skills';
 					}}
 				>
@@ -154,12 +217,9 @@
 					</div>
 				</button>
 			{/if}
-		{:else}
-			<div class="py-4">
-				<Spinner />
-			</div>
 		{/if}
 
+		{#if rootSection === 'all' || rootSection === 'toggles'}
 		{#if toggleFilters && toggleFilters.length > 0}
 			{#each toggleFilters.sort( (a, b) => a.name.localeCompare( b.name, undefined, { sensitivity: 'base' } ) ) as filter (filter.id)}
 				<Tooltip content={filter?.description} placement="top-start">
@@ -300,128 +360,7 @@
 				</button>
 			</Tooltip>
 		{/if}
-	</div>
-{:else if !rootOnly && tab === 'tools' && tools}
-	<div in:fly={{ x: 20, duration: 150 }}>
-		<button
-			class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
-			type="button"
-			on:click={() => {
-				tab = '';
-			}}
-		>
-			<ChevronLeft />
-
-			<div class="flex items-center w-full justify-between">
-				<div>
-					{$i18n.t('Tools')}
-					<span class="ml-0.5 text-gray-500">{Object.keys(tools).length}</span>
-				</div>
-			</div>
-		</button>
-
-		{#each Object.keys(tools) as toolId}
-			<button
-				class="relative flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
-				type="button"
-				on:click={async (e) => {
-					if (!(tools[toolId]?.authenticated ?? true)) {
-						e.preventDefault();
-
-						const parts = toolId.split(':');
-						initiateOAuthRedirect({
-							id: toolId,
-							serverId: parts.at(-1) ?? toolId,
-							authType: parts.length > 1 ? (parts[0] === 'server' ? parts[1] : parts[0]) : null
-						});
-					} else {
-						tools[toolId].enabled = !tools[toolId].enabled;
-
-						const state = tools[toolId].enabled;
-						await tick();
-
-						if (state) {
-							selectedToolIds = [...selectedToolIds, toolId];
-						} else {
-							selectedToolIds = selectedToolIds.filter((id) => id !== toolId);
-						}
-					}
-				}}
-			>
-				{#if !(tools[toolId]?.authenticated ?? true)}
-					<div class="absolute inset-0 opacity-50 rounded-xl cursor-pointer z-10" />
-				{/if}
-				<div class="flex-1 truncate">
-					<div class="flex flex-1 gap-2 items-center">
-						<Tooltip content={tools[toolId]?.name ?? ''} placement="top">
-							<div class="shrink-0">
-								<Wrench />
-							</div>
-						</Tooltip>
-						<Tooltip content={tools[toolId]?.description ?? ''} placement="top-start">
-							<div class="truncate">{tools[toolId].name}</div>
-						</Tooltip>
-					</div>
-				</div>
-
-				{#if (tools[toolId]?.authenticated ?? true) && toolId.startsWith('server:mcp:')}
-					<div class="shrink-0">
-						<Tooltip content={$i18n.t('Disconnect OAuth')}>
-							<button
-								class="self-center w-fit text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition rounded-full"
-								type="button"
-								on:click={async (e) => {
-									e.stopPropagation();
-									e.preventDefault();
-
-									const parts = toolId.split(':');
-									const serverId = parts.at(-1) ?? toolId;
-									const provider = `mcp:${serverId}`;
-
-									try {
-										await deleteOAuthSession(localStorage.token, provider);
-										toast.success($i18n.t('OAuth session disconnected'));
-
-										_tools.set(await getTools(localStorage.token));
-										selectedToolIds = selectedToolIds.filter((id) => id !== toolId);
-										await init();
-									} catch (err) {
-										toast.error(err ?? $i18n.t('Failed to disconnect'));
-									}
-								}}
-							>
-								<LinkSlash className="size-3.5" />
-							</button>
-						</Tooltip>
-					</div>
-				{/if}
-
-				{#if tools[toolId]?.has_user_valves && ($user?.role === 'admin' || ($user?.permissions?.chat?.valves ?? true))}
-					<div class="shrink-0">
-						<Tooltip content={$i18n.t('Valves')}>
-							<button
-								class="self-center w-fit text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition rounded-full"
-								type="button"
-								on:click={(e) => {
-									e.stopPropagation();
-									e.preventDefault();
-									onShowValves({
-										type: 'tool',
-										id: toolId
-									});
-								}}
-							>
-								<Knobs />
-							</button>
-						</Tooltip>
-					</div>
-				{/if}
-
-				<div class="shrink-0">
-					<Switch state={tools[toolId].enabled} />
-				</div>
-			</button>
-		{/each}
+		{/if}
 	</div>
 {:else if !rootOnly && tab === 'skills' && skills}
 	<div in:fly={{ x: 20, duration: 150 }}>

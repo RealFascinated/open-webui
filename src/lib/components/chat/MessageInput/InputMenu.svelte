@@ -2,7 +2,7 @@
 	import { getContext, onMount, tick } from 'svelte';
 	import { fly } from 'svelte/transition';
 
-	import { config, user, tools as _tools, mobile, knowledge, selectedTerminalId, settings, terminalServers } from '$lib/stores';
+	import { config, user, tools as _tools, skills, toolServers, mobile, knowledge, selectedTerminalId, settings, terminalServers } from '$lib/stores';
 	import { getKnowledgeBases } from '$lib/apis/knowledge';
 
 	import { createPicker } from '$lib/utils/google-drive-picker';
@@ -31,6 +31,7 @@
 	import Switch from '$lib/components/common/Switch.svelte';
 	import TerminalMenuPanel from './TerminalMenuPanel.svelte';
 	import IntegrationsMenuPanel from './IntegrationsMenuPanel.svelte';
+	import MenuFlyoutPanel from './MenuFlyoutPanel.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -59,6 +60,23 @@
 
 	$: showExtrasSection = showIntegrationsButton || showTerminalButton || showWebSearchButton;
 
+	$: showBooleanTogglesSection =
+		(toggleFilters && toggleFilters.length > 0) ||
+		showImageGenerationButton ||
+		showCodeInterpreterButton ||
+		showWebSearchButton;
+
+	$: showIntegrationsNavSection =
+		(($_tools ?? []).length > 0 || ($toolServers ?? []).length > 0) ||
+		(($skills ?? []).some((skill) => skill.is_active));
+
+	$: showNavigationExtrasSection = showTerminalButton || showIntegrationsNavSection;
+
+	$: showIntegrationsTogglesSection =
+		(toggleFilters && toggleFilters.length > 0) ||
+		showImageGenerationButton ||
+		showCodeInterpreterButton;
+
 	$: systemTerminals = ($terminalServers ?? []).filter((t) => t.id);
 	$: directTerminals = ($settings?.terminalServers ?? []).filter((s) => s.url);
 	$: selectedSystemTerminal = systemTerminals.find((t) => t.id === $selectedTerminalId);
@@ -82,6 +100,40 @@
 
 	let show = false;
 	let tab = '';
+	let activeSubmenu: string | null = null;
+
+	let terminalTriggerElement: HTMLElement | null = null;
+	let terminalFlyoutPanel: MenuFlyoutPanel | null = null;
+	let terminalCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+	$: terminalFlyoutOpen = activeSubmenu === 'terminal';
+
+	const openTerminalFlyout = () => {
+		if (terminalCloseTimer) {
+			clearTimeout(terminalCloseTimer);
+			terminalCloseTimer = null;
+		}
+		activeSubmenu = 'terminal';
+		terminalFlyoutPanel?.updatePlacement();
+	};
+
+	const closeTerminalFlyout = () => {
+		if (terminalCloseTimer) clearTimeout(terminalCloseTimer);
+		terminalCloseTimer = setTimeout(() => {
+			if (activeSubmenu === 'terminal') activeSubmenu = null;
+			terminalCloseTimer = null;
+		}, 120);
+	};
+
+	const toggleTerminalFlyout = () => {
+		if (terminalFlyoutOpen) {
+			if (terminalCloseTimer) clearTimeout(terminalCloseTimer);
+			terminalCloseTimer = null;
+			activeSubmenu = null;
+		} else {
+			openTerminalFlyout();
+		}
+	};
 
 	let showAttachWebpageModal = false;
 
@@ -147,6 +199,8 @@
 	bind:show
 	on:change={(e) => {
 		if (e.detail === false) {
+			tab = '';
+			activeSubmenu = null;
 			onClose();
 		}
 	}}
@@ -157,7 +211,7 @@
 
 	<div slot="content">
 		<div
-			class="w-70 rounded-2xl px-1 py-1 border border-gray-100 dark:border-gray-800 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg max-h-72 overflow-y-auto overflow-x-hidden scrollbar-thin transition"
+			class="w-70 rounded-2xl px-1 py-1 border border-gray-100 dark:border-gray-800 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg max-h-[min(32rem,calc(100dvh-5rem))] overflow-y-auto overflow-x-hidden scrollbar-thin transition"
 		>
 			{#if tab === ''}
 				<div in:fly={{ x: -20, duration: 150 }}>
@@ -519,10 +573,12 @@
 						<div class="my-1 mx-2 border-t border-gray-100 dark:border-gray-800" />
 					{/if}
 
-					{#if showIntegrationsButton}
+					{#if showIntegrationsNavSection}
 						<IntegrationsMenuPanel
 							bind:tab
+							bind:activeSubmenu
 							rootOnly
+							rootSection="nav"
 							active={show}
 							{selectedModels}
 							bind:selectedToolIds
@@ -538,31 +594,76 @@
 					{/if}
 
 					{#if showTerminalButton}
-						<button
-							class="flex gap-2 w-full items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl"
-							type="button"
-							on:click={() => {
-								tab = 'terminal';
-							}}
+						<div
+							bind:this={terminalTriggerElement}
+							class="relative"
+							on:mouseenter={openTerminalFlyout}
+							on:mouseleave={closeTerminalFlyout}
 						>
-							<Cloud className="size-4" strokeWidth="2" />
+							<button
+								class="flex gap-2 w-full items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl"
+								type="button"
+								on:click={toggleTerminalFlyout}
+							>
+								<Cloud className="size-4" strokeWidth="2" />
 
-							<div class="flex items-center w-full justify-between min-w-0">
-								<div class="line-clamp-1">
-									{$i18n.t('Terminal')}
-									{#if $selectedTerminalId && selectedTerminalLabel}
-										<span class="text-gray-500"> · {selectedTerminalLabel}</span>
-									{/if}
-								</div>
+								<div class="flex items-center w-full justify-between min-w-0">
+									<div class="line-clamp-1">
+										{$i18n.t('Terminal')}
+										{#if $selectedTerminalId && selectedTerminalLabel}
+											<span class="text-gray-500"> · {selectedTerminalLabel}</span>
+										{/if}
+									</div>
 
-								<div class="text-gray-500 shrink-0">
-									<ChevronRight />
+									<div class="text-gray-500 shrink-0">
+										<ChevronRight />
+									</div>
 								</div>
-							</div>
-						</button>
+							</button>
+
+							<MenuFlyoutPanel
+								bind:this={terminalFlyoutPanel}
+								show={terminalFlyoutOpen}
+								anchor={terminalTriggerElement}
+								onMouseEnter={openTerminalFlyout}
+								onMouseLeave={closeTerminalFlyout}
+							>
+								<TerminalMenuPanel
+									on:selected={() => {
+										show = false;
+										activeSubmenu = null;
+										tab = '';
+									}}
+								/>
+							</MenuFlyoutPanel>
+						</div>
 					{/if}
 
-					{#if showWebSearchButton}
+					{#if showBooleanTogglesSection}
+						{#if showNavigationExtrasSection}
+							<div class="my-1 mx-2 border-t border-gray-100 dark:border-gray-800" />
+						{/if}
+
+						{#if showIntegrationsTogglesSection}
+							<IntegrationsMenuPanel
+								bind:tab
+								rootOnly
+								rootSection="toggles"
+								active={show}
+								{selectedModels}
+								bind:selectedToolIds
+								bind:selectedSkillIds
+								{toggleFilters}
+								bind:selectedFilterIds
+								{showImageGenerationButton}
+								bind:imageGenerationEnabled
+								{showCodeInterpreterButton}
+								bind:codeInterpreterEnabled
+								{onShowValves}
+							/>
+						{/if}
+
+						{#if showWebSearchButton}
 						<Tooltip content={$i18n.t('Search the internet')} placement="top-start">
 							<button
 								class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
@@ -599,6 +700,7 @@
 								</div>
 							</button>
 						</Tooltip>
+					{/if}
 					{/if}
 				</div>
 			{:else if tab === 'knowledge'}
@@ -727,10 +829,11 @@
 						</button>
 					{/if}
 				</div>
-			{:else if tab === 'tools' || tab === 'skills'}
+			{:else if tab === 'skills'}
 				<div in:fly={{ x: 20, duration: 150 }}>
 					<IntegrationsMenuPanel
 						bind:tab
+						bind:activeSubmenu
 						active={show}
 						selectedModels={selectedModels}
 						bind:selectedToolIds
@@ -742,31 +845,6 @@
 						{showCodeInterpreterButton}
 						bind:codeInterpreterEnabled
 						{onShowValves}
-					/>
-				</div>
-			{:else if tab === 'terminal'}
-				<div in:fly={{ x: 20, duration: 150 }}>
-					<button
-						class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
-						type="button"
-						on:click={() => {
-							tab = '';
-						}}
-					>
-						<ChevronLeft />
-
-						<div class="flex items-center w-full justify-between">
-							<div>
-								{$i18n.t('Terminal')}
-							</div>
-						</div>
-					</button>
-
-					<TerminalMenuPanel
-						on:selected={() => {
-							show = false;
-							tab = '';
-						}}
 					/>
 				</div>
 			{/if}
