@@ -53,11 +53,18 @@ def normalize_usage(usage: dict) -> dict:
         return {}
 
     # Map various field names to standard names
+    cache_n = usage.get('cache_n')
+    prompt_n = usage.get('prompt_n')
+    llama_prompt_tokens = None
+    if isinstance(cache_n, (int, float)) and isinstance(prompt_n, (int, float)):
+        llama_prompt_tokens = int(cache_n) + int(prompt_n)
+
     input_tokens = (
         usage.get('input_tokens')  # Already standard
         or usage.get('prompt_tokens')  # OpenAI
         or usage.get('prompt_eval_count')  # Ollama
-        or usage.get('prompt_n')  # llama.cpp
+        or llama_prompt_tokens
+        or usage.get('prompt_n')  # llama.cpp fallback
         or 0
     )
 

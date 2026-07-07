@@ -120,6 +120,12 @@ export const getReasoningTokens = (usage: UsageRecord): number => {
 };
 
 export const getContextUsedTokens = (usage: UsageRecord): number => {
+	// llama.cpp timings are merged across stream chunks; total_tokens gets summed
+	// and overcounts. Slot occupancy matches cache_n + prompt_n (+ generation).
+	if (isLlamacppUsage(usage)) {
+		return getPromptTokens(usage) + getGenerationTokens(usage);
+	}
+
 	if (typeof usage.total_tokens === 'number') {
 		return usage.total_tokens;
 	}
