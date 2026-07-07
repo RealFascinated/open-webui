@@ -27,7 +27,8 @@ def build_react_html(jsx_code: str) -> str:
 
     registry_lines = [
         "'react': React,",
-        "'react/jsx-runtime': React,",
+        "'react/jsx-runtime': __jsxRuntime,",
+        "'react/jsx-dev-runtime': __jsxRuntime,",
         "'react-dom': ReactDOM,",
         "'react-dom/client': ReactDOM,",
     ]
@@ -62,6 +63,28 @@ def build_react_html(jsx_code: str) -> str:
 <body>
 <div id="root"></div>
 <script>
+  var __jsxRuntime = {{
+    Fragment: React.Fragment,
+    jsx: function(type, props, key) {{
+      if (key !== undefined) {{
+        props = Object.assign({{}}, props, {{ key: key }});
+      }}
+      return React.createElement(type, props);
+    }},
+    jsxs: function(type, props, key) {{
+      if (key !== undefined) {{
+        props = Object.assign({{}}, props, {{ key: key }});
+      }}
+      return React.createElement(type, props);
+    }},
+    jsxDEV: function(type, props, key) {{
+      if (key !== undefined) {{
+        props = Object.assign({{}}, props, {{ key: key }});
+      }}
+      return React.createElement(type, props);
+    }}
+  }};
+
   var __registry = {{
     {registry}
   }};

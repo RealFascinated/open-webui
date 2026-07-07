@@ -90,7 +90,6 @@ from open_webui.tools.builtin import (
     search_skills,
     search_files,
     search_web,
-    save_artifact,
     sports_scores,
     suggest_followups,
     toggle_automation,
@@ -708,7 +707,7 @@ async def get_builtin_tools(
             ]
         )
 
-    # Artifact library tools — list, read, save, update saved artifacts
+    # Artifact library tools — list, read, update saved artifacts
     if (
         is_builtin_tool_enabled('artifacts')
         and config.get('artifacts.enable')
@@ -718,7 +717,6 @@ async def get_builtin_tools(
             [
                 list_artifacts,
                 read_artifact,
-                save_artifact,
                 update_artifact,
                 delete_artifact,
             ]

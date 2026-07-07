@@ -10,6 +10,7 @@
  * API — all methods return Promises:
  *   window.storage.get(key, shared?)         → {key, value, shared} | null
  *   window.storage.set(key, value, shared?)  → {key, value, shared} | null
+ *     value is required (string; JSON.stringify objects). set(key) alone will fail.
  *   window.storage.delete(key, shared?)      → {key, deleted, shared} | null
  *   window.storage.list(prefix?, shared?)    → {keys, shared} | null
  *
@@ -57,7 +58,12 @@ export function injectStorageBridge(html: string, artifactId: string): string {
 
   window.storage = {
     get:    function (key, shared)         { return _call('get',    { key: key, shared: !!shared }); },
-    set:    function (key, value, shared)  { return _call('set',    { key: key, value: value, shared: !!shared }); },
+    set:    function (key, value, shared)  {
+      if (value === undefined || value === null) {
+        return Promise.reject(new Error('storage.set requires a value as the second argument'));
+      }
+      return _call('set', { key: key, value: value, shared: !!shared });
+    },
     delete: function (key, shared)         { return _call('delete', { key: key, shared: !!shared }); },
     list:   function (prefix, shared)      { return _call('list',   { prefix: prefix || '', shared: !!shared }); }
   };

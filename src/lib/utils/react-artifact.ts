@@ -59,11 +59,35 @@ ${conditionalScripts}
 <body>
 <div id="root"></div>
 <script>
+  /* ── JSX runtime shim (Babel automatic runtime → React.createElement) ── */
+  var __jsxRuntime = {
+    Fragment: React.Fragment,
+    jsx: function(type, props, key) {
+      if (key !== undefined) {
+        props = Object.assign({}, props, { key: key });
+      }
+      return React.createElement(type, props);
+    },
+    jsxs: function(type, props, key) {
+      if (key !== undefined) {
+        props = Object.assign({}, props, { key: key });
+      }
+      return React.createElement(type, props);
+    },
+    jsxDEV: function(type, props, key) {
+      if (key !== undefined) {
+        props = Object.assign({}, props, { key: key });
+      }
+      return React.createElement(type, props);
+    }
+  };
+
   /* ── CommonJS shim: maps require() to UMD globals ── */
   var __registry = {
-    'react':              React,
-    'react/jsx-runtime':  React,
-    'react-dom':          ReactDOM,
+    'react':                    React,
+    'react/jsx-runtime':        __jsxRuntime,
+    'react/jsx-dev-runtime':    __jsxRuntime,
+    'react-dom':                ReactDOM,
     'react-dom/client':   ReactDOM,
     ${needsRecharts   ? "'recharts':   typeof Recharts   !== 'undefined' ? Recharts   : {}," : ''}
     ${needsLodash     ? "'lodash':     typeof _         !== 'undefined' ? _           : {}," : ''}

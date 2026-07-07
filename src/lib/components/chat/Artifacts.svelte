@@ -13,12 +13,13 @@
 		showArtifacts,
 		showControls,
 		artifactContents,
+		publishedArtifactIdMap,
 		type ArtifactContent
 	} from '$lib/stores';
 	import { copyToClipboard } from '$lib/utils';
 	import { injectCsp } from '$lib/utils/csp';
 	import { injectStorageBridge } from '$lib/utils/artifact-storage-bridge';
-	import { artifactPublishMeta } from '$lib/utils/artifact-render';
+	import { artifactPublishMeta, publishedArtifactLookupKey } from '$lib/utils/artifact-render';
 	import {
 		publishArtifact,
 		deleteArtifact,
@@ -35,6 +36,7 @@
 	import Download from '../icons/Download.svelte';
 	import Cube from '../icons/Cube.svelte';
 	import Markdown from '../chat/Messages/Markdown.svelte';
+	import ConfirmDialog from '../common/ConfirmDialog.svelte';
 
 	export let overlay = false;
 
@@ -43,6 +45,7 @@
 
 	let copied = false;
 	let publishing = false;
+	let showUnpublishConfirm = false;
 	let iframeElement: HTMLIFrameElement;
 
 	// View / Code toggle
@@ -174,6 +177,13 @@
 				meta: artifactPublishMeta(currentContent)
 			});
 			if (result) {
+				const lookupKey = publishedArtifactLookupKey(
+					currentContent.identifier,
+					currentContent.title ?? `Artifact ${selectedContentIdx + 1}`
+				);
+				if (lookupKey) {
+					publishedArtifactIdMap.update((map) => ({ ...map, [lookupKey]: result.id }));
+				}
 				// Attach the stable ID to this content slot
 				artifactContents.update((prev) => {
 					if (!prev) return prev;
@@ -202,6 +212,18 @@
 		if (!currentArtifactId) return;
 		const ok = await deleteArtifact(localStorage.token, currentArtifactId);
 		if (ok) {
+			const lookupKey = publishedArtifactLookupKey(
+				currentContent?.identifier,
+				currentContent?.title
+			);
+			publishedArtifactIdMap.update((map) => {
+				const next = { ...map };
+				if (lookupKey) delete next[lookupKey];
+				for (const [key, id] of Object.entries(next)) {
+					if (id === currentArtifactId) delete next[key];
+				}
+				return next;
+			});
 			artifactContents.update((prev) => {
 				if (!prev) return prev;
 				const updated = [...prev];
@@ -335,7 +357,7 @@
 						<Tooltip content={$i18n.t('Remove from Artifacts')}>
 							<button
 								class="text-xs px-2 py-1 rounded-md text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
-								on:click={unpublishCurrentArtifact}
+								on:click={() => (showUnpublishConfirm = true)}
 							>
 								{$i18n.t('Unsave')}
 							</button>
@@ -458,3 +480,16 @@
 		</div>
 	</div>
 </div>
+
+<ConfirmDialog
+	bind:show={showUnpublishConfirm}
+	title={$i18n.t('Unsave "{{title}}"?', {
+		title: currentContent?.title ?? $i18n.t('Untitled Artifact')
+	})}
+	message={$i18n.t(
+		'This removes the artifact from your library and **permanently deletes** all saved storage data (progress, settings, and other key–value data). The preview in this chat stays open, but persistent storage stops working until you save again.'
+	)}
+	confirmLabel={$i18n.t('Unsave')}
+	on:confirm={unpublishCurrentArtifact}
+	on:cancel={() => (showUnpublishConfirm = false)}
+/>

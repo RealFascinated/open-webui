@@ -18,6 +18,16 @@ export type StorageSetResult = { key: string; value: string; shared: boolean } |
 export type StorageDeleteResult = { key: string; deleted: boolean; shared: boolean } | null;
 export type StorageListResult = { keys: string[]; prefix: string | null; shared: boolean } | null;
 
+/** Normalize artifact storage values for PUT /storage/{key} ({ value: string }). */
+export function serializeArtifactStorageValue(value: unknown): string {
+	if (value === undefined || value === null) {
+		throw new Error(
+			'storage.set requires a value as the second argument (use JSON.stringify for objects)'
+		);
+	}
+	return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
 // ── Artifact CRUD ────────────────────────────────────────────────────
 
 export const publishArtifact = async (
@@ -145,9 +155,10 @@ export const setArtifactStorageItem = async (
 	token: string,
 	artifactId: string,
 	key: string,
-	value: string,
+	value: unknown,
 	scope: 'personal' | 'shared' = 'personal'
 ): Promise<StorageSetResult> => {
+	const serialized = serializeArtifactStorageValue(value);
 	const res = await fetch(
 		`${WEBUI_API_BASE_URL}/artifacts/${artifactId}/storage/${encodeURIComponent(key)}?scope=${scope}`,
 		{
@@ -157,7 +168,7 @@ export const setArtifactStorageItem = async (
 				'Content-Type': 'application/json',
 				authorization: `Bearer ${token}`
 			},
-			body: JSON.stringify({ value })
+			body: JSON.stringify({ value: serialized })
 		}
 	)
 		.then(async (r) => {

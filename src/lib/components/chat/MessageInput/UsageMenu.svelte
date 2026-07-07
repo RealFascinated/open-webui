@@ -5,7 +5,8 @@
 	import {
 		formatUsageNumber,
 		getAdditionalUsageRows,
-		getCachedPercent,
+		formatCachedPercent,
+		getCachedUsage,
 		getContextBreakdown,
 		getContextBreakdownBarSegments,
 		getContextBreakdownRows,
@@ -38,7 +39,7 @@
 	$: promptTokens = getPromptTokens(usage);
 	$: generationTokens = getGenerationTokens(usage);
 	$: reasoningTokens = getReasoningTokens(usage);
-	$: cachedPercent = getCachedPercent(usage);
+	$: cachedUsage = getCachedUsage(usage);
 	$: syncContextWindow = getContextWindowSize(usage, model);
 	$: contextWindow = syncContextWindow ?? probedContextWindow;
 	$: contextPercent = getContextUsagePercent(contextTokens, contextWindow);
@@ -233,10 +234,15 @@
 						</div>
 					{/if}
 
-					{#if cachedPercent !== null}
+					{#if cachedUsage}
 						<div class="flex items-center justify-between gap-3">
 							<span class="text-gray-500 dark:text-gray-400">{$i18n.t('Cached')}</span>
-							<span class="text-gray-900 dark:text-white tabular-nums">{cachedPercent}%</span>
+							<span class="text-gray-900 dark:text-white tabular-nums">
+								{formatUsageNumber(cachedUsage.cached)} / {formatUsageNumber(cachedUsage.prompt)}
+								<span class="text-gray-400 dark:text-gray-500"
+									>({formatCachedPercent(cachedUsage.percent)})</span
+								>
+							</span>
 						</div>
 					{/if}
 

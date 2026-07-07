@@ -148,6 +148,22 @@
 					{/if}
 				</div>
 			</div>
+		{:else if status?.action === 'context_compaction'}
+			<div class="flex flex-col justify-center -space-y-0.5">
+				<div
+					class="{(done || status?.done) === false
+						? 'shimmer'
+						: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+				>
+					{#if status?.error}
+						{$i18n.t('Context compaction failed')}
+					{:else if status?.done}
+						{$i18n.t('Context compacted')}
+					{:else}
+						{$i18n.t('Compacting context')}
+					{/if}
+				</div>
+			</div>
 		{:else}
 			<div class="flex flex-col justify-center -space-y-0.5">
 				<div

@@ -102,6 +102,7 @@ from open_webui.utils.misc import (
     get_last_user_message,
     get_last_user_message_item,
     get_message_list,
+    get_output_text,
     get_system_message,
     is_string_allowed,
     merge_system_messages,
@@ -132,6 +133,13 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
+
+
+def _raise_if_cancelled() -> None:
+    """Propagate task cancellation during long tool-call loops."""
+    task = asyncio.current_task()
+    if task is not None and task.cancelling():
+        raise asyncio.CancelledError()
 
 
 # We believe in one maker of all models, seen and unseen,
@@ -1277,8 +1285,10 @@ async def chat_completion_tools_handler(
             # check if "tool_calls" in result
             if result.get('tool_calls'):
                 for tool_call in result.get('tool_calls'):
+                    _raise_if_cancelled()
                     await tool_call_handler(tool_call)
             else:
+                _raise_if_cancelled()
                 await tool_call_handler(result)
 
         except Exception as e:
@@ -1999,7 +2009,7 @@ async def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[
         return None
 
     return [
-        {k: v for k, v in msg.items() if k in ('role', 'content', 'output', 'files', 'contextSummary')}
+        {k: v for k, v in msg.items() if k in ('role', 'content', 'output', 'files', 'contextSummary', 'usage')}
         for msg in db_messages
     ]
 
@@ -2058,6 +2068,7 @@ def strip_compaction_fields(messages: list[dict]) -> list[dict]:
         clean = dict(message)
         clean.pop('contextSummary', None)
         clean.pop('context_summary', None)
+        clean.pop('usage', None)
         stripped.append(clean)
     return stripped
 
@@ -2324,7 +2335,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         {
                             k: v
                             for k, v in assistant_message.items()
-                            if k in ('role', 'content', 'output', 'files', 'contextSummary')
+                            if k in ('role', 'content', 'output', 'files', 'contextSummary', 'usage')
                         }
                     )
 
@@ -3505,7 +3516,7 @@ async def outlet_filter_handler(ctx):
                 {
                     'id': m.get('id'),
                     'role': m.get('role'),
-                    'content': m.get('content', ''),
+                    'content': m.get('content') or get_output_text(m.get('output')),
                     'info': m.get('info'),
                     'timestamp': m.get('timestamp'),
                     **({'output': m['output']} if m.get('output') else {}),
@@ -3554,13 +3565,17 @@ async def outlet_filter_handler(ctx):
                     outlet_message_id = message.get('id')
                     if outlet_message_id and outlet_message_id in messages_map:
                         original_message = messages_map[outlet_message_id]
-                        content_changed = original_message.get('content') != message.get('content')
+                        # Compare against the same output-derived baseline the filter received
+                        original_content = original_message.get('content') or get_output_text(
+                            original_message.get('output')
+                        )
+                        content_changed = original_content != message.get('content')
                         output_changed = message.get('output') and message.get('output') != original_message.get(
                             'output'
                         )
                         if content_changed or output_changed:
                             message_update = {
-                                'originalContent': original_message.get('content'),
+                                'originalContent': original_content,
                                 **({'output': message['output']} if output_changed else {}),
                             }
                             if content_changed:
@@ -4801,6 +4816,7 @@ async def streaming_chat_response_handler(response, ctx):
                     CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS is None
                     or tool_call_iterations < CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS
                 ):
+                    _raise_if_cancelled()
                     tool_call_iterations += 1
 
                     response_tool_calls = tool_calls.pop(0)
@@ -4837,6 +4853,7 @@ async def streaming_chat_response_handler(response, ctx):
                     results = []
 
                     for tool_call in response_tool_calls:
+                        _raise_if_cancelled()
                         tool_call_id = tool_call.get('id', '')
                         tool_function_name = tool_call.get('function', {}).get('name', '')
                         tool_args = tool_call.get('function', {}).get('arguments', '{}')
@@ -5095,6 +5112,7 @@ async def streaming_chat_response_handler(response, ctx):
                     )
 
                     try:
+                        _raise_if_cancelled()
                         new_form_data = {
                             **form_data,
                             'model': model_id,

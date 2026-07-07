@@ -4263,7 +4263,9 @@ async def present_options(
     __event_emitter__: callable = None,
 ) -> str:
     """
-    Present the user with 2–4 tappable option buttons. Their selection arrives as their next message.
+    Present the user with 2–4 tappable option buttons below your message text. Their selection arrives as their next message.
+
+    Write any brief intro or explanation in your response first, then call this tool so buttons render under your prose.
 
     :param question: The question to present
     :param options: List of 2–4 short option labels
@@ -4702,60 +4704,6 @@ async def read_artifact(
         )
     except Exception as e:
         log.exception(f'read_artifact error: {e}')
-        return json.dumps({'error': str(e)})
-
-
-async def save_artifact(
-    title: str,
-    content: str,
-    artifact_type: str = 'iframe',
-    __request__: Request = None,
-    __user__: dict = None,
-    __chat_id__: str = None,
-) -> str:
-    """
-    Save an artifact to the user's library. Only call when the user explicitly asks to save or publish.
-
-    :param title: Human-readable title for the artifact
-    :param content: Full source — HTML page, SVG, or React JSX (with export default)
-    :param artifact_type: "iframe" for HTML, "svg" for SVG, "react" for React/JSX components
-    :return: JSON with id, title, and status
-    """
-    if err := await _artifacts_access_error(__request__, __user__):
-        return json.dumps({'error': err})
-
-    if not content or not str(content).strip():
-        return json.dumps({'error': 'Content is required'})
-
-    try:
-        from open_webui.models.artifacts import ArtifactPublishForm, Artifacts
-
-        db_type, code, meta = _prepare_artifact_storage(str(content), artifact_type)
-        form = ArtifactPublishForm(
-            chat_id=__chat_id__,
-            title=(title or 'Untitled Artifact').strip(),
-            type=db_type,
-            code=code,
-            meta=meta,
-        )
-        artifact = await Artifacts.publish_artifact(__user__.get('id'), form)
-        if not artifact:
-            return json.dumps({'error': 'Failed to save artifact'})
-
-        saved_type, _ = _editable_artifact_content(artifact)
-        return json.dumps(
-            {
-                'status': 'success',
-                'id': artifact.id,
-                'title': artifact.title,
-                'type': artifact.type,
-                'artifact_type': saved_type,
-                'message': 'Artifact saved to library.',
-            },
-            ensure_ascii=False,
-        )
-    except Exception as e:
-        log.exception(f'save_artifact error: {e}')
         return json.dumps({'error': str(e)})
 
 

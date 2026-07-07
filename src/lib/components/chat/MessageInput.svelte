@@ -126,10 +126,10 @@
 	export let history;
 	export const taskIds = null;
 
-	$: currentMessage = history?.currentId ? history.messages[history.currentId] : null;
-	$: isActive =
-		generating ||
-		(currentMessage?.role === 'assistant' && currentMessage?.done != true);
+	$: responseInProgress = Object.values(history?.messages ?? {}).some(
+		(message) => message?.role === 'assistant' && message?.done != true
+	);
+	$: isActive = generating || responseInProgress;
 
 	export let prompt = '';
 	export let files = [];

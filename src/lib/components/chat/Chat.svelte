@@ -37,6 +37,7 @@
 		chatTitle,
 		showArtifacts,
 		artifactContents,
+		publishedArtifactIdMap,
 		tools,
 		skills,
 		toolServers,
@@ -69,6 +70,11 @@
 		displayFileHandler
 	} from '$lib/utils';
 	import { buildReactHtml } from '$lib/utils/react-artifact';
+	import {
+		buildPublishedArtifactIdMap,
+		resolvePublishedArtifactId
+	} from '$lib/utils/artifact-render';
+	import { getArtifacts } from '$lib/apis/artifacts';
 	import { AudioQueue } from '$lib/utils/audio';
 	import { resolveThinkForRequest } from '$lib/utils/thinking';
 	import { getOutputText, getAssistantText } from './Messages/structuredOutput';
@@ -214,7 +220,6 @@
 	let generating = false;
 	let dragged = false;
 	let generationController = null;
-	let contextCompactionToastId = null;
 
 	let chat = null;
 	let tags = [];
@@ -591,43 +596,6 @@
 		}
 	};
 
-	const dismissContextCompactionToast = () => {
-		if (contextCompactionToastId !== null) {
-			toast.dismiss(contextCompactionToastId);
-			contextCompactionToastId = null;
-		}
-	};
-
-	const handleContextCompactionStatus = (status) => {
-		if (status?.action !== 'context_compaction') {
-			return;
-		}
-
-		if (status?.done) {
-			if (contextCompactionToastId !== null) {
-				if (status?.error) {
-					toast.error($i18n.t('Context compaction failed'), {
-						id: contextCompactionToastId,
-						duration: 3000
-					});
-				} else {
-					toast.success($i18n.t('Context compacted'), {
-						id: contextCompactionToastId,
-						duration: 1800
-					});
-				}
-				contextCompactionToastId = null;
-			}
-			return;
-		}
-
-		if (contextCompactionToastId === null) {
-			contextCompactionToastId = toast.loading($i18n.t('Compacting context'), {
-				duration: Infinity
-			});
-		}
-	};
-
 	const chatEventHandler = async (event, cb) => {
 		console.log(event);
 
@@ -645,8 +613,6 @@
 					} else {
 						message.statusHistory = [data];
 					}
-				} else if (type === 'context_compaction') {
-					handleContextCompactionStatus(data);
 				} else if (type === 'chat:active') {
 					if (!data?.active) {
 						taskIds = null;
@@ -657,7 +623,6 @@
 				} else if (type === 'chat:completion') {
 					chatCompletionEventHandler(data, message, event.chat_id);
 				} else if (type === 'chat:tasks:cancel') {
-					dismissContextCompactionToast();
 					if (event.message_id === history.currentId) {
 						taskIds = null;
 						// Set all response messages to done
@@ -940,6 +905,11 @@
 				message?.role === 'assistant' && !message.done && (message.childrenIds?.length ?? 0) === 0
 		);
 
+	const hasResponseInProgress = () =>
+		Object.values(history.messages).some(
+			(message) => message?.role === 'assistant' && message?.done != true
+		);
+
 	const handleSocketConnect = async () => {
 		if (!chatIdProp || $temporaryChatEnabled) {
 			return;
@@ -1092,7 +1062,6 @@
 				$socket?.off('events', chatEventHandler);
 				$socket?.off('connect', handleSocketConnect);
 				pendingSubmitUnsub();
-				dismissContextCompactionToast();
 				audioQueueInstance?.destroy();
 				audioQueue.set(null);
 			} catch (e) {
@@ -1338,19 +1307,31 @@
 		);
 	};
 
+	const loadPublishedArtifacts = async (id: string) => {
+		const artifacts = await getArtifacts(localStorage.token);
+		publishedArtifactIdMap.set(buildPublishedArtifactIdMap(artifacts, id));
+	};
+
 	const getContents = () => {
 		const messages = history ? createMessagesList(history, history.currentId) : [];
 		let contents = [];
 		// Track identifier → index for in-place updates (stable antArtifact revisions)
 		const identifierIndex = new Map<string, number>();
+		const publishedMap = get(publishedArtifactIdMap);
+
+		const withPublishedId = (item) => ({
+			...item,
+			artifactId: resolvePublishedArtifactId(item.identifier, item.title, publishedMap)
+		});
 
 		const upsert = (item) => {
-			if (item.identifier && identifierIndex.has(item.identifier)) {
+			const enriched = withPublishedId(item);
+			if (enriched.identifier && identifierIndex.has(enriched.identifier)) {
 				// Update in-place — same identifier means a revision, not a new slot
-				contents[identifierIndex.get(item.identifier)] = item;
+				contents[identifierIndex.get(enriched.identifier)] = enriched;
 			} else {
-				if (item.identifier) identifierIndex.set(item.identifier, contents.length);
-				contents = [...contents, item];
+				if (enriched.identifier) identifierIndex.set(enriched.identifier, contents.length);
+				contents = [...contents, enriched];
 			}
 		};
 
@@ -1563,6 +1544,7 @@
 		await resetInput();
 		await chatId.set('');
 		await chatTitle.set('');
+		publishedArtifactIdMap.set({});
 
 		history = {
 			messages: {},
@@ -1713,6 +1695,8 @@
 				}
 
 				oldSelectedModelIds = structuredClone(selectedModels);
+
+				await loadPublishedArtifacts($chatId);
 
 				history =
 					(chatContent?.history ?? undefined) !== undefined
@@ -1872,7 +1856,7 @@
 			messages: messages.map((m) => ({
 				id: m.id,
 				role: m.role,
-				content: m.content,
+				content: getOutputText(m.output) || m.content,
 				info: m.info ? m.info : undefined,
 				timestamp: m.timestamp,
 				...(m.sources ? { sources: m.sources } : {})
@@ -2802,18 +2786,17 @@
 	};
 
 	const stopResponse = async (processQueue = true) => {
-		const currentMessage = history.currentId ? history.messages[history.currentId] : null;
-		const responseInProgress = currentMessage?.role === 'assistant' && currentMessage?.done != true;
+		const responseInProgress = hasResponseInProgress();
 
-		if (taskIds && responseInProgress) {
+		if (responseInProgress || taskIds) {
 			if ($chatId) {
 				await stopTasksByChatId(localStorage.token, $chatId).catch((error) => {
 					toast.error(`${error}`);
 					return null;
 				});
-			} else {
+			} else if (taskIds?.length) {
 				for (const taskId of taskIds) {
-					const res = await stopTask(localStorage.token, taskId).catch((error) => {
+					await stopTask(localStorage.token, taskId).catch((error) => {
 						toast.error(`${error}`);
 						return null;
 					});
@@ -2822,21 +2805,16 @@
 
 			taskIds = null;
 
-			const responseMessage = history.messages[history.currentId];
-			// Set all response messages to done
-			if (responseMessage.parentId && history.messages[responseMessage.parentId]) {
-				for (const messageId of history.messages[responseMessage.parentId].childrenIds) {
-					history.messages[messageId].done = true;
+			// Mark every in-flight assistant response as done (not only history.currentId).
+			for (const message of Object.values(history.messages)) {
+				if (message?.role === 'assistant' && message?.done != true) {
+					message.done = true;
 				}
 			}
-
-			history.messages[history.currentId] = responseMessage;
 
 			if (autoScroll) {
 				scrollToBottom();
 			}
-		} else if (taskIds) {
-			taskIds = null;
 		}
 
 		if (generating) {

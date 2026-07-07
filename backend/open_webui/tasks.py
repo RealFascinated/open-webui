@@ -142,6 +142,19 @@ async def list_task_ids_by_item_id(redis, id):
     return item_tasks.get(id, [])
 
 
+async def _cancel_local_task(task_id: str) -> bool:
+    """Cancel a task in this process's in-memory registry, if present."""
+    task = tasks.get(task_id)
+    if not task:
+        return False
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    return True
+
+
 async def stop_task(redis, task_id: str):
     """
     Cancel a running task and remove it from the global task list.
@@ -149,7 +162,9 @@ async def stop_task(redis, task_id: str):
     if redis:
         # Look up the item_id before cleanup so we can remove the set entry too
         item_id = await redis.hget(REDIS_TASKS_KEY, task_id)
-        # PUBSUB: All instances check if they have this task, and stop if so.
+        # Cancel on this worker immediately — don't rely on pub/sub alone.
+        await _cancel_local_task(task_id)
+        # PUBSUB: Other instances check if they have this task, and stop if so.
         await redis_send_command(
             redis,
             {

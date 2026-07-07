@@ -144,32 +144,71 @@ export const isLlamacppUsage = (usage: UsageRecord): boolean => {
 	);
 };
 
-export const getCachedPercent = (usage: UsageRecord): number | null => {
+const roundCachedPercent = (cached: number, prompt: number): number => {
+	if (prompt <= 0) {
+		return cached > 0 ? 100 : 0;
+	}
+	return Math.min(100, Math.round((cached / prompt) * 1000) / 10);
+};
+
+export const formatCachedPercent = (percent: number): string => {
+	if (Number.isInteger(percent)) {
+		return `${percent}%`;
+	}
+	return `${percent.toFixed(1)}%`;
+};
+
+export const getCachedUsage = (
+	usage: UsageRecord
+): { cached: number; prompt: number; percent: number } | null => {
 	if (typeof usage.cache_n === 'number' && typeof usage.prompt_n === 'number') {
-		const total = usage.cache_n + usage.prompt_n;
-		if (total <= 0) return usage.cache_n > 0 ? 100 : 0;
-		return Math.round((usage.cache_n / total) * 100);
+		const cached = usage.cache_n;
+		const prompt = cached + usage.prompt_n;
+		if (prompt <= 0) {
+			return cached > 0 ? { cached, prompt: 0, percent: 100 } : null;
+		}
+		return {
+			cached,
+			prompt,
+			percent: roundCachedPercent(cached, prompt)
+		};
 	}
 
 	const promptDetails = usage.prompt_tokens_details;
 	if (promptDetails && typeof promptDetails === 'object') {
 		const cached = (promptDetails as UsageRecord).cached_tokens;
-		const prompt = getPromptTokens(usage);
-		if (typeof cached === 'number' && prompt > 0) {
-			return Math.min(100, Math.round((cached / prompt) * 100));
-		}
-		if (typeof cached === 'number' && cached === 0) {
-			return 0;
+		if (typeof cached === 'number') {
+			const prompt = getPromptTokens(usage);
+			if (prompt > 0) {
+				return {
+					cached,
+					prompt,
+					percent: roundCachedPercent(cached, prompt)
+				};
+			}
+			if (cached === 0) {
+				return { cached: 0, prompt: 0, percent: 0 };
+			}
 		}
 	}
 
 	const cacheRead = usage.cache_read_input_tokens;
-	const inputTokens = Number(usage.input_tokens ?? usage.prompt_tokens ?? 0);
-	if (typeof cacheRead === 'number' && inputTokens > 0) {
-		return Math.min(100, Math.round((cacheRead / inputTokens) * 100));
+	if (typeof cacheRead === 'number') {
+		const prompt = Number(usage.input_tokens ?? usage.prompt_tokens ?? 0);
+		if (prompt > 0) {
+			return {
+				cached: cacheRead,
+				prompt,
+				percent: roundCachedPercent(cacheRead, prompt)
+			};
+		}
 	}
 
 	return null;
+};
+
+export const getCachedPercent = (usage: UsageRecord): number | null => {
+	return getCachedUsage(usage)?.percent ?? null;
 };
 
 const parsePositiveInt = (value: unknown): number | null => {

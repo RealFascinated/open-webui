@@ -84,6 +84,15 @@ export function artifactPublishMeta(content: {
 	return JSON.stringify(payload);
 }
 
+export function publishedArtifactLookupKey(
+	identifier: string | undefined,
+	title: string | undefined
+): string | undefined {
+	if (identifier) return identifier;
+	if (title) return `title:${title}`;
+	return undefined;
+}
+
 /** Build identifier → artifact id map for the current chat. */
 export function buildPublishedArtifactIdMap(
 	artifacts: { id: string; chat_id: string | null; title: string | null; meta: string | null }[],
@@ -93,11 +102,8 @@ export function buildPublishedArtifactIdMap(
 	for (const artifact of artifacts) {
 		if (artifact.chat_id !== chatId) continue;
 		const meta = parseArtifactMeta(artifact.meta);
-		if (meta.identifier) {
-			map[meta.identifier] = artifact.id;
-		} else if (artifact.title) {
-			map[`title:${artifact.title}`] = artifact.id;
-		}
+		const key = publishedArtifactLookupKey(meta.identifier, artifact.title ?? undefined);
+		if (key) map[key] = artifact.id;
 	}
 	return map;
 }
@@ -107,7 +113,6 @@ export function resolvePublishedArtifactId(
 	title: string | undefined,
 	map: Record<string, string>
 ): string | undefined {
-	if (identifier && map[identifier]) return map[identifier];
-	if (title && map[`title:${title}`]) return map[`title:${title}`];
-	return undefined;
+	const key = publishedArtifactLookupKey(identifier, title);
+	return key ? map[key] : undefined;
 }

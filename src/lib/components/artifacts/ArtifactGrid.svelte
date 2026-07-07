@@ -118,18 +118,14 @@
 
 <ConfirmDialog
 	bind:show={showDeleteConfirm}
+	title={$i18n.t('Unpublish "{{title}}"?', { title: pendingDelete?.title ?? 'Untitled Artifact' })}
+	message={$i18n.t(
+		'This removes the artifact from your library and **permanently deletes** all saved storage data. This cannot be undone.'
+	)}
+	confirmLabel={$i18n.t('Unpublish')}
 	on:confirm={confirmDelete}
 	on:cancel={() => {
 		pendingDelete = null;
 		showDeleteConfirm = false;
 	}}
->
-	<div slot="content" class="flex flex-col gap-2">
-		<p class="text-sm text-gray-700 dark:text-gray-300">
-			{$i18n.t('Unpublish "{{title}}"?', { title: pendingDelete?.title ?? 'Untitled Artifact' })}
-		</p>
-		<p class="text-xs text-red-500 dark:text-red-400">
-			{$i18n.t('This permanently deletes all stored data associated with this artifact.')}
-		</p>
-	</div>
-</ConfirmDialog>
+/>

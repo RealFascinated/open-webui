@@ -725,10 +725,6 @@
 							<WeatherCard weather={message.weather} />
 						{/if}
 
-						{#if message?.options}
-							<OptionsCard options={message.options} />
-						{/if}
-
 						{#if message?.currency}
 							<CurrencyCard currency={message.currency} />
 						{/if}
@@ -922,6 +918,10 @@
 
 							{#if message.code_executions}
 								<CodeExecutions codeExecutions={message.code_executions} />
+							{/if}
+
+							{#if message?.options}
+								<OptionsCard options={message.options} disabled={!isLastMessage} />
 							{/if}
 						</div>
 					</div>

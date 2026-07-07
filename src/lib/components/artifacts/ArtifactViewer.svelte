@@ -34,6 +34,7 @@
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import Check from '$lib/components/icons/Check.svelte';
 	import Pencil from '$lib/components/icons/Pencil.svelte';
+	import ChevronLeft from '$lib/components/icons/ChevronLeft.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -173,6 +174,14 @@
 			iframeElement.requestFullscreen();
 		}
 	}
+
+	function goBack() {
+		if (artifact?.chat_id) {
+			goto(`/c/${artifact.chat_id}`);
+		} else {
+			goto('/artifacts');
+		}
+	}
 </script>
 
 {#if !loaded}
@@ -183,6 +192,16 @@
 	<div class="flex flex-col h-full w-full">
 		<div class="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 shrink-0">
 			<div class="flex items-center gap-2 min-w-0">
+				<Tooltip content={artifact.chat_id ? $i18n.t('Back to chat') : $i18n.t('Back')}>
+					<button
+						class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition shrink-0"
+						aria-label={artifact.chat_id ? $i18n.t('Back to chat') : $i18n.t('Back')}
+						on:click={goBack}
+					>
+						<ChevronLeft strokeWidth="2.5" />
+					</button>
+				</Tooltip>
+
 				{#if editingTitle}
 					<input
 						bind:this={titleInput}
@@ -304,15 +323,11 @@
 
 <ConfirmDialog
 	bind:show={showDeleteConfirm}
+	title={$i18n.t('Unpublish "{{title}}"?', { title: artifact?.title ?? 'Untitled Artifact' })}
+	message={$i18n.t(
+		'This removes the artifact from your library and **permanently deletes** all saved storage data. This cannot be undone.'
+	)}
+	confirmLabel={$i18n.t('Unpublish')}
 	on:confirm={confirmDelete}
 	on:cancel={() => (showDeleteConfirm = false)}
->
-	<div slot="content" class="flex flex-col gap-2">
-		<p class="text-sm text-gray-700 dark:text-gray-300">
-			{$i18n.t('Unpublish "{{title}}"?', { title: artifact?.title ?? 'Untitled Artifact' })}
-		</p>
-		<p class="text-xs text-red-500 dark:text-red-400">
-			{$i18n.t('This permanently deletes all stored data associated with this artifact and cannot be undone.')}
-		</p>
-	</div>
-</ConfirmDialog>
+/>
