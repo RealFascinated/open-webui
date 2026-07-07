@@ -27,6 +27,7 @@
 	import Knowledge from './InputMenu/Knowledge.svelte';
 	import AttachWebpageModal from './AttachWebpageModal.svelte';
 	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
+	import Switch from '$lib/components/common/Switch.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -34,6 +35,10 @@
 
 	export let selectedModels: string[] = [];
 	export let fileUploadCapableModels: string[] = [];
+
+	export let showWebSearchButton = false;
+	export let webSearchEnabled = false;
+	export let onWebSearchToggle: Function = () => {};
 
 	export let screenCaptureHandler: Function;
 	export let uploadFilesHandler: Function;
@@ -478,6 +483,47 @@
 								</div>
 							</button>
 						{/if}
+					{/if}
+
+					{#if showWebSearchButton}
+						<div class="my-1 mx-2 border-t border-gray-100 dark:border-gray-800" />
+
+						<Tooltip content={$i18n.t('Search the internet')} placement="top-start">
+							<button
+								class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
+								aria-pressed={webSearchEnabled}
+								aria-label={webSearchEnabled
+									? $i18n.t('Disable Web Search')
+									: $i18n.t('Enable Web Search')}
+								type="button"
+								on:click={() => {
+									webSearchEnabled = !webSearchEnabled;
+									onWebSearchToggle(webSearchEnabled);
+								}}
+							>
+								<div class="flex-1 truncate">
+									<div class="flex flex-1 gap-2 items-center">
+										<div class="shrink-0">
+											<GlobeAlt />
+										</div>
+
+										<div class="truncate">{$i18n.t('Web Search')}</div>
+									</div>
+								</div>
+
+								<div class="shrink-0">
+									<Switch
+										state={webSearchEnabled}
+										on:change={async (e) => {
+											const state = e.detail;
+											webSearchEnabled = state;
+											onWebSearchToggle(state);
+											await tick();
+										}}
+									/>
+								</div>
+							</button>
+						</Tooltip>
 					{/if}
 				</div>
 			{:else if tab === 'knowledge'}

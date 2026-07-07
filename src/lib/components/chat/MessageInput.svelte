@@ -1702,6 +1702,9 @@
 										bind:files
 										selectedModels={selectedModelIds}
 										{fileUploadCapableModels}
+										{showWebSearchButton}
+										bind:webSearchEnabled
+										{onWebSearchToggle}
 										{screenCaptureHandler}
 										{inputFilesHandler}
 										uploadFilesHandler={() => {
@@ -1760,27 +1763,24 @@
 										</button>
 									</InputMenu>
 
-									{#if showWebSearchButton || showImageGenerationButton || showCodeInterpreterButton || showToolsButton || showSkillsButton || (toggleFilters && toggleFilters.length > 0)}
+									{#if showImageGenerationButton || showCodeInterpreterButton || showToolsButton || showSkillsButton || (toggleFilters && toggleFilters.length > 0)}
 										<div
 											class="flex self-center w-[1px] h-4 mx-1 bg-gray-200/50 dark:bg-gray-800/50 shrink-0"
 										/>
 									{/if}
 
 									<div class="flex flex-1 items-center min-w-0 overflow-x-auto scrollbar-none">
-										{#if showWebSearchButton || showImageGenerationButton || showCodeInterpreterButton || showToolsButton || showSkillsButton || (toggleFilters && toggleFilters.length > 0)}
+										{#if showImageGenerationButton || showCodeInterpreterButton || showToolsButton || showSkillsButton || (toggleFilters && toggleFilters.length > 0)}
 											<IntegrationsMenu
 												selectedModels={selectedModelIds}
 												{toggleFilters}
-												{showWebSearchButton}
 												{showImageGenerationButton}
 												{showCodeInterpreterButton}
 												bind:selectedToolIds
 												bind:selectedSkillIds
 												bind:selectedFilterIds
-												bind:webSearchEnabled
 												bind:imageGenerationEnabled
 												bind:codeInterpreterEnabled
-												{onWebSearchToggle}
 												closeOnOutsideClick={integrationsMenuCloseOnOutsideClick}
 												onShowValves={(e) => {
 													const { type, id } = e;
