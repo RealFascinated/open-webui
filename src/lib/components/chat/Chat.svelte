@@ -52,7 +52,9 @@
 		showFileNavDir,
 		chatRequestQueues,
 		desktopEvent,
-		pendingSubmit
+		pendingSubmit,
+		pendingArtifactFix,
+		type PendingArtifactFix
 	} from '$lib/stores';
 
 	import {
@@ -70,6 +72,7 @@
 		displayFileHandler
 	} from '$lib/utils';
 	import { buildReactHtml } from '$lib/utils/react-artifact';
+	import { buildArtifactFixPrompt } from '$lib/utils/artifact-error-bridge';
 	import {
 		buildPublishedArtifactIdMap,
 		resolvePublishedArtifactId
@@ -942,6 +945,13 @@
 			}
 		});
 
+		const pendingArtifactFixUnsub = pendingArtifactFix.subscribe((value) => {
+			if (value) {
+				pendingArtifactFix.set(null);
+				handleArtifactFix(value);
+			}
+		});
+
 		$audioQueue?.destroy();
 
 		const audioQueueInstance = new AudioQueue(document.getElementById('audioElement'));
@@ -1062,6 +1072,7 @@
 				$socket?.off('events', chatEventHandler);
 				$socket?.off('connect', handleSocketConnect);
 				pendingSubmitUnsub();
+				pendingArtifactFixUnsub();
 				audioQueueInstance?.destroy();
 				audioQueue.set(null);
 			} catch (e) {
@@ -2826,6 +2837,45 @@
 		if (processQueue) {
 			await processNextInQueue($chatId);
 		}
+	};
+
+	const findArtifactAssistantMessage = (fix: PendingArtifactFix) => {
+		const messages = history ? createMessagesList(history, history.currentId) : [];
+		for (let i = messages.length - 1; i >= 0; i--) {
+			const message = messages[i];
+			if (message?.role === 'user') continue;
+
+			const messageContent = getAssistantText(message?.output, message?.content ?? '');
+			const artifacts = parseAntArtifacts(messageContent);
+			const match = artifacts.find(
+				(a) =>
+					(fix.identifier && a.identifier === fix.identifier) ||
+					(!fix.identifier &&
+						fix.title &&
+						a.title === fix.title &&
+						(!fix.mimeType || a.type === fix.mimeType))
+			);
+			if (match) return message;
+		}
+		return null;
+	};
+
+	const handleArtifactFix = async (fix: PendingArtifactFix) => {
+		const assistantMessage = findArtifactAssistantMessage(fix);
+		if (!assistantMessage) {
+			toast.error($i18n.t('Could not find the artifact message to fix'));
+			return;
+		}
+
+		const prompt = buildArtifactFixPrompt({
+			title: fix.title,
+			identifier: fix.identifier,
+			mimeType: fix.mimeType,
+			errorKind: fix.errorKind,
+			errorMessage: fix.errorMessage
+		});
+
+		await submitMessage(assistantMessage.id, prompt);
 	};
 
 	const submitMessage = async (parentId, prompt) => {

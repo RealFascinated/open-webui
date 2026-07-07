@@ -68,6 +68,24 @@ def config_updates(data: dict, key_map: dict[str, str]) -> dict:
     return {key_map[field]: value for field, value in data.items() if field in key_map}
 
 
+def build_task_metadata(task: str, form_data: dict) -> dict:
+    return {
+        'task': str(task),
+        'task_body': form_data,
+        'chat_id': form_data.get('chat_id', None),
+    }
+
+
+async def run_task_completion(request: Request, payload: dict, user, models):
+    payload = await process_pipeline_inlet_filter(request, payload, user, models)
+    return await generate_chat_completion(
+        request,
+        form_data=payload,
+        user=user,
+        bypass_system_prompt=True,
+    )
+
+
 ##################################
 #
 # Task Endpoints
@@ -180,22 +198,11 @@ async def generate_title(request: Request, form_data: dict, user=Depends(get_ver
                 'max_completion_tokens': max_tokens,
             }
         ),
-        'metadata': {
-            **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
-            'task': str(TASKS.TITLE_GENERATION),
-            'task_body': form_data,
-            'chat_id': form_data.get('chat_id', None),
-        },
+        'metadata': build_task_metadata(TASKS.TITLE_GENERATION, form_data),
     }
 
-    # Process the payload through the pipeline
     try:
-        payload = await process_pipeline_inlet_filter(request, payload, user, models)
-    except Exception as e:
-        raise e
-
-    try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await run_task_completion(request, payload, user, models)
     except Exception as e:
         log.error('Exception occurred', exc_info=True)
         return JSONResponse(
@@ -250,22 +257,11 @@ async def generate_follow_ups(request: Request, form_data: dict, user=Depends(ge
         'model': task_model_id,
         'messages': [{'role': 'user', 'content': content}],
         'stream': False,
-        'metadata': {
-            **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
-            'task': str(TASKS.FOLLOW_UP_GENERATION),
-            'task_body': form_data,
-            'chat_id': form_data.get('chat_id', None),
-        },
+        'metadata': build_task_metadata(TASKS.FOLLOW_UP_GENERATION, form_data),
     }
 
-    # Process the payload through the pipeline
     try:
-        payload = await process_pipeline_inlet_filter(request, payload, user, models)
-    except Exception as e:
-        raise e
-
-    try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await run_task_completion(request, payload, user, models)
     except Exception as e:
         log.error('Exception occurred', exc_info=True)
         return JSONResponse(
@@ -320,22 +316,11 @@ async def generate_chat_tags(request: Request, form_data: dict, user=Depends(get
         'model': task_model_id,
         'messages': [{'role': 'user', 'content': content}],
         'stream': False,
-        'metadata': {
-            **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
-            'task': str(TASKS.TAGS_GENERATION),
-            'task_body': form_data,
-            'chat_id': form_data.get('chat_id', None),
-        },
+        'metadata': build_task_metadata(TASKS.TAGS_GENERATION, form_data),
     }
 
-    # Process the payload through the pipeline
     try:
-        payload = await process_pipeline_inlet_filter(request, payload, user, models)
-    except Exception as e:
-        raise e
-
-    try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await run_task_completion(request, payload, user, models)
     except Exception as e:
         log.error(f'Error generating chat completion: {e}')
         return JSONResponse(
@@ -384,22 +369,11 @@ async def generate_image_prompt(request: Request, form_data: dict, user=Depends(
         'model': task_model_id,
         'messages': [{'role': 'user', 'content': content}],
         'stream': False,
-        'metadata': {
-            **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
-            'task': str(TASKS.IMAGE_PROMPT_GENERATION),
-            'task_body': form_data,
-            'chat_id': form_data.get('chat_id', None),
-        },
+        'metadata': build_task_metadata(TASKS.IMAGE_PROMPT_GENERATION, form_data),
     }
 
-    # Process the payload through the pipeline
     try:
-        payload = await process_pipeline_inlet_filter(request, payload, user, models)
-    except Exception as e:
-        raise e
-
-    try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await run_task_completion(request, payload, user, models)
     except Exception as e:
         log.error('Exception occurred', exc_info=True)
         return JSONResponse(
@@ -466,22 +440,11 @@ async def generate_queries(request: Request, form_data: dict, user=Depends(get_v
         'model': task_model_id,
         'messages': [{'role': 'user', 'content': content}],
         'stream': False,
-        'metadata': {
-            **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
-            'task': str(TASKS.QUERY_GENERATION),
-            'task_body': form_data,
-            'chat_id': form_data.get('chat_id', None),
-        },
+        'metadata': build_task_metadata(TASKS.QUERY_GENERATION, form_data),
     }
 
-    # Process the payload through the pipeline
     try:
-        payload = await process_pipeline_inlet_filter(request, payload, user, models)
-    except Exception as e:
-        raise e
-
-    try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await run_task_completion(request, payload, user, models)
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -547,22 +510,11 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
         'model': task_model_id,
         'messages': [{'role': 'user', 'content': content}],
         'stream': False,
-        'metadata': {
-            **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
-            'task': str(TASKS.AUTOCOMPLETE_GENERATION),
-            'task_body': form_data,
-            'chat_id': form_data.get('chat_id', None),
-        },
+        'metadata': build_task_metadata(TASKS.AUTOCOMPLETE_GENERATION, form_data),
     }
 
-    # Process the payload through the pipeline
     try:
-        payload = await process_pipeline_inlet_filter(request, payload, user, models)
-    except Exception as e:
-        raise e
-
-    try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await run_task_completion(request, payload, user, models)
     except Exception as e:
         log.error(f'Error generating chat completion: {e}')
         return JSONResponse(
@@ -614,22 +566,11 @@ async def generate_emoji(request: Request, form_data: dict, user=Depends(get_ver
                 'max_completion_tokens': 4,
             }
         ),
-        'metadata': {
-            **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
-            'task': str(TASKS.EMOJI_GENERATION),
-            'task_body': form_data,
-            'chat_id': form_data.get('chat_id', None),
-        },
+        'metadata': build_task_metadata(TASKS.EMOJI_GENERATION, form_data),
     }
 
-    # Process the payload through the pipeline
     try:
-        payload = await process_pipeline_inlet_filter(request, payload, user, models)
-    except Exception as e:
-        raise e
-
-    try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await run_task_completion(request, payload, user, models)
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -667,22 +608,11 @@ async def generate_moa_response(request: Request, form_data: dict, user=Depends(
         'model': model_id,
         'messages': [{'role': 'user', 'content': content}],
         'stream': form_data.get('stream', False),
-        'metadata': {
-            **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
-            'chat_id': form_data.get('chat_id', None),
-            'task': str(TASKS.MOA_RESPONSE_GENERATION),
-            'task_body': form_data,
-        },
+        'metadata': build_task_metadata(TASKS.MOA_RESPONSE_GENERATION, form_data),
     }
 
-    # Process the payload through the pipeline
     try:
-        payload = await process_pipeline_inlet_filter(request, payload, user, models)
-    except Exception as e:
-        raise e
-
-    try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await run_task_completion(request, payload, user, models)
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,

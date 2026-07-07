@@ -63,6 +63,28 @@ def build_react_html(jsx_code: str) -> str:
 <body>
 <div id="root"></div>
 <script>
+  function __reportArtifactError(kind, message) {{
+    try {{
+      window.parent.postMessage({{
+        _owsArtifactError: true,
+        kind: kind,
+        message: String(message || '')
+      }}, '*');
+    }} catch (e) {{}}
+  }}
+  window.addEventListener('error', function(e) {{
+    var root = document.getElementById('root');
+    var msg = (e.error && e.error.message) || e.message || 'Unknown error';
+    if (root && root.childNodes.length === 0) {{
+      root.innerHTML =
+        '<div style="padding:1rem 1.25rem;font-family:monospace;color:#b91c1c;' +
+        'background:#fee2e2;border-radius:8px;margin:1rem;font-size:13px;white-space:pre-wrap">' +
+        '<strong>Compile error:</strong> ' + msg.replace(/</g, '&lt;') + '</div>';
+    }}
+    __reportArtifactError('compile', msg);
+  }});
+</script>
+<script>
   var __jsxRuntime = {{
     Fragment: React.Fragment,
     jsx: function(type, props, key) {{
@@ -115,6 +137,7 @@ def build_react_html(jsx_code: str) -> str:
       '<strong>No default export found.</strong><br/>' +
       'Add <code style="background:#fca5a5;padding:2px 4px;border-radius:3px">export default function App() {{ ... }}</code> ' +
       'to render your component.</div>';
+    __reportArtifactError('export', 'No default export found');
     return;
   }}
 
@@ -125,6 +148,7 @@ def build_react_html(jsx_code: str) -> str:
     document.getElementById('root').innerHTML =
       '<div style="padding:1rem 1.25rem;font-family:monospace;color:#b91c1c;background:#fee2e2;border-radius:8px;margin:1rem;font-size:13px">' +
       '<strong>Render error:</strong> ' + e.message + '</div>';
+    __reportArtifactError('render', e.message);
   }}
 }})();
 </script>

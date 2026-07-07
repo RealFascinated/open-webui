@@ -14,11 +14,16 @@
 		showControls,
 		artifactContents,
 		publishedArtifactIdMap,
+		pendingArtifactFix,
 		type ArtifactContent
 	} from '$lib/stores';
 	import { copyToClipboard } from '$lib/utils';
 	import { injectCsp } from '$lib/utils/csp';
 	import { injectStorageBridge } from '$lib/utils/artifact-storage-bridge';
+	import {
+		injectArtifactErrorBridge,
+		type ArtifactErrorKind
+	} from '$lib/utils/artifact-error-bridge';
 	import { artifactPublishMeta, publishedArtifactLookupKey } from '$lib/utils/artifact-render';
 	import {
 		publishArtifact,
@@ -47,6 +52,8 @@
 	let publishing = false;
 	let showUnpublishConfirm = false;
 	let iframeElement: HTMLIFrameElement;
+	let artifactError: { kind: ArtifactErrorKind; message: string } | null = null;
+	let fixingArtifact = false;
 
 	// View / Code toggle
 	let viewMode: 'preview' | 'code' = 'preview';
@@ -66,6 +73,7 @@
 	// ── iframe load ──────────────────────────────────────────────────
 
 	const iframeLoadHandler = () => {
+		artifactError = null;
 		iframeElement.contentWindow.addEventListener(
 			'click',
 			function (e) {
@@ -131,11 +139,39 @@
 		}
 	}
 
+	function handleArtifactErrorMessage(e: MessageEvent) {
+		if (!iframeElement || e.source !== iframeElement.contentWindow) return;
+		const data = e.data;
+		if (!data?._owsArtifactError) return;
+
+		artifactError = {
+			kind: data.kind ?? 'runtime',
+			message: data.message ?? 'Unknown error'
+		};
+	}
+
+	const requestArtifactFix = () => {
+		if (!currentContent || !artifactError || fixingArtifact) return;
+		fixingArtifact = true;
+		pendingArtifactFix.set({
+			identifier: currentContent.identifier,
+			title: currentContent.title,
+			mimeType: currentContent.mimeType,
+			errorKind: artifactError.kind,
+			errorMessage: artifactError.message
+		});
+		artifactError = null;
+		setTimeout(() => {
+			fixingArtifact = false;
+		}, 1000);
+	};
+
 	// ── Computed srcdoc ──────────────────────────────────────────────
 
 	$: srcdoc = (() => {
 		if (!currentContent) return '';
 		let html = currentContent.content;
+		html = injectArtifactErrorBridge(html);
 		// Inject storage bridge first (before CSP meta tag which must be earliest)
 		if (currentArtifactId) {
 			html = injectStorageBridge(html, currentArtifactId);
@@ -243,6 +279,7 @@
 
 	onMount(() => {
 		window.addEventListener('message', handleStorageMessage);
+		window.addEventListener('message', handleArtifactErrorMessage);
 
 		const unsubscribeArtifactCode = artifactCode.subscribe((value) => {
 			if (contents && value) {
@@ -273,6 +310,7 @@
 
 	onDestroy(() => {
 		window.removeEventListener('message', handleStorageMessage);
+		window.removeEventListener('message', handleArtifactErrorMessage);
 	});
 </script>
 
@@ -341,6 +379,21 @@
 
 				<!-- Spacer -->
 				<div class="flex-1"></div>
+
+				{#if artifactError}
+					<div class="flex items-center gap-1.5 min-w-0 max-w-[50%]">
+						<span class="text-xs text-red-600 dark:text-red-400 truncate" title={artifactError.message}>
+							{$i18n.t('Preview error')}
+						</span>
+						<button
+							class="shrink-0 text-xs px-2 py-1 rounded-md bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 transition font-medium disabled:opacity-40"
+							on:click={requestArtifactFix}
+							disabled={fixingArtifact}
+						>
+							{fixingArtifact ? $i18n.t('Sending…') : $i18n.t('Fix with AI')}
+						</button>
+					</div>
+				{/if}
 
 				<!-- Action buttons -->
 				<div class="flex items-center gap-1">

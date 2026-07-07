@@ -153,6 +153,17 @@ export const playingNotificationSound = writable(false);
 /** Pending prompt submitted via option chips or follow-up chips in assistant messages. */
 export const pendingSubmit: Writable<string | null> = writable(null);
 
+export type PendingArtifactFix = {
+	identifier?: string;
+	title?: string;
+	mimeType?: string;
+	errorKind: string;
+	errorMessage: string;
+};
+
+/** Artifact preview error — Chat.svelte sends a fix prompt to the model. */
+export const pendingArtifactFix: Writable<PendingArtifactFix | null> = writable(null);
+
 export type Model = OpenAIModel | OllamaModel;
 
 type BaseModel = {

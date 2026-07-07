@@ -11,6 +11,7 @@ from open_webui.tools.knowledge_fs import kb_exec  # noqa: F401 — re-exported
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Optional
 
@@ -4570,6 +4571,70 @@ def _parse_artifact_meta(meta: Optional[str]) -> dict:
         return {}
 
 
+_ARTIFACT_IN_CHAT_BUILD_ERROR = (
+    'Do not use artifact library tools for new build/create/make requests. '
+    'Output the full source in an <antArtifact> tag in your chat response instead. '
+    'list_artifacts / read_artifact / update_artifact are only for artifacts the user '
+    'explicitly asked to edit in their saved library (e.g. "update my saved clicker game"). '
+    'In-chat revisions reuse the same <antArtifact identifier="…"> — no library tool calls.'
+)
+
+
+def _artifact_library_tool_allowed(user_prompt: Optional[str]) -> bool:
+    """Block library artifact writes when the user asked for a new in-chat build."""
+    if not user_prompt or not str(user_prompt).strip():
+        return True
+
+    prompt = str(user_prompt).lower()
+
+    library_cues = (
+        'saved artifact',
+        'saved game',
+        'my library',
+        'artifact library',
+        'published artifact',
+        'in my library',
+        'from my library',
+        'previously saved',
+        'saved to',
+    )
+    if any(cue in prompt for cue in library_cues):
+        return True
+
+    if re.search(r'\b(update|edit|modify|revise|change|fix)\s+(my|the)\s+saved\b', prompt):
+        return True
+
+    build_cues = (
+        'build me',
+        'build a',
+        'build an',
+        'create a',
+        'create me',
+        'create an',
+        'make me',
+        'make a',
+        'make an',
+        'write me',
+        'write a',
+        'write an',
+        'design a',
+        'design me',
+        'code me',
+        'code a',
+        'generate a',
+        'generate me',
+        'in chat',
+        'using react',
+        'using tailwind',
+        'with react',
+        'with tailwind',
+    )
+    if any(cue in prompt for cue in build_cues):
+        return False
+
+    return True
+
+
 def _prepare_artifact_storage(content: str, artifact_type: str) -> tuple[str, str, Optional[str]]:
     normalized = (artifact_type or 'iframe').lower().strip()
     if normalized == 'react':
@@ -4626,15 +4691,23 @@ async def list_artifacts(
     count: int = 50,
     __request__: Request = None,
     __user__: dict = None,
+    __metadata__: dict = None,
 ) -> str:
     """
-    List the user's saved artifacts from the artifact library.
+    List artifacts in the user's saved library (published via the panel Save button).
+
+    Do NOT call for new build/create/make requests — output <antArtifact> in chat instead.
+    Only call when the user explicitly refers to their saved/published library.
 
     :param count: Maximum number of artifacts to return (default: 50)
     :return: JSON list with id, title, type, artifact_type, updated_at
     """
     if err := await _artifacts_access_error(__request__, __user__):
         return json.dumps({'error': err})
+
+    user_prompt = (__metadata__ or {}).get('user_prompt')
+    if not _artifact_library_tool_allowed(user_prompt):
+        return json.dumps({'error': _ARTIFACT_IN_CHAT_BUILD_ERROR})
 
     try:
         from open_webui.models.artifacts import Artifacts
@@ -4667,15 +4740,23 @@ async def read_artifact(
     artifact_id: str,
     __request__: Request = None,
     __user__: dict = None,
+    __metadata__: dict = None,
 ) -> str:
     """
-    Read the full editable source of a saved artifact by ID.
+    Read editable source of an artifact already in the user's saved library.
+
+    Do NOT call for new build/create/make requests — output <antArtifact> in chat instead.
+    Call only after list_artifacts when the user asked to edit a specific saved artifact.
 
     :param artifact_id: The artifact ID from list_artifacts
     :return: JSON with id, title, type, artifact_type, and content (editable source)
     """
     if err := await _artifacts_access_error(__request__, __user__):
         return json.dumps({'error': err})
+
+    user_prompt = (__metadata__ or {}).get('user_prompt')
+    if not _artifact_library_tool_allowed(user_prompt):
+        return json.dumps({'error': _ARTIFACT_IN_CHAT_BUILD_ERROR})
 
     try:
         from open_webui.models.artifacts import Artifacts
@@ -4714,18 +4795,28 @@ async def update_artifact(
     artifact_type: Optional[str] = None,
     __request__: Request = None,
     __user__: dict = None,
+    __metadata__: dict = None,
 ) -> str:
     """
-    Replace a saved artifact's full source. Call read_artifact first. Also output an <antArtifact> tag after updating.
+    Replace source of an artifact already in the user's saved library.
+
+    NEVER use for build/create/make requests — output <antArtifact> in chat instead.
+    NEVER use to deliver new interactive content. Only when the user explicitly asked
+    to edit a saved/published library artifact. Requires list_artifacts → read_artifact first.
+    After updating, also output an <antArtifact> tag so the in-chat panel refreshes.
 
     :param artifact_id: The artifact ID to update
     :param content: Complete replacement source (not a diff)
     :param title: Optional new title
-    :param artifact_type: Optional type override: iframe, svg, or react
+    :param artifact_type: Optional type override: iframe, svg, react, or markdown
     :return: JSON with updated artifact metadata
     """
     if err := await _artifacts_access_error(__request__, __user__):
         return json.dumps({'error': err})
+
+    user_prompt = (__metadata__ or {}).get('user_prompt')
+    if not _artifact_library_tool_allowed(user_prompt):
+        return json.dumps({'error': _ARTIFACT_IN_CHAT_BUILD_ERROR})
 
     if not content or not str(content).strip():
         return json.dumps({'error': 'Content is required'})

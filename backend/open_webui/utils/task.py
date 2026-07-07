@@ -301,7 +301,15 @@ async def rag_template(template: str, context: str, query: str):
     return template
 
 
+def strip_system_messages(messages: Optional[list[dict]] = None) -> list[dict]:
+    """Task prompts should use user/assistant turns only — not chat system prompts."""
+    if not messages:
+        return []
+    return [message for message in messages if message.get('role') != 'system']
+
+
 async def title_generation_template(template: str, messages: list[dict], user: Optional[Any] = None) -> str:
+    messages = strip_system_messages(messages)
     prompt = get_last_user_message(messages)
     template = replace_prompt_variable(template, prompt)
     template = replace_messages_variable(template, messages)
@@ -312,6 +320,7 @@ async def title_generation_template(template: str, messages: list[dict], user: O
 
 
 async def follow_up_generation_template(template: str, messages: list[dict], user: Optional[Any] = None) -> str:
+    messages = strip_system_messages(messages)
     prompt = get_last_user_message(messages)
     template = replace_prompt_variable(template, prompt)
     template = replace_messages_variable(template, messages)
@@ -321,6 +330,7 @@ async def follow_up_generation_template(template: str, messages: list[dict], use
 
 
 async def tags_generation_template(template: str, messages: list[dict], user: Optional[Any] = None) -> str:
+    messages = strip_system_messages(messages)
     prompt = get_last_user_message(messages)
     template = replace_prompt_variable(template, prompt)
     template = replace_messages_variable(template, messages)
@@ -330,6 +340,7 @@ async def tags_generation_template(template: str, messages: list[dict], user: Op
 
 
 async def image_prompt_generation_template(template: str, messages: list[dict], user: Optional[Any] = None) -> str:
+    messages = strip_system_messages(messages)
     prompt = get_last_user_message(messages)
     template = replace_prompt_variable(template, prompt)
     template = replace_messages_variable(template, messages)
@@ -354,13 +365,14 @@ async def autocomplete_generation_template(
 ) -> str:
     template = template.replace('{{TYPE}}', type if type else '')
     template = replace_prompt_variable(template, prompt)
-    template = replace_messages_variable(template, messages)
+    template = replace_messages_variable(template, strip_system_messages(messages))
 
     template = await prompt_template(template, user)
     return template
 
 
 async def query_generation_template(template: str, messages: list[dict], user: Optional[Any] = None) -> str:
+    messages = strip_system_messages(messages)
     prompt = get_last_user_message(messages)
     template = replace_prompt_variable(template, prompt)
     template = replace_messages_variable(template, messages)
