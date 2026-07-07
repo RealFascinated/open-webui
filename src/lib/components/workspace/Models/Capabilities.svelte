@@ -17,7 +17,7 @@
 		},
 		file_context: {
 			label: $i18n.t('File Context'),
-			description: $i18n.t('Inject file content into conversation context')
+			description: $i18n.t('Process attached files when uploaded. Follow-up messages use conversation history and on-demand file access.')
 		},
 		web_search: {
 			label: $i18n.t('Web Search'),

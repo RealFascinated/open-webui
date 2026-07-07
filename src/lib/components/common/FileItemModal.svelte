@@ -346,7 +346,7 @@
 						{/if}
 					</div>
 
-					{#if edit}
+					{#if edit && item?.knowledge}
 						<div class=" self-end">
 							<Tooltip
 								content={enableFullContent

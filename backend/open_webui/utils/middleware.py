@@ -2619,6 +2619,40 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         # Remove duplicate files based on their content
         files = list({json.dumps(f, sort_keys=True): f for f in files}.values())
 
+    chat_has_files = bool(files)
+    if not chat_has_files:
+        _chat_id = metadata.get('chat_id')
+        if _chat_id and isinstance(_chat_id, str) and _chat_id.startswith('local:'):
+            for _msg in form_data.get('messages', []):
+                for _file in _msg.get('files') or []:
+                    _ftype = _file.get('type')
+                    if _ftype in ('doc', 'text', 'note', 'chat', 'collection', 'folder'):
+                        chat_has_files = True
+                        break
+                    if _ftype == 'file' and _file.get('id'):
+                        _ct = _file.get('content_type') or ''
+                        if not _ct.startswith('image/'):
+                            chat_has_files = True
+                            break
+                if chat_has_files:
+                    break
+        elif _chat_id and isinstance(_chat_id, str) and not _chat_id.startswith(('local:', 'channel:')):
+            _chat = await Chats.get_chat_by_id_and_user_id(_chat_id, user.id)
+            if _chat:
+                for _msg in (_chat.chat.get('history', {}).get('messages') or {}).values():
+                    for _file in _msg.get('files') or []:
+                        _ftype = _file.get('type')
+                        if _ftype in ('doc', 'text', 'note', 'chat', 'collection', 'folder'):
+                            chat_has_files = True
+                            break
+                        if _ftype == 'file' and _file.get('id'):
+                            _ct = _file.get('content_type') or ''
+                            if not _ct.startswith('image/'):
+                                chat_has_files = True
+                                break
+                    if chat_has_files:
+                        break
+
     metadata = {
         **metadata,
         'model_id': form_data.get('model'),
@@ -2626,8 +2660,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         'terminal_id': terminal_id,
         'files': files,
         'features': features,
+        'chat_has_files': chat_has_files,
     }
     form_data['metadata'] = metadata
+    extra_params['__metadata__'] = metadata
 
     # When the caller provides an explicit `tools` key in the request body,
     # skip all server-side tool resolution and pass the caller's tools through

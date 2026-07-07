@@ -555,6 +555,12 @@ async def get_builtin_tools(
                 ]
             )
 
+    # Chat-uploaded files: on-demand access for follow-up turns (Claude-style).
+    # Files are processed on attach; later turns use view_file instead of per-turn RAG.
+    if get_model_capability('file_upload') and extra_params.get('__metadata__', {}).get('chat_has_files'):
+        if view_file not in builtin_functions:
+            builtin_functions.append(view_file)
+
     # Chats tools - search and fetch user's chat history
     if is_builtin_tool_enabled('chats'):
         builtin_functions.extend([search_chats, view_chat])

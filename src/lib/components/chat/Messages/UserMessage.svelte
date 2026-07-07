@@ -13,6 +13,7 @@
 	import ProfileImage from './ProfileImage.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import FileItem from '$lib/components/common/FileItem.svelte';
+	import Pin from '$lib/components/icons/Pin.svelte';
 	import Markdown from './Markdown.svelte';
 	import Image from '$lib/components/common/Image.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
@@ -41,6 +42,14 @@
 	export let readOnly: boolean;
 	export let editCodeBlock = true;
 	export let topPadding = false;
+	export let pinFileToChat: Function = () => {};
+	export let pinnedFileIds = [];
+
+	const RAG_FILE_TYPES = ['doc', 'text', 'note', 'chat', 'collection', 'folder'];
+
+	const isRagFile = (file) =>
+		RAG_FILE_TYPES.includes(file?.type) ||
+		(file?.type === 'file' && !(file?.content_type ?? '').startsWith('image/'));
 
 	let showDeleteConfirm = false;
 
@@ -215,14 +224,31 @@
 								{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
 									<Image src={fileUrl} imageClassName=" max-h-96 rounded-lg" />
 								{:else}
-									<FileItem
-										item={file}
-										url={file.url}
-										name={file.name}
-										type={file.type}
-										size={file?.size}
-										small={true}
-									/>
+									<div class="flex items-center gap-1">
+										<FileItem
+											item={file}
+											url={file.url}
+											name={file.name}
+											type={file.type}
+											size={file?.size}
+											small={true}
+										/>
+										{#if !readOnly && isRagFile(file) && file.id && !pinnedFileIds.includes(file.id)}
+											<Tooltip content={$i18n.t('Pin to chat')}>
+												<button
+													class="p-1 rounded-lg text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+													type="button"
+													aria-label={$i18n.t('Pin to chat')}
+													on:click={() => {
+														pinFileToChat(file);
+														toast.success($i18n.t('File pinned to chat'));
+													}}
+												>
+													<Pin className="size-3.5" />
+												</button>
+											</Tooltip>
+										{/if}
+									</div>
 								{/if}
 							</div>
 						{/each}

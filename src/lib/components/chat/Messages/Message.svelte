@@ -39,6 +39,8 @@
 	export let mergeResponses;
 
 	export let addMessages;
+	export let pinFileToChat = () => {};
+	export let pinnedFileIds = [];
 	export let triggerScroll;
 	export let readOnly = false;
 	export let editCodeBlock = true;
@@ -72,6 +74,8 @@
 				{readOnly}
 				{editCodeBlock}
 				{topPadding}
+				{pinFileToChat}
+				{pinnedFileIds}
 			/>
 		{:else if (history.messages[history.messages[messageId].parentId]?.models?.length ?? 1) === 1}
 			<ResponseMessage

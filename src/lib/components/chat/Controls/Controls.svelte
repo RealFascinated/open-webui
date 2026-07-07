@@ -50,12 +50,16 @@
 		<div class=" dark:text-gray-200 text-sm py-0.5 px-0.5">
 			{#if chatFiles.length > 0}
 				<Collapsible
-					title={$i18n.t('Files')}
+					title={$i18n.t('Pinned Files')}
 					bind:open={showFiles}
 					onChange={setOpen('files')}
 					buttonClassName="w-full"
 				>
-					<div class="flex flex-col gap-1 mt-1.5" slot="content">
+					<div slot="content">
+						<p class="text-xs text-gray-500 dark:text-gray-500 mb-1.5">
+							{$i18n.t('Pinned files are included in every message, like project knowledge.')}
+						</p>
+						<div class="flex flex-col gap-1">
 						{#each chatFiles as file, fileIdx}
 							<FileItem
 								className="w-full"
@@ -78,6 +82,7 @@
 								}}
 							/>
 						{/each}
+						</div>
 					</div>
 				</Collapsible>
 

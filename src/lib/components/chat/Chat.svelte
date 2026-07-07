@@ -232,9 +232,25 @@
 
 	// Chat Input
 	let prompt = '';
+	// Explicitly pinned files — always included in RAG (like Claude project files)
 	let chatFiles = [];
 	let files = [];
 	let params = {};
+
+	const RAG_FILE_TYPES = ['doc', 'text', 'note', 'chat', 'collection', 'folder'];
+
+	const isRagFile = (item) =>
+		RAG_FILE_TYPES.includes(item?.type) ||
+		(item?.type === 'file' && !(item?.content_type ?? '').startsWith('image/'));
+
+	const getRagFiles = (fileList = []) => fileList.filter(isRagFile);
+
+	const pinFileToChat = (file) => {
+		if (!file?.id || chatFiles.some((f) => f.id === file.id)) return;
+		chatFiles = [...chatFiles, { ...structuredClone(file), pinned: true }];
+	};
+
+	$: pinnedFileIds = chatFiles.map((f) => f.id).filter(Boolean);
 
 	$: if (chatIdProp) {
 		navigateHandler();
@@ -1205,7 +1221,6 @@
 			name: url,
 			collection_name: '',
 			status: 'uploading',
-			context: 'full',
 			url,
 			error: ''
 		}));
@@ -1640,7 +1655,10 @@
 				chatTitle.set(chatContent.title);
 
 				params = structuredClone(chatContent?.params ?? {});
-				chatFiles = structuredClone(chatContent?.files ?? []);
+				// Only keep explicitly pinned files — message attachments are scoped to their turn
+				chatFiles = (chatContent?.files ?? [])
+					.filter((f) => f.pinned === true)
+					.map((f) => ({ ...structuredClone(f), pinned: true }));
 
 				// Load tasks from chat-level DB field
 				chatTasks = chat?.tasks ?? [];
@@ -2092,18 +2110,6 @@
 	const submitPrompt = async (inputContent, inputFiles) => {
 		const _files = structuredClone(inputFiles);
 
-		chatFiles.push(
-			..._files.filter(
-				(item) =>
-					['doc', 'text', 'note', 'chat', 'folder', 'collection'].includes(item.type) ||
-					(item.type === 'file' && !(item?.content_type ?? '').startsWith('image/'))
-			)
-		);
-		chatFiles = chatFiles.filter(
-			// Remove duplicates
-			(item, index, array) => array.findIndex((i) => equal(i, item)) === index
-		);
-
 		// Create user message
 		let userMessageId = uuidv4();
 		let userMessage = {
@@ -2432,26 +2438,14 @@
 		const responseMessage = _history.messages[responseMessageId];
 		const userMessage = _history.messages[responseMessage.parentId];
 
-		const chatMessageFiles = _messages
-			.filter((message) => message.files)
-			.flatMap((message) => message.files);
-
-		// Filter chatFiles to only include files that are in the chatMessageFiles
-		chatFiles = chatFiles.filter((item) => {
-			const fileExists = chatMessageFiles.some((messageFile) => messageFile.id === item.id);
-			return fileExists;
-		});
-
-		let files = structuredClone(chatFiles);
-		files.push(
-			...(userMessage?.files ?? []).filter(
-				(item) =>
-					['doc', 'text', 'note', 'chat', 'collection', 'folder'].includes(item.type) ||
-					(item.type === 'file' && !(item?.content_type ?? '').startsWith('image/'))
-			)
+		// RAG only for files attached to this message + explicitly pinned chat files
+		let files = [
+			...getRagFiles(chatFiles),
+			...getRagFiles(userMessage?.files ?? [])
+		];
+		files = files.filter(
+			(item, index, array) => array.findIndex((i) => i.id === item.id) === index
 		);
-		// Remove duplicates
-		files = files.filter((item, index, array) => array.findIndex((i) => equal(i, item)) === index);
 
 		scrollToBottom();
 		eventTarget.dispatchEvent(
@@ -3296,6 +3290,8 @@
 										{mergeResponses}
 										{chatActionHandler}
 										{addMessages}
+										{pinFileToChat}
+										{pinnedFileIds}
 										topPadding={true}
 										bottomPadding={files.length > 0}
 										{onSelect}

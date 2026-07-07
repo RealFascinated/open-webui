@@ -47,6 +47,8 @@
 	export let showMessage: Function = () => {};
 	export let submitMessage: Function = () => {};
 	export let addMessages: Function = () => {};
+	export let pinFileToChat: Function = () => {};
+	export let pinnedFileIds = [];
 
 	export let readOnly = false;
 	export let editCodeBlock = true;
@@ -547,6 +549,8 @@
 								{continueResponse}
 								{mergeResponses}
 								{addMessages}
+								{pinFileToChat}
+								{pinnedFileIds}
 								{triggerScroll}
 								{readOnly}
 								{editCodeBlock}
