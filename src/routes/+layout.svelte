@@ -76,6 +76,7 @@
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import SyncStatsModal from '$lib/components/chat/Settings/SyncStatsModal.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import { getOutputText } from '$lib/components/chat/Messages/structuredOutput';
 	import { getUserSettings } from '$lib/apis/users';
 	import dayjs from 'dayjs';
@@ -112,6 +113,10 @@
 	let isAuthRedirectInProgress = false;
 
 	let showRefresh = false;
+	let showToolConfirmDialog = false;
+	let toolConfirmTitle = '';
+	let toolConfirmMessage = '';
+	let toolConfirmCallback = null;
 
 	let showSyncStatsModal = false;
 	let syncStatsEventData = null;
@@ -614,6 +619,14 @@
 				}
 				return;
 			}
+		}
+
+		if (type === 'confirmation' && typeof cb === 'function') {
+			toolConfirmTitle = data?.title ?? $i18n.t('Confirm');
+			toolConfirmMessage = data?.message ?? '';
+			toolConfirmCallback = cb;
+			showToolConfirmDialog = true;
+			return;
 		}
 
 		if ((event.chat_id !== $chatId && !$temporaryChatEnabled) || isInBackground) {
@@ -1273,6 +1286,26 @@
 {#if $config?.features.enable_community_sharing}
 	<SyncStatsModal bind:show={showSyncStatsModal} eventData={syncStatsEventData} />
 {/if}
+
+<ConfirmDialog
+	bind:show={showToolConfirmDialog}
+	title={toolConfirmTitle}
+	message={toolConfirmMessage}
+	confirmLabel={$i18n.t('Confirm')}
+	cancelLabel={$i18n.t('Cancel')}
+	on:confirm={() => {
+		if (toolConfirmCallback) {
+			toolConfirmCallback(true);
+			toolConfirmCallback = null;
+		}
+	}}
+	on:cancel={() => {
+		if (toolConfirmCallback) {
+			toolConfirmCallback(false);
+			toolConfirmCallback = null;
+		}
+	}}
+/>
 
 <Toaster
 	theme={$theme.includes('dark')

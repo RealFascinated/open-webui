@@ -27,6 +27,10 @@
 			label: $i18n.t('Knowledge Base'),
 			description: $i18n.t('Browse and query knowledge bases')
 		},
+		files: {
+			label: $i18n.t('Files'),
+			description: $i18n.t('Search and read uploaded files')
+		},
 		channels: {
 			label: $i18n.t('Channels'),
 			description: $i18n.t('Search channels and channel messages')
@@ -54,6 +58,10 @@
 		calendar: {
 			label: $i18n.t('Calendar'),
 			description: $i18n.t('List calendars, search, create, update, and delete calendar events')
+		},
+		skills: {
+			label: $i18n.t('Skills'),
+			description: $i18n.t('Search and load skill instructions')
 		}
 	};
 

@@ -759,6 +759,10 @@
 						toast.info(toastContent);
 					}
 				} else if (type === 'confirmation') {
+					if (typeof cb === 'function') {
+						return;
+					}
+
 					eventCallback = cb;
 
 					eventConfirmationInput = false;

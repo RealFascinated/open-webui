@@ -96,7 +96,7 @@ from open_webui.utils.misc import (
     convert_logit_bias_input_to_json,
     convert_output_to_messages,
     deep_update,
-    extract_urls,
+    extract_urls_from_prompt,
     get_content_from_message,
     get_last_assistant_message,
     get_last_user_message,
@@ -2183,6 +2183,60 @@ async def connect_mcp_server(
     return client, tool_specs
 
 
+async def attach_prompt_urls_to_files(
+    user: UserModel,
+    prompt: str,
+    files: list | None,
+    metadata: dict,
+    event_emitter,
+) -> list | None:
+    """Extract bare URLs from a short user prompt and attach them for RAG fetching."""
+    if not prompt or not prompt.strip() or files:
+        return files
+
+    if not await Config.get('web.prompt_url_extraction.enable', True):
+        return files
+
+    # Native function calling exposes fetch_url; avoid duplicate fetches.
+    if metadata.get('params', {}).get('function_calling') != 'legacy':
+        return files
+
+    if user.role != 'admin':
+        permissions = await Config.get('user.permissions')
+        if not await has_permission(user.id, 'chat.web_upload', permissions):
+            return files
+
+    max_prompt_len = await Config.get('web.prompt_url_extraction.max_prompt_length', 500)
+    if len(prompt) > max_prompt_len:
+        return files
+
+    max_urls = await Config.get('web.prompt_url_extraction.max_urls', 3)
+    raw_urls = extract_urls_from_prompt(prompt, max_urls=max_urls)
+    if not raw_urls:
+        return files
+
+    from open_webui.retrieval.web.utils import safe_validate_urls
+
+    valid_urls = list(safe_validate_urls(raw_urls))
+    if not valid_urls:
+        return files
+
+    if event_emitter:
+        await event_emitter(
+            {
+                'type': 'status',
+                'data': {
+                    'action': 'prompt_urls_extracted',
+                    'urls': valid_urls,
+                    'count': len(valid_urls),
+                    'done': True,
+                },
+            }
+        )
+
+    return [{'type': 'url', 'url': url, 'name': url} for url in valid_urls]
+
+
 async def process_chat_payload(request, form_data, user, metadata, model):
     # Ensure chat_id is always a string — external API clients may omit it.
     if not isinstance(metadata.get('chat_id'), str):
@@ -2596,10 +2650,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         if fallback:
             set_last_user_message_content(fallback, form_data['messages'])
             prompt = fallback
-    # TODO: re-enable URL extraction from prompt
-    # urls = []
-    # if prompt and len(prompt or "") < 500 and (not files or len(files) == 0):
-    #     urls = extract_urls(prompt)
+
+    files = await attach_prompt_urls_to_files(user, prompt, files, metadata, event_emitter)
 
     if files:
         if not files:
@@ -2615,7 +2667,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         files = [f for f in files if f.get('id', None) != folder_id]
                         files = [*files, *await get_accessible_folder_files(folder.data['files'], user)]
 
-        # files = [*files, *[{"type": "url", "url": url, "name": url} for url in urls]]
         # Remove duplicate files based on their content
         files = list({json.dumps(f, sort_keys=True): f for f in files}.values())
 

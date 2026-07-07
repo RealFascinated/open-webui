@@ -288,6 +288,7 @@ RETRIEVAL_CONFIG_KEYS = {
     'ENABLE_RAG_HYBRID_SEARCH': 'rag.enable_hybrid_search',
     'ENABLE_RAG_HYBRID_SEARCH_ENRICHED_TEXTS': 'rag.enable_hybrid_search_enriched_texts',
     'ENABLE_WEB_LOADER_SSL_VERIFICATION': 'web.loader.ssl_verification',
+    'ENABLE_PROMPT_URL_EXTRACTION': 'web.prompt_url_extraction.enable',
     'ENABLE_WEB_SEARCH': 'web.search.enable',
     'ENABLE_WEB_SEARCH_CONFIRMATION': 'web.search.confirmation.enable',
     'WEB_SEARCH_CONFIRMATION_CONTENT': 'web.search.confirmation.content',
@@ -338,6 +339,8 @@ RETRIEVAL_CONFIG_KEYS = {
     'PERPLEXITY_SEARCH_CONTEXT_USAGE': 'web.search.perplexity_search_context_usage',
     'PLAYWRIGHT_TIMEOUT': 'web.loader.playwright_timeout',
     'PLAYWRIGHT_WS_URL': 'web.loader.playwright_ws_url',
+    'PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH': 'web.prompt_url_extraction.max_prompt_length',
+    'PROMPT_URL_EXTRACTION_MAX_URLS': 'web.prompt_url_extraction.max_urls',
     'RAG_AZURE_OPENAI_API_KEY': 'rag.azure_openai.api_key',
     'RAG_AZURE_OPENAI_API_VERSION': 'rag.azure_openai.api_version',
     'RAG_AZURE_OPENAI_BASE_URL': 'rag.azure_openai.base_url',
@@ -695,6 +698,9 @@ async def get_rag_config(request: Request, user=Depends(get_admin_user)):
             'WEB_SEARCH_CONCURRENT_REQUESTS': config.WEB_SEARCH_CONCURRENT_REQUESTS,
             'WEB_FETCH_MAX_CONTENT_LENGTH': config.WEB_FETCH_MAX_CONTENT_LENGTH,
             'WEB_LOADER_CONCURRENT_REQUESTS': config.WEB_LOADER_CONCURRENT_REQUESTS,
+            'ENABLE_PROMPT_URL_EXTRACTION': config.ENABLE_PROMPT_URL_EXTRACTION,
+            'PROMPT_URL_EXTRACTION_MAX_URLS': config.PROMPT_URL_EXTRACTION_MAX_URLS,
+            'PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH': config.PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH,
             'WEB_SEARCH_DOMAIN_FILTER_LIST': config.WEB_SEARCH_DOMAIN_FILTER_LIST,
             'BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL': config.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL,
             'BYPASS_WEB_SEARCH_WEB_LOADER': config.BYPASS_WEB_SEARCH_WEB_LOADER,
@@ -774,6 +780,9 @@ class WebConfig(BaseModel):
     WEB_SEARCH_DOMAIN_FILTER_LIST: list[str | None] = []
     WEB_FETCH_MAX_CONTENT_LENGTH: int | None = None
     WEB_LOADER_CONCURRENT_REQUESTS: int | None = None
+    ENABLE_PROMPT_URL_EXTRACTION: bool | None = None
+    PROMPT_URL_EXTRACTION_MAX_URLS: int | None = None
+    PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH: int | None = None
     BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL: bool | None = None
     BYPASS_WEB_SEARCH_WEB_LOADER: bool | None = None
     OLLAMA_CLOUD_WEB_SEARCH_API_KEY: str | None = None
@@ -1241,6 +1250,12 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
         config.WEB_SEARCH_CONCURRENT_REQUESTS = form_data.web.WEB_SEARCH_CONCURRENT_REQUESTS
         config.WEB_FETCH_MAX_CONTENT_LENGTH = form_data.web.WEB_FETCH_MAX_CONTENT_LENGTH
         config.WEB_LOADER_CONCURRENT_REQUESTS = form_data.web.WEB_LOADER_CONCURRENT_REQUESTS
+        if form_data.web.ENABLE_PROMPT_URL_EXTRACTION is not None:
+            config.ENABLE_PROMPT_URL_EXTRACTION = form_data.web.ENABLE_PROMPT_URL_EXTRACTION
+        if form_data.web.PROMPT_URL_EXTRACTION_MAX_URLS is not None:
+            config.PROMPT_URL_EXTRACTION_MAX_URLS = form_data.web.PROMPT_URL_EXTRACTION_MAX_URLS
+        if form_data.web.PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH is not None:
+            config.PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH = form_data.web.PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH
         config.WEB_SEARCH_DOMAIN_FILTER_LIST = form_data.web.WEB_SEARCH_DOMAIN_FILTER_LIST
         config.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL = form_data.web.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL
         config.BYPASS_WEB_SEARCH_WEB_LOADER = form_data.web.BYPASS_WEB_SEARCH_WEB_LOADER
@@ -1392,6 +1407,9 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
             'WEB_SEARCH_CONCURRENT_REQUESTS': config.WEB_SEARCH_CONCURRENT_REQUESTS,
             'WEB_FETCH_MAX_CONTENT_LENGTH': config.WEB_FETCH_MAX_CONTENT_LENGTH,
             'WEB_LOADER_CONCURRENT_REQUESTS': config.WEB_LOADER_CONCURRENT_REQUESTS,
+            'ENABLE_PROMPT_URL_EXTRACTION': config.ENABLE_PROMPT_URL_EXTRACTION,
+            'PROMPT_URL_EXTRACTION_MAX_URLS': config.PROMPT_URL_EXTRACTION_MAX_URLS,
+            'PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH': config.PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH,
             'WEB_SEARCH_DOMAIN_FILTER_LIST': config.WEB_SEARCH_DOMAIN_FILTER_LIST,
             'BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL': config.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL,
             'BYPASS_WEB_SEARCH_WEB_LOADER': config.BYPASS_WEB_SEARCH_WEB_LOADER,
@@ -2110,6 +2128,14 @@ async def process_web(
     overwrite: bool = Query(True, description='Whether to overwrite existing collection'),
     user=Depends(get_verified_user),
 ):
+    if user.role != 'admin':
+        permissions = await Config.get('user.permissions')
+        if not await has_permission(user.id, 'chat.web_upload', permissions):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+            )
+
     config = await get_retrieval_config()
     try:
         content, docs = await get_content_from_url(request, form_data.url)

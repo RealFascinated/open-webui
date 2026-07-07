@@ -28,7 +28,7 @@ MAX_GREP_MATCHES = 50
 
 
 # =============================================================================
-# SHARED REGEX UTILITIES — also used by builtin.py grep_knowledge_files
+# SHARED REGEX UTILITIES — used by kb_exec grep command
 # =============================================================================
 
 

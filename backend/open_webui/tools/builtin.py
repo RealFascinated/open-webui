@@ -922,6 +922,113 @@ async def list_memories(
 # =============================================================================
 
 
+def _get_note_markdown(note) -> str:
+    if note.data and note.data.get('content', {}).get('md'):
+        return note.data['content']['md']
+    return ''
+
+
+async def _get_note_read_access(note_id: str, __user__: dict):
+    """Return (note, error_json) — error_json is set when access is denied or note is missing."""
+    note = await Notes.get_note_by_id(note_id)
+    if not note:
+        return None, json.dumps({'error': 'Note not found'})
+
+    user_id = __user__.get('id')
+    user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+
+    from open_webui.models.access_grants import AccessGrants
+
+    if note.user_id != user_id and not await AccessGrants.has_access(
+        user_id=user_id,
+        resource_type='note',
+        resource_id=note.id,
+        permission='read',
+        user_group_ids=set(user_group_ids),
+    ):
+        return None, json.dumps({'error': 'Access denied'})
+
+    return note, None
+
+
+async def _get_note_write_access(note_id: str, __user__: dict):
+    """Return (note, error_json) — error_json is set when write access is denied or note is missing."""
+    note = await Notes.get_note_by_id(note_id)
+    if not note:
+        return None, json.dumps({'error': 'Note not found'})
+
+    user_id = __user__.get('id')
+    user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+
+    from open_webui.models.access_grants import AccessGrants
+
+    if note.user_id != user_id and not await AccessGrants.has_access(
+        user_id=user_id,
+        resource_type='note',
+        resource_id=note.id,
+        permission='write',
+        user_group_ids=set(user_group_ids),
+    ):
+        return None, json.dumps({'error': 'Write access denied'})
+
+    return note, None
+
+
+def _normalize_note_line_range(
+    start_line: int,
+    end_line: Optional[int],
+    total_lines: int,
+) -> tuple[int, int] | str:
+    """Return (start_idx, end_idx) as 0-based inclusive indices, or an error string."""
+    if isinstance(start_line, str):
+        try:
+            start_line = int(start_line)
+        except ValueError:
+            return 'start_line must be an integer'
+    if end_line is None:
+        end_line = start_line
+    elif isinstance(end_line, str):
+        try:
+            end_line = int(end_line)
+        except ValueError:
+            return 'end_line must be an integer'
+
+    if start_line < 1 or end_line < 1:
+        return 'Line numbers are 1-indexed and must be positive'
+    if start_line > end_line:
+        return 'start_line must be less than or equal to end_line'
+    if start_line > total_lines:
+        return f'start_line {start_line} is beyond the note length ({total_lines} lines)'
+
+    end_line = min(end_line, total_lines)
+    return start_line - 1, end_line - 1
+
+
+async def _request_user_confirmation(
+    title: str,
+    message: str,
+    __event_call__: callable = None,
+) -> bool:
+    if __event_call__ is None:
+        return False
+
+    result = await __event_call__(
+        {
+            'type': 'confirmation',
+            'data': {
+                'title': title,
+                'message': message,
+            },
+        }
+    )
+
+    if result is True:
+        return True
+    if isinstance(result, dict) and result.get('confirmed'):
+        return True
+    return bool(result)
+
+
 async def search_notes(
     query: str,
     count: int = 5,
@@ -1195,6 +1302,186 @@ async def replace_note_content(
         return json.dumps({'error': str(e)})
 
 
+async def view_note_lines(
+    note_id: str,
+    start_line: int,
+    end_line: Optional[int] = None,
+    line_numbers: bool = True,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Read a specific line range from a note without loading the entire content.
+    Use this to inspect part of a long note before making targeted edits.
+
+    :param note_id: The ID of the note to read
+    :param start_line: First line to read (1-indexed)
+    :param end_line: Last line to read, inclusive (1-indexed; defaults to start_line)
+    :param line_numbers: Prefix each line with its line number (default: true)
+    :return: JSON with id, title, content slice, and line metadata
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        note, error = await _get_note_read_access(note_id, __user__)
+        if error:
+            return error
+
+        lines = _get_note_markdown(note).split('\n')
+        line_range = _normalize_note_line_range(start_line, end_line, len(lines) or 1)
+        if isinstance(line_range, str):
+            return json.dumps({'error': line_range})
+
+        start_idx, end_idx = line_range
+        selected = lines[start_idx : end_idx + 1]
+        if line_numbers:
+            content = '\n'.join(f'{start_idx + i + 1}: {line}' for i, line in enumerate(selected))
+        else:
+            content = '\n'.join(selected)
+
+        return json.dumps(
+            {
+                'id': note.id,
+                'title': note.title,
+                'content': content,
+                'start_line': start_idx + 1,
+                'end_line': end_idx + 1,
+                'total_lines': len(lines),
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'view_note_lines error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def update_note_content(
+    note_id: str,
+    start_line: int,
+    content: str,
+    end_line: Optional[int] = None,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Replace a specific line range in a note without rewriting the entire note.
+    Use view_note_lines first to inspect the target section.
+
+    :param note_id: The ID of the note to update
+    :param start_line: First line to replace (1-indexed)
+    :param content: New markdown content for the line range (may span multiple lines)
+    :param end_line: Last line to replace, inclusive (1-indexed; defaults to start_line)
+    :return: JSON with success status and updated line metadata
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        from open_webui.models.notes import NoteUpdateForm
+
+        note, error = await _get_note_write_access(note_id, __user__)
+        if error:
+            return error
+
+        lines = _get_note_markdown(note).split('\n')
+        total_lines = len(lines)
+        line_range = _normalize_note_line_range(start_line, end_line, total_lines or 1)
+        if isinstance(line_range, str):
+            return json.dumps({'error': line_range})
+
+        start_idx, end_idx = line_range
+        replacement_lines = content.split('\n')
+        updated_lines = lines[:start_idx] + replacement_lines + lines[end_idx + 1 :]
+        updated_content = '\n'.join(updated_lines)
+
+        form = NoteUpdateForm(data={'content': {'md': updated_content}})
+        updated_note = await Notes.update_note_by_id(note_id, form)
+
+        if not updated_note:
+            return json.dumps({'error': 'Failed to update note'})
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'id': updated_note.id,
+                'title': updated_note.title,
+                'start_line': start_idx + 1,
+                'end_line': end_idx + 1,
+                'replaced_line_count': end_idx - start_idx + 1,
+                'inserted_line_count': len(replacement_lines),
+                'total_lines': len(updated_lines),
+                'updated_at': updated_note.updated_at,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'update_note_content error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def delete_note(
+    note_id: str,
+    __request__: Request = None,
+    __user__: dict = None,
+    __event_call__: callable = None,
+) -> str:
+    """
+    Permanently delete a note. Requires user confirmation in the chat UI.
+
+    :param note_id: The ID of the note to delete
+    :return: JSON with success status or cancellation/error details
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        note, error = await _get_note_write_access(note_id, __user__)
+        if error:
+            return error
+
+        if __event_call__ is None:
+            return json.dumps({'error': 'Delete requires an active browser session for confirmation'})
+
+        confirmed = await _request_user_confirmation(
+            title='Delete note?',
+            message=f'This will permanently delete "{note.title}".',
+            __event_call__=__event_call__,
+        )
+        if not confirmed:
+            return json.dumps(
+                {
+                    'status': 'cancelled',
+                    'message': 'Note deletion cancelled by user',
+                }
+            )
+
+        deleted = await Notes.delete_note_by_id(note_id)
+        if not deleted:
+            return json.dumps({'error': 'Failed to delete note'})
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'id': note_id,
+                'title': note.title,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'delete_note error: {e}')
+        return json.dumps({'error': str(e)})
+
+
 # =============================================================================
 # CHATS TOOLS
 # =============================================================================
@@ -1345,6 +1632,382 @@ async def view_chat(
         )
     except Exception as e:
         log.exception(f'view_chat error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def update_chat(
+    chat_id: str,
+    title: Optional[str] = None,
+    tags: Optional[list[str]] = None,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Update a chat's title and/or tags.
+
+    :param chat_id: The ID of the chat to update
+    :param title: Optional new title for the chat
+    :param tags: Optional list of tag names to set on the chat
+    :return: JSON with the updated chat metadata
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    if title is None and tags is None:
+        return json.dumps({'error': 'Provide at least one of title or tags to update'})
+
+    try:
+        from types import SimpleNamespace
+
+        user_id = __user__.get('id')
+        chat = await Chats.get_chat_by_id_and_user_id(chat_id, user_id)
+
+        if not chat:
+            return json.dumps({'error': 'Chat not found or access denied'})
+
+        updated_chat = chat
+        if title is not None:
+            updated = await Chats.update_chat_title_by_id(chat_id, title)
+            if not updated:
+                return json.dumps({'error': 'Failed to update chat title'})
+            updated_chat = updated
+
+        if tags is not None:
+            updated = await Chats.update_chat_tags_by_id(chat_id, tags, SimpleNamespace(id=user_id))
+            if not updated:
+                return json.dumps({'error': 'Failed to update chat tags'})
+            updated_chat = updated
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'id': updated_chat.id,
+                'title': updated_chat.title,
+                'tags': updated_chat.meta.get('tags', []),
+                'updated_at': updated_chat.updated_at,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'update_chat error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def archive_chat(
+    chat_id: str,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Archive a chat so it is hidden from the main chat list.
+
+    :param chat_id: The ID of the chat to archive
+    :return: JSON with success status and archived chat metadata
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        user_id = __user__.get('id')
+        chat = await Chats.get_chat_by_id_and_user_id(chat_id, user_id)
+
+        if not chat:
+            return json.dumps({'error': 'Chat not found or access denied'})
+
+        if chat.archived:
+            return json.dumps(
+                {
+                    'status': 'already_archived',
+                    'id': chat.id,
+                    'title': chat.title,
+                },
+                ensure_ascii=False,
+            )
+
+        updated_chat = await Chats.toggle_chat_archive_by_id(chat_id)
+        if not updated_chat:
+            return json.dumps({'error': 'Failed to archive chat'})
+
+        tag_ids = updated_chat.meta.get('tags', [])
+        if tag_ids:
+            await Chats.delete_orphan_tags_for_user(tag_ids, user_id)
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'id': updated_chat.id,
+                'title': updated_chat.title,
+                'archived': updated_chat.archived,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'archive_chat error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def list_folders(
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    List chat folders the user can access.
+    Use the returned folder id with move_chat_to_folder (write permission required).
+
+    :return: JSON list of folders with id, name, parent_id, owned, and permission
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        from open_webui.internal.db import get_async_db_context
+        from open_webui.models.folders import Folders
+        from open_webui.models.users import Users
+        from open_webui.utils.access_control import has_permission
+
+        user_id = __user__.get('id')
+        config = await Config.get_many('folders.enable', 'user.permissions')
+
+        if config.get('folders.enable') is False:
+            return json.dumps({'error': 'Folders are disabled'})
+
+        if __user__.get('role') != 'admin' and not await has_permission(
+            user_id,
+            'features.folders',
+            config.get('user.permissions'),
+        ):
+            return json.dumps({'error': 'Access denied'})
+
+        async with get_async_db_context() as db:
+            owned_folders = await Folders.get_folders_by_user_id(user_id, db=db)
+            groups = await Groups.get_groups_by_member_id(user_id, db=db)
+            group_ids = {group.id for group in groups}
+            shared_perms = await Folders.get_shared_folder_ids_for_user(user_id, group_ids, db=db)
+
+            folders = []
+            seen_ids = set()
+
+            for folder in owned_folders:
+                folders.append(
+                    {
+                        'id': folder.id,
+                        'name': folder.name,
+                        'parent_id': folder.parent_id,
+                        'owned': True,
+                        'permission': 'write',
+                    }
+                )
+                seen_ids.add(folder.id)
+
+            owner_cache = {}
+            for folder_id, permission in shared_perms.items():
+                if folder_id in seen_ids:
+                    continue
+
+                folder = await Folders.get_folder_by_id(folder_id, db=db)
+                if not folder or folder.user_id == user_id:
+                    continue
+
+                if folder.user_id not in owner_cache:
+                    owner = await Users.get_user_by_id(folder.user_id, db=db)
+                    owner_cache[folder.user_id] = owner.name if owner else 'Unknown'
+
+                folders.append(
+                    {
+                        'id': folder.id,
+                        'name': folder.name,
+                        'parent_id': folder.parent_id,
+                        'owned': False,
+                        'owner_name': owner_cache[folder.user_id],
+                        'permission': permission,
+                    }
+                )
+                seen_ids.add(folder.id)
+
+            # Include subfolders of shared folders (inherit parent permission)
+            for entry in list(folders):
+                if entry.get('owned'):
+                    continue
+                root = await Folders.get_folder_by_id(entry['id'], db=db)
+                if not root:
+                    continue
+                children = await Folders.get_children_folders_by_id_and_user_id(root.id, root.user_id, db=db)
+                if not children:
+                    continue
+                for child in children:
+                    if child.id in seen_ids:
+                        continue
+                    folders.append(
+                        {
+                            'id': child.id,
+                            'name': child.name,
+                            'parent_id': child.parent_id,
+                            'owned': False,
+                            'owner_name': owner_cache.get(child.user_id, 'Unknown'),
+                            'permission': entry['permission'],
+                        }
+                    )
+                    seen_ids.add(child.id)
+
+            folders.sort(key=lambda f: (f.get('name') or '').lower())
+
+            return json.dumps(
+                {
+                    'folders': folders,
+                    'total': len(folders),
+                },
+                ensure_ascii=False,
+            )
+    except Exception as e:
+        log.exception(f'list_folders error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def create_folder(
+    name: str,
+    parent_id: Optional[str] = None,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Create a new chat folder, optionally nested under a parent folder.
+
+    :param name: The folder name
+    :param parent_id: Optional parent folder ID for a subfolder
+    :return: JSON with the new folder id, name, and parent_id
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    if not name or not name.strip():
+        return json.dumps({'error': 'Folder name is required'})
+
+    try:
+        from open_webui.internal.db import get_async_db_context
+        from open_webui.models.folders import FolderForm, Folders
+        from open_webui.utils.access_control import has_permission
+        from open_webui.utils.access_control.folders import has_folder_access
+
+        user_id = __user__.get('id')
+        config = await Config.get_many('folders.enable', 'user.permissions')
+
+        if config.get('folders.enable') is False:
+            return json.dumps({'error': 'Folders are disabled'})
+
+        if __user__.get('role') != 'admin' and not await has_permission(
+            user_id,
+            'features.folders',
+            config.get('user.permissions'),
+        ):
+            return json.dumps({'error': 'Access denied'})
+
+        form_data = FolderForm(name=name.strip(), parent_id=parent_id)
+
+        async with get_async_db_context() as db:
+            existing = await Folders.get_folder_by_parent_id_and_user_id_and_name(
+                parent_id, user_id, form_data.name, db=db
+            )
+            if existing:
+                return json.dumps({'error': 'Folder already exists'})
+
+            owner_id = user_id
+            if parent_id:
+                parent = await Folders.get_folder_by_id(parent_id, db=db)
+                if not parent:
+                    return json.dumps({'error': 'Parent folder not found'})
+                if parent.user_id != user_id:
+                    if __user__.get('role') != 'admin' and not await has_folder_access(
+                        user_id, parent, 'write', db
+                    ):
+                        return json.dumps({'error': 'Write access denied for parent folder'})
+                    owner_id = parent.user_id
+
+            folder = await Folders.insert_new_folder(owner_id, form_data, parent_id, db=db)
+            if not folder:
+                return json.dumps({'error': 'Failed to create folder'})
+
+            return json.dumps(
+                {
+                    'status': 'success',
+                    'id': folder.id,
+                    'name': folder.name,
+                    'parent_id': folder.parent_id,
+                },
+                ensure_ascii=False,
+            )
+    except Exception as e:
+        log.exception(f'create_folder error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def move_chat_to_folder(
+    chat_id: str,
+    folder_id: Optional[str] = None,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Move a chat into a folder, or remove it from its current folder.
+
+    :param chat_id: The ID of the chat to move
+    :param folder_id: Target folder ID, or omit/null to remove the chat from any folder
+    :return: JSON with success status and updated folder assignment
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        from open_webui.internal.db import get_async_db_context
+        from open_webui.models.folders import Folders
+        from open_webui.utils.access_control.folders import has_folder_access
+
+        user_id = __user__.get('id')
+
+        async with get_async_db_context() as db:
+            chat = await Chats.get_chat_by_id_and_user_id(chat_id, user_id, db=db)
+
+            if not chat:
+                return json.dumps({'error': 'Chat not found or access denied'})
+
+            if folder_id:
+                if not await Folders.get_folder_by_id_and_user_id(folder_id, user_id, db=db):
+                    shared_folder = await Folders.get_folder_by_id(folder_id, db=db)
+                    if not shared_folder or not await has_folder_access(user_id, shared_folder, 'write', db):
+                        return json.dumps({'error': 'Folder not found or write access denied'})
+
+            updated_chat = await Chats.update_chat_folder_id_by_id_and_user_id(
+                chat_id, user_id, folder_id, db=db
+            )
+
+            if not updated_chat:
+                return json.dumps({'error': 'Failed to move chat'})
+
+            return json.dumps(
+                {
+                    'status': 'success',
+                    'id': updated_chat.id,
+                    'title': updated_chat.title,
+                    'folder_id': updated_chat.folder_id,
+                },
+                ensure_ascii=False,
+            )
+    except Exception as e:
+        log.exception(f'move_chat_to_folder error: {e}')
         return json.dumps({'error': str(e)})
 
 
@@ -1636,64 +2299,6 @@ async def view_channel_thread(
 # =============================================================================
 
 
-async def list_knowledge_bases(
-    count: int = 10,
-    skip: int = 0,
-    __request__: Request = None,
-    __user__: dict = None,
-) -> str:
-    """
-    List the user's accessible knowledge bases so a relevant internal source
-    can be chosen.
-
-    :param count: Maximum number of KBs to return (default: 10)
-    :param skip: Number of results to skip for pagination (default: 0)
-    :return: JSON with KBs containing id, name, description, and file_count
-    """
-    if __request__ is None:
-        return json.dumps({'error': 'Request context not available'})
-
-    if not __user__:
-        return json.dumps({'error': 'User context not available'})
-
-    try:
-        from open_webui.models.knowledge import Knowledges
-
-        user_id = __user__.get('id')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
-
-        result = await Knowledges.search_knowledge_bases(
-            user_id,
-            filter={
-                'query': '',
-                'user_id': user_id,
-                'group_ids': user_group_ids,
-            },
-            skip=skip,
-            limit=count,
-        )
-
-        knowledge_bases = []
-        for knowledge_base in result.items:
-            files = await Knowledges.get_files_by_id(knowledge_base.id)
-            file_count = len(files) if files else 0
-
-            knowledge_bases.append(
-                {
-                    'id': knowledge_base.id,
-                    'name': knowledge_base.name,
-                    'description': knowledge_base.description or '',
-                    'file_count': file_count,
-                    'updated_at': knowledge_base.updated_at,
-                }
-            )
-
-        return json.dumps(knowledge_bases, ensure_ascii=False)
-    except Exception as e:
-        log.exception(f'list_knowledge_bases error: {e}')
-        return json.dumps({'error': str(e)})
-
-
 async def search_knowledge_bases(
     query: str,
     count: int = 5,
@@ -1754,197 +2359,27 @@ async def search_knowledge_bases(
         return json.dumps({'error': str(e)})
 
 
-async def search_knowledge_files(
-    query: str,
-    knowledge_id: Optional[str] = None,
-    count: int = 5,
-    skip: int = 0,
-    __request__: Request = None,
-    __user__: dict = None,
-    __model_knowledge__: Optional[list[dict]] = None,
-) -> str:
-    """
-    Search files by filename across knowledge bases the user has access to.
-    When the model has attached knowledge, searches only within attached KBs and files.
-    Helpful when looking for a specific document or file name.
+# =============================================================================
+# FILES TOOLS
+# =============================================================================
 
-    :param query: The search query to find matching files by filename
-    :param knowledge_id: Optional KB id to limit search to a specific knowledge base
-    :param count: Maximum number of results to return (default: 5)
-    :param skip: Number of results to skip for pagination (default: 0)
-    :return: JSON with matching files containing id, filename, and updated_at
-    """
-    if __request__ is None:
-        return json.dumps({'error': 'Request context not available'})
-
-    if not __user__:
-        return json.dumps({'error': 'User context not available'})
-
-    try:
-        from open_webui.models.access_grants import AccessGrants
-        from open_webui.models.files import Files
-        from open_webui.models.knowledge import Knowledges
-
-        user_id = __user__.get('id')
-        user_role = __user__.get('role', 'user')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
-
-        # When model has attached knowledge, scope to attached KBs/files only
-        if __model_knowledge__:
-            attached_kb_ids = set()
-            attached_file_ids = set()
-
-            for item in __model_knowledge__:
-                item_type = item.get('type')
-                item_id = item.get('id')
-                if item_type == 'collection':
-                    attached_kb_ids.add(item_id)
-                elif item_type == 'file':
-                    attached_file_ids.add(item_id)
-
-            # If knowledge_id specified, verify it's in the attached set
-            if knowledge_id:
-                if knowledge_id not in attached_kb_ids:
-                    return json.dumps({'error': f'Knowledge base {knowledge_id} is not attached to this model'})
-                attached_kb_ids = {knowledge_id}
-
-            all_files = []
-
-            # Search within attached KBs
-            for kb_id in attached_kb_ids:
-                knowledge = await Knowledges.get_knowledge_by_id(kb_id)
-                if not knowledge:
-                    continue
-
-                if not (
-                    user_role == 'admin'
-                    or knowledge.user_id == user_id
-                    or await AccessGrants.has_access(
-                        user_id=user_id,
-                        resource_type='knowledge',
-                        resource_id=knowledge.id,
-                        permission='read',
-                        user_group_ids=set(user_group_ids),
-                    )
-                ):
-                    continue
-
-                result = await Knowledges.search_files_by_id(
-                    knowledge_id=kb_id,
-                    user_id=user_id,
-                    filter={'query': query},
-                    skip=0,
-                    limit=count + skip,
-                )
-
-                for file in result.items:
-                    all_files.append(
-                        {
-                            'id': file.id,
-                            'filename': file.filename,
-                            'knowledge_id': knowledge.id,
-                            'knowledge_name': knowledge.name,
-                            'updated_at': file.updated_at,
-                        }
-                    )
-
-            # Search within directly attached files (filename match)
-            if not knowledge_id and attached_file_ids:
-                query_lower = query.lower() if query else ''
-                for file_id in attached_file_ids:
-                    file = await Files.get_file_by_id(file_id)
-                    if file and (not query_lower or query_lower in file.filename.lower()):
-                        all_files.append(
-                            {
-                                'id': file.id,
-                                'filename': file.filename,
-                                'updated_at': file.updated_at,
-                            }
-                        )
-
-            # Apply pagination across combined results
-            all_files = all_files[skip : skip + count]
-            return json.dumps(all_files, ensure_ascii=False)
-
-        # No attached knowledge - search all accessible KBs
-        if knowledge_id:
-            # search_files_by_id does not enforce knowledge_id ownership; mirror the attached-KB check above.
-            knowledge = await Knowledges.get_knowledge_by_id(knowledge_id)
-            if not knowledge or not (
-                user_role == 'admin'
-                or knowledge.user_id == user_id
-                or await AccessGrants.has_access(
-                    user_id=user_id,
-                    resource_type='knowledge',
-                    resource_id=knowledge.id,
-                    permission='read',
-                    user_group_ids=set(user_group_ids),
-                )
-            ):
-                return json.dumps({'error': f'Access denied to knowledge base {knowledge_id}'})
-
-            result = await Knowledges.search_files_by_id(
-                knowledge_id=knowledge_id,
-                user_id=user_id,
-                filter={'query': query},
-                skip=skip,
-                limit=count,
-            )
-        else:
-            result = await Knowledges.search_knowledge_files(
-                filter={
-                    'query': query,
-                    'user_id': user_id,
-                    'group_ids': user_group_ids,
-                },
-                skip=skip,
-                limit=count,
-            )
-
-        files = []
-        for file in result.items:
-            file_info = {
-                'id': file.id,
-                'filename': file.filename,
-                'updated_at': file.updated_at,
-            }
-            if hasattr(file, 'collection') and file.collection:
-                file_info['knowledge_id'] = file.collection.get('id', '')
-                file_info['knowledge_name'] = file.collection.get('name', '')
-            files.append(file_info)
-
-        return json.dumps(files, ensure_ascii=False)
-    except Exception as e:
-        log.exception(f'search_knowledge_files error: {e}')
-        return json.dumps({'error': str(e)})
-
-
-# Hard cap for view_file / view_knowledge_file output
 MAX_VIEW_FILE_CHARS = 100_000
 DEFAULT_VIEW_FILE_MAX_CHARS = 10_000
-MAX_GREP_RESULTS = 50
 
 
-async def grep_knowledge_files(
-    pattern: str,
-    file_id: Optional[str] = None,
-    case_insensitive: bool = False,
-    count_only: bool = False,
+async def search_files(
+    query: str = '*',
+    count: int = 20,
     __request__: Request = None,
     __user__: dict = None,
-    __model_knowledge__: Optional[list[dict]] = None,
 ) -> str:
     """
-    Search for exact text across knowledge files. Returns matching lines with line numbers.
-    Unlike query_knowledge_files (semantic/vector search), this performs exact string matching.
-    Automatically detects regex patterns (e.g. "error|warn", "version \\d+").
-    Helpful for literal strings, identifiers, error messages, or regex-style searches.
+    Search the user's uploaded files by filename.
+    Supports wildcards (e.g. "*.pdf", "report*"). Use view_file to read a file's content.
 
-    :param pattern: The text pattern to search for (regex auto-detected)
-    :param file_id: Optional file ID to search within a single file only
-    :param case_insensitive: If true, ignore case when matching (default: false)
-    :param count_only: If true, return only match counts per file (default: false)
-    :return: Matching lines with file IDs, filenames, and line numbers
+    :param query: Filename search text or glob pattern (default: all files)
+    :param count: Maximum number of results to return (default: 20)
+    :return: JSON list of matching files with id, filename, and timestamps
     """
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
@@ -1952,137 +2387,58 @@ async def grep_knowledge_files(
     if not __user__:
         return json.dumps({'error': 'User context not available'})
 
-    if not pattern or not pattern.strip():
-        return json.dumps({'error': 'Pattern is required'})
-
     try:
+        from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
         from open_webui.models.files import Files
-        from open_webui.models.knowledge import Knowledges
-        from open_webui.tools.knowledge_fs import build_matcher
 
         user_id = __user__.get('id')
         user_role = __user__.get('role', 'user')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
 
-        _matches, err = build_matcher(pattern, case_insensitive)
-        if err:
-            return json.dumps({'error': err})
+        if isinstance(count, str):
+            try:
+                count = int(count)
+            except ValueError:
+                count = 20
 
-        # Collect files to search
-        files_to_search = []
+        count = max(1, min(count, 100))
 
-        if file_id:
-            # Single file mode — verify access
-            file = await Files.get_file_by_id(file_id)
-            if file:
-                if not await _has_read_access_to_file(file, user_id, user_role, __model_knowledge__):
-                    return json.dumps({'error': 'File not found'})
-                files_to_search.append(file)
-        elif __model_knowledge__:
-            # Scoped to model's attached knowledge
-            from open_webui.models.access_grants import AccessGrants
+        filename = query.strip() if query else '*'
+        if filename and '*' not in filename and '?' not in filename:
+            filename = f'*{filename}*'
 
-            seen_ids = set()
-            for item in __model_knowledge__:
-                item_type = item.get('type')
-                item_id = item.get('id')
-                if item_type == 'file' and item_id not in seen_ids:
-                    file = await Files.get_file_by_id(item_id)
-                    if file:
-                        files_to_search.append(file)
-                        seen_ids.add(item_id)
-                elif item_type == 'collection':
-                    knowledge = await Knowledges.get_knowledge_by_id(item_id)
-                    if not knowledge:
-                        continue
-                    # Verify user can access this KB
-                    if not (
-                        user_role == 'admin'
-                        or knowledge.user_id == user_id
-                        or await AccessGrants.has_access(
-                            user_id=user_id,
-                            resource_type='knowledge',
-                            resource_id=knowledge.id,
-                            permission='read',
-                            user_group_ids=set(user_group_ids),
-                        )
-                    ):
-                        continue
-                    kb_files = await Knowledges.get_files_by_id(item_id)
-                    if kb_files:
-                        for f in kb_files:
-                            if f.id not in seen_ids:
-                                files_to_search.append(f)
-                                seen_ids.add(f.id)
-        else:
-            # All accessible knowledge bases — use the same search pattern as list_knowledge_bases
-            result = await Knowledges.search_knowledge_bases(
-                user_id,
-                filter={
-                    'query': '',
-                    'user_id': user_id,
-                    'group_ids': user_group_ids,
-                },
-                skip=0,
-                limit=200,
-            )
-            seen_ids = set()
-            for kb in result.items:
-                file_ids = []
-                # Get files attached to this KB
-                files_from_kb = await Knowledges.get_files_by_id(kb.id)
-                if files_from_kb:
-                    file_ids = [f.id for f in files_from_kb]
-                for fid in file_ids:
-                    if fid not in seen_ids:
-                        file = await Files.get_file_by_id(fid)
-                        if file:
-                            files_to_search.append(file)
-                            seen_ids.add(fid)
+        search_user_id = user_id
+        if user_role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL:
+            search_user_id = None
 
-        if not files_to_search:
-            return json.dumps({'error': 'No accessible files found'})
+        files = await Files.search_files(
+            user_id=search_user_id,
+            filename=filename,
+            skip=0,
+            limit=count,
+        )
 
-        # Search
         results = []
-        total_matches = 0
-        counts = []
+        for file in files:
+            meta = file.meta.model_dump() if hasattr(file.meta, 'model_dump') else (file.meta or {})
+            results.append(
+                {
+                    'id': file.id,
+                    'filename': file.filename,
+                    'created_at': file.created_at,
+                    'updated_at': file.updated_at,
+                    'content_type': meta.get('content_type'),
+                }
+            )
 
-        for file in files_to_search:
-            content = ''
-            if file.data:
-                content = file.data.get('content', '')
-            if not content:
-                continue
-
-            lines = content.split('\n')
-            file_matches = 0
-
-            for i, line in enumerate(lines, 1):
-                if _matches(line):
-                    file_matches += 1
-                    total_matches += 1
-                    if not count_only and len(results) < MAX_GREP_RESULTS:
-                        results.append(f'{file.id}  {file.filename}:{i}: {line}')
-
-            if file_matches > 0 and count_only:
-                counts.append(f'{file.id}  {file.filename}: {file_matches}')
-
-        if count_only:
-            if not counts:
-                return f'No matches for "{pattern}"'
-            return '\n'.join(counts) + f'\n[{total_matches} total matches]'
-
-        if not results:
-            return f'No matches for "{pattern}"'
-
-        output = '\n'.join(results)
-        if total_matches > MAX_GREP_RESULTS:
-            output += f'\n[{MAX_GREP_RESULTS} of {total_matches} matches shown — use file_id to narrow]'
-        return output
-
+        return json.dumps(
+            {
+                'files': results,
+                'total': len(results),
+            },
+            ensure_ascii=False,
+        )
     except Exception as e:
-        log.exception(f'grep_knowledge_files error: {e}')
+        log.exception(f'search_files error: {e}')
         return json.dumps({'error': str(e)})
 
 
@@ -2199,294 +2555,6 @@ async def view_file(
         return json.dumps(result, ensure_ascii=False)
     except Exception as e:
         log.exception(f'view_file error: {e}')
-        return json.dumps({'error': str(e)})
-
-
-async def view_knowledge_file(
-    file_id: str,
-    offset: int = 0,
-    max_chars: int = DEFAULT_VIEW_FILE_MAX_CHARS,
-    line_numbers: bool = False,
-    start_line: Optional[int] = None,
-    end_line: Optional[int] = None,
-    __request__: Request = None,
-    __user__: dict = None,
-) -> str:
-    """
-    Get the content of a file from a knowledge base. Supports pagination for large files.
-
-    :param file_id: The ID of the file to retrieve
-    :param offset: Character offset to start reading from (default: 0)
-    :param max_chars: Maximum characters to return (default: 10000, hard cap: 100000)
-    :param line_numbers: If true, prefix each line with its 1-indexed line number
-    :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set)
-    :param end_line: Optional 1-indexed end line (inclusive)
-    :return: JSON with the file's id, filename, content, and pagination metadata if truncated
-    """
-    if __request__ is None:
-        return json.dumps({'error': 'Request context not available'})
-
-    if not __user__:
-        return json.dumps({'error': 'User context not available'})
-
-    # Coerce parameters from LLM tool calls (may come as strings)
-    if isinstance(offset, str):
-        try:
-            offset = int(offset)
-        except ValueError:
-            offset = 0
-    if isinstance(max_chars, str):
-        try:
-            max_chars = int(max_chars)
-        except ValueError:
-            max_chars = DEFAULT_VIEW_FILE_MAX_CHARS
-
-    # Enforce hard cap
-    max_chars = min(max(max_chars, 1), MAX_VIEW_FILE_CHARS)
-    offset = max(offset, 0)
-
-    try:
-        from open_webui.models.access_grants import AccessGrants
-        from open_webui.models.files import Files
-        from open_webui.models.knowledge import Knowledges
-
-        user_id = __user__.get('id')
-        user_role = __user__.get('role', 'user')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
-
-        file = await Files.get_file_by_id(file_id)
-        if not file:
-            return json.dumps({'error': 'File not found'})
-
-        # Check access via any KB containing this file
-        knowledges = await Knowledges.get_knowledges_by_file_id(file_id)
-        has_knowledge_access = False
-        knowledge_info = None
-
-        for knowledge_base in knowledges:
-            if (
-                user_role == 'admin'
-                or knowledge_base.user_id == user_id
-                or await AccessGrants.has_access(
-                    user_id=user_id,
-                    resource_type='knowledge',
-                    resource_id=knowledge_base.id,
-                    permission='read',
-                    user_group_ids=set(user_group_ids),
-                )
-            ):
-                has_knowledge_access = True
-                knowledge_info = {'id': knowledge_base.id, 'name': knowledge_base.name}
-                break
-
-        if not has_knowledge_access:
-            if file.user_id != user_id and user_role != 'admin':
-                return json.dumps({'error': 'Access denied'})
-
-        content = ''
-        if file.data:
-            content = file.data.get('content', '')
-
-        total_chars = len(content)
-
-        # Line-based addressing (overrides char-based offset/max_chars)
-        if start_line is not None:
-            all_lines = content.split('\n')
-            total_lines = len(all_lines)
-            s = max(1, int(start_line)) - 1
-            e = min(total_lines, int(end_line) if end_line else s + 100)
-            selected = all_lines[s:e]
-            sliced = '\n'.join(f'{s + i + 1}: {line}' for i, line in enumerate(selected))
-            is_truncated = e < total_lines
-            result = {
-                'id': file.id,
-                'filename': file.filename,
-                'content': sliced,
-                'updated_at': file.updated_at,
-                'created_at': file.created_at,
-                'total_lines': total_lines,
-                'showing_lines': f'{s + 1}-{e}',
-            }
-            if knowledge_info:
-                result['knowledge_id'] = knowledge_info['id']
-                result['knowledge_name'] = knowledge_info['name']
-            if is_truncated:
-                result['truncated'] = True
-                result['next_start_line'] = e + 1
-            return json.dumps(result, ensure_ascii=False)
-
-        sliced = content[offset : offset + max_chars]
-        is_truncated = (offset + len(sliced)) < total_chars
-
-        if line_numbers:
-            start_ln = content[:offset].count('\n') + 1
-            lines = sliced.split('\n')
-            sliced = '\n'.join(f'{start_ln + i}: {line}' for i, line in enumerate(lines))
-
-        result = {
-            'id': file.id,
-            'filename': file.filename,
-            'content': sliced,
-            'updated_at': file.updated_at,
-            'created_at': file.created_at,
-        }
-        if knowledge_info:
-            result['knowledge_id'] = knowledge_info['id']
-            result['knowledge_name'] = knowledge_info['name']
-
-        if is_truncated or offset > 0:
-            result['truncated'] = is_truncated
-            result['total_chars'] = total_chars
-            result['returned_chars'] = len(sliced)
-            result['offset'] = offset
-            if is_truncated:
-                result['next_offset'] = offset + len(sliced)
-
-        return json.dumps(result, ensure_ascii=False)
-    except Exception as e:
-        log.exception(f'view_knowledge_file error: {e}')
-        return json.dumps({'error': str(e)})
-
-
-async def list_knowledge(
-    knowledge_id: Optional[str] = None,
-    skip: int = 0,
-    count: int = 50,
-    __request__: Request = None,
-    __user__: dict = None,
-    __model_knowledge__: Optional[list[dict]] = None,
-) -> str:
-    """
-    List knowledge bases, files, and notes attached to the current model.
-    Use this first to discover what knowledge is available before querying or reading files.
-    Without knowledge_id: returns KB summaries (name, description, file_count)
-    plus standalone files and notes — no file listing inside KBs.
-    With knowledge_id: includes paginated file listing for that specific KB.
-    Use skip/count to page through large KBs.
-
-    :param knowledge_id: Optional KB ID to get file listing for
-    :param skip: Number of files to skip for pagination (default: 0)
-    :param count: Maximum files per page (default: 50, max: 200)
-    :return: JSON with knowledge_bases, files, and notes attached to this model
-    """
-    if __request__ is None:
-        return json.dumps({'error': 'Request context not available'})
-
-    if not __user__:
-        return json.dumps({'error': 'User context not available'})
-
-    if not __model_knowledge__:
-        return json.dumps({'knowledge_bases': [], 'files': [], 'notes': []})
-
-    # Coerce parameters from LLM tool calls (may come as strings)
-    if isinstance(skip, str):
-        try:
-            skip = int(skip)
-        except ValueError:
-            skip = 0
-    if isinstance(count, str):
-        try:
-            count = int(count)
-        except ValueError:
-            count = 50
-    if isinstance(knowledge_id, str) and knowledge_id.lower() in ('none', 'null', ''):
-        knowledge_id = None
-
-    count = min(count, 200)
-
-    try:
-        from open_webui.models.access_grants import AccessGrants
-        from open_webui.models.files import Files
-        from open_webui.models.knowledge import Knowledges
-        from open_webui.models.notes import Notes
-
-        user_id = __user__.get('id')
-        user_role = __user__.get('role', 'user')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
-
-        knowledge_bases = []
-        files = []
-        notes = []
-
-        for item in __model_knowledge__:
-            item_type = item.get('type')
-            item_id = item.get('id')
-
-            if item_type == 'collection':
-                knowledge = await Knowledges.get_knowledge_by_id(item_id)
-                if knowledge and (
-                    user_role == 'admin'
-                    or knowledge.user_id == user_id
-                    or await AccessGrants.has_access(
-                        user_id=user_id,
-                        resource_type='knowledge',
-                        resource_id=knowledge.id,
-                        permission='read',
-                        user_group_ids=set(user_group_ids),
-                    )
-                ):
-                    kb_files = await Knowledges.get_files_by_id(knowledge.id)
-                    file_count = len(kb_files) if kb_files else 0
-
-                    kb_entry = {
-                        'id': knowledge.id,
-                        'name': knowledge.name,
-                        'description': knowledge.description or '',
-                        'file_count': file_count,
-                    }
-
-                    # Include file listing only when this KB is targeted
-                    if knowledge_id and knowledge_id == knowledge.id:
-                        if kb_files:
-                            paged_files = kb_files[skip : skip + count]
-                            kb_entry['files'] = [{'id': f.id, 'filename': f.filename} for f in paged_files]
-                            kb_entry['files_skip'] = skip
-                            kb_entry['files_count'] = len(paged_files)
-                            kb_entry['files_total'] = file_count
-                            kb_entry['has_more'] = skip + count < file_count
-
-                    knowledge_bases.append(kb_entry)
-
-            elif item_type == 'file':
-                file = await Files.get_file_by_id(item_id)
-                if file:
-                    files.append(
-                        {
-                            'id': file.id,
-                            'filename': file.filename,
-                            'updated_at': file.updated_at,
-                        }
-                    )
-
-            elif item_type == 'note':
-                note = await Notes.get_note_by_id(item_id)
-                if note and (
-                    user_role == 'admin'
-                    or note.user_id == user_id
-                    or await AccessGrants.has_access(
-                        user_id=user_id,
-                        resource_type='note',
-                        resource_id=note.id,
-                        permission='read',
-                    )
-                ):
-                    notes.append(
-                        {
-                            'id': note.id,
-                            'title': note.title,
-                        }
-                    )
-
-        return json.dumps(
-            {
-                'knowledge_bases': knowledge_bases,
-                'files': files,
-                'notes': notes,
-            },
-            ensure_ascii=False,
-        )
-    except Exception as e:
-        log.exception(f'list_knowledge error: {e}')
         return json.dumps({'error': str(e)})
 
 
@@ -2812,6 +2880,74 @@ async def query_knowledge_bases(
 # =============================================================================
 # SKILLS TOOLS
 # =============================================================================
+
+
+async def search_skills(
+    query: str,
+    count: int = 5,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Search available skills by name, description, or id.
+    Use view_skill to load the full instructions for a matching skill.
+
+    :param query: Search text to match against skill name, description, or id
+    :param count: Maximum number of results to return (default: 5)
+    :return: JSON list of matching skills with id, name, and description
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        from open_webui.models.skills import Skills
+
+        user_id = __user__.get('id')
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+
+        if isinstance(count, str):
+            try:
+                count = int(count)
+            except ValueError:
+                count = 5
+
+        result = await Skills.search_skills(
+            user_id=user_id,
+            filter={
+                'query': query,
+                'user_id': user_id,
+                'group_ids': user_group_ids,
+                'permission': 'read',
+            },
+            skip=0,
+            limit=count,
+        )
+
+        skills = []
+        for skill in result.items:
+            if not skill.is_active:
+                continue
+            skills.append(
+                {
+                    'id': skill.id,
+                    'name': skill.name,
+                    'description': skill.description or '',
+                }
+            )
+
+        return json.dumps(
+            {
+                'skills': skills,
+                'total': result.total,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'search_skills error: {e}')
+        return json.dumps({'error': str(e)})
 
 
 async def view_skill(
@@ -3402,6 +3538,48 @@ def _event_to_dict(event, tz) -> dict:
         'color': event.color,
         'is_cancelled': event.is_cancelled,
     }
+
+
+async def list_calendars(
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    List calendars available to the user.
+    Use the returned calendar_id when creating or updating events.
+
+    :return: JSON list of calendars with id, name, color, and is_default
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        from open_webui.models.calendar import Calendars
+
+        user_id = __user__.get('id')
+        calendars = await Calendars.get_calendars_by_user(user_id)
+
+        return json.dumps(
+            {
+                'calendars': [
+                    {
+                        'id': cal.id,
+                        'name': cal.name,
+                        'color': cal.color,
+                        'is_default': cal.is_default,
+                    }
+                    for cal in calendars
+                ],
+                'total': len(calendars),
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'list_calendars error: {e}')
+        return json.dumps({'error': str(e)})
 
 
 async def search_calendar_events(

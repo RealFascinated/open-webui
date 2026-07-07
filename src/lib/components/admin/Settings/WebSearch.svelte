@@ -1137,6 +1137,60 @@
 				</div>
 
 				<div class="mb-3">
+					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Prompt URL Extraction')}</div>
+
+					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
+
+					<div class="  mb-2.5 flex w-full justify-between">
+						<div class=" self-center text-xs font-medium">
+							<Tooltip
+								content={$i18n.t(
+									'Automatically fetch webpages linked in short chat messages for RAG context. Requires Web Upload permission. Skipped when files are already attached or native function calling is enabled.'
+								)}
+								placement="top-start"
+							>
+								{$i18n.t('Automatic URL Extraction')}
+							</Tooltip>
+						</div>
+						<div class="flex items-center relative">
+							<Switch bind:state={webConfig.ENABLE_PROMPT_URL_EXTRACTION} />
+						</div>
+					</div>
+
+					{#if webConfig.ENABLE_PROMPT_URL_EXTRACTION}
+						<div class="  mb-2.5 flex w-full justify-between">
+							<div class=" self-center text-xs font-medium">
+								{$i18n.t('Max URLs per Message')}
+							</div>
+							<div class="flex items-center relative">
+								<input
+									class="w-16 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right border border-gray-100/30 dark:border-gray-850/30"
+									type="number"
+									min="1"
+									max="10"
+									bind:value={webConfig.PROMPT_URL_EXTRACTION_MAX_URLS}
+								/>
+							</div>
+						</div>
+
+						<div class="  mb-2.5 flex w-full justify-between">
+							<div class=" self-center text-xs font-medium">
+								{$i18n.t('Max Prompt Length')}
+							</div>
+							<div class="flex items-center relative">
+								<input
+									class="w-20 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right border border-gray-100/30 dark:border-gray-850/30"
+									type="number"
+									min="50"
+									max="5000"
+									bind:value={webConfig.PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH}
+								/>
+							</div>
+						</div>
+					{/if}
+				</div>
+
+				<div class="mb-3">
 					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Loader')}</div>
 
 					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />

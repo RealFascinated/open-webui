@@ -1160,6 +1160,10 @@ WEB_FETCH_MAX_CONTENT_LENGTH = (
     int(os.getenv('WEB_FETCH_MAX_CONTENT_LENGTH')) if os.getenv('WEB_FETCH_MAX_CONTENT_LENGTH') else None
 )
 
+ENABLE_PROMPT_URL_EXTRACTION = os.getenv('ENABLE_PROMPT_URL_EXTRACTION', 'True').lower() == 'true'
+PROMPT_URL_EXTRACTION_MAX_URLS = int(os.getenv('PROMPT_URL_EXTRACTION_MAX_URLS', '3'))
+PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH = int(os.getenv('PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH', '500'))
+
 WEB_LOADER_ENGINE = os.getenv('WEB_LOADER_ENGINE', '')
 
 
@@ -2868,6 +2872,9 @@ DEFAULT_CONFIG = {
     'web.search.domain.filter_list': WEB_SEARCH_DOMAIN_FILTER_LIST,
     'web.search.concurrent_requests': WEB_SEARCH_CONCURRENT_REQUESTS,
     'web.fetch.max_content_length': WEB_FETCH_MAX_CONTENT_LENGTH,
+    'web.prompt_url_extraction.enable': ENABLE_PROMPT_URL_EXTRACTION,
+    'web.prompt_url_extraction.max_urls': PROMPT_URL_EXTRACTION_MAX_URLS,
+    'web.prompt_url_extraction.max_prompt_length': PROMPT_URL_EXTRACTION_MAX_PROMPT_LENGTH,
     'web.loader.engine': WEB_LOADER_ENGINE,
     'web.loader.concurrent_requests': WEB_LOADER_CONCURRENT_REQUESTS,
     'web.loader.timeout': WEB_LOADER_TIMEOUT,

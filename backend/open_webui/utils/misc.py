@@ -1039,10 +1039,55 @@ def strict_match_mime_type(supported: list[str] | str, header: str) -> str | Non
         return None
 
 
+_FENCED_CODE_BLOCK_PATTERN = re.compile(r'```.*?```', re.DOTALL)
+_INLINE_CODE_PATTERN = re.compile(r'`[^`\n]+`')
+_MARKDOWN_LINK_PATTERN = re.compile(r'\[([^\]]*)\]\((https?://[^)\s]+)\)', re.IGNORECASE)
+_URL_PATTERN = re.compile(r'https?://[^\s<>\[\]()]+', re.IGNORECASE)
+_TRAILING_URL_PUNCTUATION = '.,;:!?)\\]}>"\''
+
+
+def sanitize_extracted_url(url: str) -> str:
+    url = url.strip()
+    while url and url[-1] in _TRAILING_URL_PUNCTUATION:
+        url = url[:-1]
+    while url and url[-1] in ')]' and url.count('(') < url.count(')'):
+        url = url[:-1]
+    while url and url[-1] in ']' and url.count('[') < url.count(']'):
+        url = url[:-1]
+    return url
+
+
+def _strip_non_bare_url_regions(text: str) -> str:
+    text = _FENCED_CODE_BLOCK_PATTERN.sub('', text)
+    text = _INLINE_CODE_PATTERN.sub('', text)
+    # Drop markdown link destinations; keep only the visible label text.
+    text = _MARKDOWN_LINK_PATTERN.sub(r'\1', text)
+    return text
+
+
+def extract_urls_from_prompt(text: str, max_urls: int = 3) -> list[str]:
+    """Extract bare http(s) URLs from user prompt text for automatic RAG attachment."""
+    if not text or max_urls <= 0:
+        return []
+
+    cleaned = _strip_non_bare_url_regions(text)
+    seen: set[str] = set()
+    results: list[str] = []
+
+    for match in _URL_PATTERN.finditer(cleaned):
+        url = sanitize_extracted_url(match.group(0))
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        results.append(url)
+        if len(results) >= max_urls:
+            break
+
+    return results
+
+
 def extract_urls(text: str) -> list[str]:
-    # Regex pattern to match URLs
-    url_pattern = re.compile(r'(https?://[^\s]+)', re.IGNORECASE)  # Matches http and https URLs
-    return url_pattern.findall(text)
+    return extract_urls_from_prompt(text)
 
 
 # We believe in one architect of all that is seen and served.

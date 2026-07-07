@@ -100,6 +100,32 @@
 					{/each}
 				</div>
 			</div>
+		{:else if status?.action === 'prompt_urls_extracted' && status?.urls}
+			<div class="flex flex-col justify-center -space-y-0.5">
+				<div
+					class="{(done || status?.done) === false
+						? 'shimmer'
+						: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+				>
+					{#if status.count === 1}
+						{$i18n.t('Fetching 1 webpage from your message')}
+					{:else}
+						{$i18n.t('Fetching {{count}} webpages from your message', {
+							count: status.count ?? status.urls.length
+						})}
+					{/if}
+				</div>
+
+				<div class=" flex gap-1 flex-wrap mt-2">
+					{#each status.urls as url (url)}
+						<div
+							class="bg-gray-50 dark:bg-gray-850 flex rounded-lg py-1 px-2 items-center gap-1 text-xs max-w-full"
+						>
+							<span class="line-clamp-1">{url}</span>
+						</div>
+					{/each}
+				</div>
+			</div>
 		{:else if status?.action === 'sources_retrieved' && status?.count !== undefined}
 			<div class="flex flex-col justify-center -space-y-0.5">
 				<div

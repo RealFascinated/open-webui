@@ -46,25 +46,28 @@ from open_webui.models.tools import Tools
 from open_webui.models.users import UserModel
 from open_webui.tools.builtin import (
     add_memory,
+    archive_chat,
     calculate_timestamp,
     create_automation,
     create_calendar_event,
+    create_folder,
     create_tasks,
     delete_automation,
     delete_calendar_event,
     delete_memory,
+    delete_note,
     edit_image,
     execute_code,
     fetch_url,
     generate_image,
     get_current_timestamp,
-    grep_knowledge_files,
     kb_exec,
     list_automations,
-    list_knowledge,
-    list_knowledge_bases,
+    list_calendars,
+    list_folders,
     list_memories,
     list_memory_paths,
+    move_chat_to_folder,
     query_knowledge_bases,
     query_knowledge_files,
     read_memory_path,
@@ -75,21 +78,24 @@ from open_webui.tools.builtin import (
     search_channels,
     search_chats,
     search_knowledge_bases,
-    search_knowledge_files,
     search_memories,
     search_notes,
+    search_skills,
+    search_files,
     search_web,
     toggle_automation,
     update_automation,
     update_calendar_event,
+    update_chat,
     update_memory,
+    update_note_content,
     update_task,
     view_channel_message,
     view_channel_thread,
     view_chat,
     view_file,
-    view_knowledge_file,
     view_note,
+    view_note_lines,
     view_skill,
     write_note,
 )
@@ -495,6 +501,7 @@ async def get_builtin_tools(
         'channels.enable',
         'automations.enable',
         'calendar.enable',
+        'folders.enable',
     )
 
     async def has_user_permission(feature_key: str) -> bool:
@@ -519,41 +526,16 @@ async def get_builtin_tools(
     if folder_knowledge:
         model_knowledge = list(model_knowledge or []) + list(folder_knowledge)
     if is_builtin_tool_enabled('knowledge'):
-        from open_webui.env import ENABLE_KB_EXEC
-
-        if ENABLE_KB_EXEC:
-            builtin_functions.append(kb_exec)
-            builtin_functions.append(query_knowledge_files)
-            # Notes attached to the model need view_note since kb_exec is file-only
-            if model_knowledge:
-                knowledge_types = {item.get('type') for item in model_knowledge}
-                if 'note' in knowledge_types:
-                    builtin_functions.append(view_note)
-            if not model_knowledge:
-                builtin_functions.append(query_knowledge_bases)
-                builtin_functions.append(search_knowledge_bases)
-        elif model_knowledge:
-            builtin_functions.extend(
-                [list_knowledge, search_knowledge_files, grep_knowledge_files, query_knowledge_files]
-            )
-
+        builtin_functions.append(kb_exec)
+        builtin_functions.append(query_knowledge_files)
+        # Notes attached to the model need view_note since kb_exec is file-only
+        if model_knowledge:
             knowledge_types = {item.get('type') for item in model_knowledge}
-            if 'file' in knowledge_types or 'collection' in knowledge_types:
-                builtin_functions.extend([view_file, view_knowledge_file])
             if 'note' in knowledge_types:
                 builtin_functions.append(view_note)
-        else:
-            builtin_functions.extend(
-                [
-                    list_knowledge_bases,
-                    search_knowledge_bases,
-                    query_knowledge_bases,
-                    grep_knowledge_files,
-                    search_knowledge_files,
-                    query_knowledge_files,
-                    view_knowledge_file,
-                ]
-            )
+        if not model_knowledge:
+            builtin_functions.append(query_knowledge_bases)
+            builtin_functions.append(search_knowledge_bases)
 
     # Chat-uploaded files: on-demand access for follow-up turns (Claude-style).
     # Files are processed on attach; later turns use view_file instead of per-turn RAG.
@@ -561,9 +543,29 @@ async def get_builtin_tools(
         if view_file not in builtin_functions:
             builtin_functions.append(view_file)
 
+    # File library tools - search and read uploaded files
+    if (
+        is_builtin_tool_enabled('files')
+        and get_model_capability('file_upload')
+        and await has_user_permission('file_upload')
+    ):
+        if search_files not in builtin_functions:
+            builtin_functions.append(search_files)
+        if view_file not in builtin_functions:
+            builtin_functions.append(view_file)
+
     # Chats tools - search and fetch user's chat history
     if is_builtin_tool_enabled('chats'):
-        builtin_functions.extend([search_chats, view_chat])
+        builtin_functions.extend(
+            [
+                search_chats,
+                view_chat,
+                update_chat,
+                archive_chat,
+            ]
+        )
+        if config.get('folders.enable') and await has_user_permission('folders'):
+            builtin_functions.extend([list_folders, create_folder, move_chat_to_folder])
 
     # Add memory tools when memory is enabled and the model allows this builtin category.
     if (
@@ -625,7 +627,17 @@ async def get_builtin_tools(
 
     # Notes tools - search, view, create, and update user's notes
     if is_builtin_tool_enabled('notes') and config.get('notes.enable') and await has_user_permission('notes'):
-        builtin_functions.extend([search_notes, view_note, write_note, replace_note_content])
+        builtin_functions.extend(
+            [
+                search_notes,
+                view_note,
+                view_note_lines,
+                write_note,
+                replace_note_content,
+                update_note_content,
+                delete_note,
+            ]
+        )
 
     # Channels tools - search channels and messages
     if is_builtin_tool_enabled('channels') and config.get('channels.enable') and await has_user_permission('channels'):
@@ -638,7 +650,9 @@ async def get_builtin_tools(
             ]
         )
 
-    # Skills tools - view_skill allows model to load full skill instructions on demand
+    # Skills tools - discover and load skill instructions on demand
+    if is_builtin_tool_enabled('skills'):
+        builtin_functions.append(search_skills)
     if extra_params.get('__skill_ids__'):
         builtin_functions.append(view_skill)
 
@@ -659,7 +673,13 @@ async def get_builtin_tools(
     # Calendar tools - search/create/update/delete events
     if is_builtin_tool_enabled('calendar') and config.get('calendar.enable') and await has_user_permission('calendar'):
         builtin_functions.extend(
-            [search_calendar_events, create_calendar_event, update_calendar_event, delete_calendar_event]
+            [
+                list_calendars,
+                search_calendar_events,
+                create_calendar_event,
+                update_calendar_event,
+                delete_calendar_event,
+            ]
         )
 
     for func in builtin_functions:
