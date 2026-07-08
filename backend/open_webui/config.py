@@ -492,14 +492,14 @@ VECTOR_DB = os.getenv('VECTOR_DB', 'chroma')
 
 # Chroma
 CHROMA_DATA_PATH = f'{DATA_DIR}/vector_db'
+CHROMA_HTTP_HOST = os.getenv('CHROMA_HTTP_HOST', '')
+CHROMA_HTTP_PORT = int(os.getenv('CHROMA_HTTP_PORT', '8000'))
 
 if VECTOR_DB == 'chroma':
     import chromadb
 
     CHROMA_TENANT = os.getenv('CHROMA_TENANT', chromadb.DEFAULT_TENANT)
     CHROMA_DATABASE = os.getenv('CHROMA_DATABASE', chromadb.DEFAULT_DATABASE)
-    CHROMA_HTTP_HOST = os.getenv('CHROMA_HTTP_HOST', '')
-    CHROMA_HTTP_PORT = int(os.getenv('CHROMA_HTTP_PORT', '8000'))
     CHROMA_CLIENT_AUTH_PROVIDER = os.getenv('CHROMA_CLIENT_AUTH_PROVIDER', '')
     CHROMA_CLIENT_AUTH_CREDENTIALS = os.getenv('CHROMA_CLIENT_AUTH_CREDENTIALS', '')
     # Comma-separated list of header=value pairs

@@ -19,7 +19,7 @@
 	import { copyToClipboard } from '$lib/utils';
 	import { page } from '$app/stores';
 
-	import { getModels } from '$lib/apis';
+	import { getModels, unloadModel } from '$lib/apis';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -173,6 +173,18 @@
 			type: 'application/json'
 		});
 		saveAs(blob, `models-export-${Date.now()}.json`);
+	};
+
+	const unloadModelHandler = async (model) => {
+		const res = await unloadModel(localStorage.token, model.id).catch((error) => {
+			toast.error($i18n.t('Error unloading model: {{error}}', { error }));
+		});
+
+		if (res) {
+			toast.success($i18n.t('Model unloaded successfully'));
+			await init();
+			_models.set(await getModels(localStorage.token));
+		}
 	};
 
 	const init = async () => {
@@ -672,6 +684,9 @@
 										}}
 										hideHandler={() => {
 											hideModelHandler(model);
+										}}
+										unloadHandler={() => {
+											unloadModelHandler(model);
 										}}
 										copyLinkHandler={() => {
 											copyLinkHandler(model);

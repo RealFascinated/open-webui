@@ -14,7 +14,6 @@
 	import { goto } from '$app/navigation';
 
 	import { deleteModel, getOllamaVersion, pullModel } from '$lib/apis/ollama';
-	import { unloadModel } from '$lib/apis';
 
 	import {
 		user,
@@ -426,19 +425,6 @@
 		}
 	};
 
-	const unloadModelHandler = async (model: string) => {
-		const res = await unloadModel(localStorage.token, model).catch((error) => {
-			toast.error($i18n.t('Error unloading model: {{error}}', { error }));
-		});
-
-		if (res) {
-			toast.success($i18n.t('Model unloaded successfully'));
-			models.set(
-				await getModels(localStorage.token)
-			);
-		}
-	};
-
 	let showDeleteConfirm = false;
 	let deleteModelTarget: unknown = null;
 
@@ -734,7 +720,6 @@
 										{index}
 										{value}
 										{pinModelHandler}
-										{unloadModelHandler}
 										{deleteModelHandler}
 										{selectionOnly}
 										onClick={() => {

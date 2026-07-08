@@ -9,7 +9,6 @@
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { copyToClipboard, sanitizeResponseContent } from '$lib/utils';
-	import ArrowUpTray from '$lib/components/icons/ArrowUpTray.svelte';
 	import Check from '$lib/components/icons/Check.svelte';
 	import ModelItemMenu from './ModelItemMenu.svelte';
 	import EllipsisHorizontal from '$lib/components/icons/EllipsisHorizontal.svelte';
@@ -24,7 +23,6 @@
 	export let index: number = -1;
 	export let value: string | null = '';
 
-	export let unloadModelHandler: (modelValue: string) => void = () => {};
 	export let pinModelHandler: (modelId: string) => void = () => {};
 	export let deleteModelHandler: (model: unknown) => void = () => {};
 	export let selectionOnly = false;
@@ -217,25 +215,6 @@
 	</div>
 
 	<div class="ml-auto pl-2 pr-1 flex items-center gap-1.5 shrink-0">
-		{#if !selectionOnly && $user?.role === 'admin' && item.model.loaded}
-			<Tooltip
-				content={`${$i18n.t('Eject')}`}
-				className="flex-shrink-0 group-hover/item:opacity-100 opacity-0 "
-			>
-				<button
-					class="flex"
-					aria-label={$i18n.t('Eject model')}
-					on:click={(e) => {
-						e.preventDefault();
-						e.stopPropagation();
-						unloadModelHandler(item.value);
-					}}
-				>
-					<ArrowUpTray className="size-3" />
-				</button>
-			</Tooltip>
-		{/if}
-
 		{#if !selectionOnly}
 			<ModelItemMenu
 				bind:show={showMenu}

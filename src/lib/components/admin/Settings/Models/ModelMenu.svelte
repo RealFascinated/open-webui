@@ -10,6 +10,7 @@
 	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
 	import Download from '$lib/components/icons/Download.svelte';
 	import ArrowUpCircle from '$lib/components/icons/ArrowUpCircle.svelte';
+	import ArrowUpTray from '$lib/components/icons/ArrowUpTray.svelte';
 
 	import { config } from '$lib/stores';
 	import Link from '$lib/components/icons/Link.svelte';
@@ -21,6 +22,7 @@
 
 	export let exportHandler: (...args: unknown[]) => unknown;
 	export let hideHandler: (...args: unknown[]) => unknown;
+	export let unloadHandler: (...args: unknown[]) => unknown;
 	export let copyLinkHandler: (...args: unknown[]) => unknown;
 
 	export let onClose: (...args: unknown[]) => unknown;
@@ -93,6 +95,19 @@
 					{/if}
 				</div>
 			</button>
+
+			{#if model?.loaded}
+				<button
+					class="select-none flex w-full gap-2 items-center px-3 py-1.5 text-sm font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+					on:click={() => {
+						unloadHandler();
+					}}
+				>
+					<ArrowUpTray className="size-4" />
+
+					<div class="flex items-center">{$i18n.t('Eject model')}</div>
+				</button>
+			{/if}
 
 			<button
 				class="select-none flex w-full gap-2 items-center px-3 py-1.5 text-sm font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
