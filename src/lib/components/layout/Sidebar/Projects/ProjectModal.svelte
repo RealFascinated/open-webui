@@ -12,17 +12,17 @@
 
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import Knowledge from '$lib/components/workspace/Models/Knowledge.svelte';
-	import { getFolderById } from '$lib/apis/folders';
+	import { getProjectById } from '$lib/apis/projects';
 	const i18n = getContext('i18n');
 
 	export let show = false;
 	export let onSubmit: (...args: unknown[]) => unknown = (e) => {};
 
-	export let folderId = null;
+	export let projectId = null;
 	export let parentId = null;
 	export let edit = false;
 
-	let folder = null;
+	let project = null;
 	let name = '';
 	let meta = {
 		background_image_url: null
@@ -44,10 +44,10 @@
 		}
 
 		// Check folder max file count limit
-		const maxFileCount = $config?.features?.folder_max_file_count ?? '';
+		const maxFileCount = $config?.features?.project_max_file_count ?? '';
 		if (maxFileCount && (data?.files ?? []).length > maxFileCount) {
 			toast.error(
-				$i18n.t('Maximum number of files per folder is {{max}}.', { max: maxFileCount ?? 0 })
+				$i18n.t('Maximum number of files per project is {{max}}.', { max: maxFileCount ?? 0 })
 			);
 			loading = false;
 			return;
@@ -64,17 +64,17 @@
 	};
 
 	const init = async () => {
-		if (folderId) {
-			folder = await getFolderById(localStorage.token, folderId).catch((error) => {
+		if (projectId) {
+			project = await getProjectById(localStorage.token, projectId).catch((error) => {
 				toast.error(`${error}`);
 				return null;
 			});
 
-			name = folder.name;
-			meta = folder.meta || {
+			name = project.name;
+			meta = project.meta || {
 				background_image_url: null
 			};
-			data = folder.data || {
+			data = project.data || {
 				system_prompt: '',
 				files: []
 			};
@@ -113,9 +113,9 @@
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-1">
 			<div class=" text-lg font-medium self-center">
 				{#if edit}
-					{$i18n.t('Edit Folder')}
+					{$i18n.t('Edit Project')}
 				{:else}
-					{$i18n.t('Create Folder')}
+					{$i18n.t('Create Sub-project')}
 				{/if}
 			</div>
 			<button
@@ -137,7 +137,7 @@
 					}}
 				>
 					<div class="flex flex-col w-full mt-1">
-						<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Folder Name')}</div>
+						<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Project Name')}</div>
 
 						<div class="flex-1">
 							<input
@@ -145,7 +145,7 @@
 								class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
 								type="text"
 								bind:value={name}
-								placeholder={$i18n.t('Enter folder name')}
+								placeholder={$i18n.t('Enter project name')}
 								autocomplete="off"
 							/>
 						</div>
@@ -183,7 +183,7 @@
 					/>
 
 					<div class="flex justify-between w-full mt-1 items-center">
-						<div class="text-xs text-gray-500">{$i18n.t('Folder Background Image')}</div>
+						<div class="text-xs text-gray-500">{$i18n.t('Project Background Image')}</div>
 
 						<div class="">
 							<button
@@ -221,7 +221,7 @@
 									placeholder={$i18n.t(
 										'Write your model system prompt content here\ne.g.) You are Mario from Super Mario Bros, acting as an assistant.'
 									)}
-									maxSize={200}
+									maxSize={2000}
 									bind:value={data.system_prompt}
 								/>
 							</div>

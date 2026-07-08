@@ -17,8 +17,10 @@ from open_webui.utils.auth import get_verified_user
 from open_webui.utils.memory import (
     clean_memory_content,
     clean_memory_path,
+    generate_consolidation_operations,
     list_memory_path_groups,
     memory_vector_text,
+    memory_visible_in_scope,
     read_memory_path_rows,
     search_memory_rows,
     validate_memory_operations,
@@ -99,7 +101,12 @@ class SearchMemoriesForm(BaseModel):
     type: Literal['user', 'context', 'all'] = 'all'
     path: str | None = None
     memory_id: str | None = None
+    project_id: str | None = None
     limit: int = 20
+
+
+class ConsolidateMemoriesForm(BaseModel):
+    model: str | None = None
 
 
 class ListMemoryPathsForm(BaseModel):
@@ -124,6 +131,48 @@ def _memory_metadata(memory: MemoryModel) -> dict:
     }
 
 
+async def find_semantic_duplicate(
+    request: Request,
+    user,
+    content: str,
+    path: str | None,
+    memory_type: str,
+) -> MemoryModel | None:
+    threshold = float(await Config.get('memories.dedup_threshold', 0.0) or 0.0)
+    if threshold <= 0:
+        return None
+
+    try:
+        vector = await request.app.state.EMBEDDING_FUNCTION(memory_vector_text(content, path), user=user)
+        results = await ASYNC_VECTOR_DB_CLIENT.search(
+            collection_name=f'user-memory-{user.id}',
+            vectors=[vector],
+            limit=3,
+        )
+        if not results or not results.ids or not results.ids[0]:
+            return None
+
+        for idx, memory_id in enumerate(results.ids[0]):
+            score = None
+            if results.distances and results.distances[0] and len(results.distances[0]) > idx:
+                score = results.distances[0][idx]
+            if score is not None and score < threshold:
+                continue
+
+            memory = await Memories.get_memory_by_id(memory_id)
+            if not memory or memory.user_id != user.id:
+                continue
+            if memory.type != Memories.normalize_memory_type(memory_type):
+                continue
+            if (memory.path or None) != (path or None):
+                continue
+            return memory
+    except Exception as e:
+        log.debug(f'Semantic memory dedup failed: {e}')
+
+    return None
+
+
 @router.post('/add', response_model=MemoryModel | None)
 async def add_memory(
     request: Request,
@@ -140,6 +189,10 @@ async def add_memory(
 
     content = clean_memory_content(form_data.content)
     path = clean_memory_path(form_data.path)
+    duplicate = await find_semantic_duplicate(request, user, content, path, form_data.type)
+    if duplicate:
+        return duplicate
+
     memory = await Memories.insert_new_memory(
         user.id,
         content,
@@ -183,7 +236,27 @@ async def update_memories(
     operations = validate_memory_operations(form_data)
     metadata = getattr(request.state, 'metadata', {}) or {}
     source = form_data.source or 'tool'
+    skipped_results: list[dict] = []
+    filtered_operations: list[dict] = []
     for operation in operations:
+        if operation.get('action') == 'add':
+            duplicate = await find_semantic_duplicate(
+                request,
+                user,
+                operation.get('content', ''),
+                operation.get('path'),
+                operation.get('type', 'context'),
+            )
+            if duplicate:
+                skipped_results.append(
+                    {
+                        'action': 'add',
+                        'status': 'skipped',
+                        'reason': 'semantic_duplicate',
+                        'memory': duplicate.model_dump(),
+                    }
+                )
+                continue
         if operation.get('action') in {'add', 'replace', 'move'}:
             operation['meta'] = {
                 'created_by': source,
@@ -191,11 +264,19 @@ async def update_memories(
                 'message_id': metadata.get('message_id'),
                 'model': metadata.get('model'),
             }
+        filtered_operations.append(operation)
+
+    operations = filtered_operations
+    if not operations and skipped_results:
+        return skipped_results
 
     try:
         results = await Memories.apply_memory_operations(user.id, operations)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+    if skipped_results:
+        results = skipped_results + results
 
     upsert_items = []
     delete_ids = []
@@ -335,6 +416,8 @@ async def search_memories(
     await check_memories_permission(user)
 
     memories = await Memories.get_memories_by_user_id(user.id)
+    if form_data.project_id is not None:
+        memories = [memory for memory in (memories or []) if memory_visible_in_scope(memory, form_data.project_id)]
     return search_memory_rows(
         memories,
         query=form_data.query,
@@ -342,6 +425,48 @@ async def search_memories(
         memory_id=form_data.memory_id,
         memory_type=form_data.type,
         limit=form_data.limit,
+    )
+
+
+@router.post('/consolidate', response_model=list[dict])
+async def consolidate_memories(
+    request: Request,
+    form_data: ConsolidateMemoriesForm,
+    user=Depends(get_verified_user),
+):
+    await check_memories_permission(user)
+
+    model_id = form_data.model
+    if not model_id:
+        model_id = await Config.get('task.model.default')
+    if not model_id:
+        raise HTTPException(status_code=400, detail='No model available for memory consolidation')
+
+    operations = await generate_consolidation_operations(
+        request=request,
+        user=user,
+        model_id=model_id,
+        metadata=getattr(request.state, 'metadata', {}) or {},
+    )
+    if not operations:
+        return []
+
+    operation_models = []
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get('action') not in {'add', 'replace', 'move', 'remove'}:
+            continue
+        try:
+            operation_models.append(MemoryOperationModel(**operation))
+        except Exception:
+            continue
+
+    if not operation_models:
+        return []
+
+    return await update_memories(
+        request,
+        UpdateMemoriesForm(operations=operation_models, source='tool'),
+        user,
     )
 
 

@@ -10,10 +10,15 @@
 	import { getAllUsers } from '$lib/apis/users';
 	import { exportConfig, importConfig } from '$lib/apis/configs';
 	import AdminSettingsCard from '../AdminSettingsCard.svelte';
+	import AdminDangerZone from '../AdminDangerZone.svelte';
+	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let saveHandler: (...args: unknown[]) => unknown = () => {};
+
+	let showImportConfirm = false;
+	let pendingImportFile: File | null = null;
 
 	const exportAllUserChats = async () => {
 		let blob = new Blob([JSON.stringify(await getAllUserChats(localStorage.token))], {
@@ -48,7 +53,37 @@
 	onMount(async () => {
 		// permissions = await getUserPermissions(localStorage.token);
 	});
+
+	const importConfigFile = async (file: File) => {
+		const reader = new FileReader();
+
+		reader.onload = async (e) => {
+			const res = await importConfig(localStorage.token, JSON.parse(e.target.result)).catch((error) => {
+				toast.error(`${error}`);
+			});
+
+			if (res) {
+				toast.success($i18n.t('Config imported successfully'));
+			}
+		};
+
+		reader.readAsText(file);
+	};
 </script>
+
+<ConfirmDialog
+	title={$i18n.t('Import Config')}
+	message={$i18n.t(
+		'Importing configuration will overwrite current settings. This action cannot be undone.'
+	)}
+	bind:show={showImportConfirm}
+	onConfirm={async () => {
+		if (pendingImportFile) {
+			await importConfigFile(pendingImportFile);
+			pendingImportFile = null;
+		}
+	}}
+/>
 
 <div class="flex flex-col text-sm" data-save-handler={!!saveHandler}>
 	<div class="space-y-3">
@@ -58,46 +93,20 @@
 			type="file"
 			accept=".json"
 			on:change={(e) => {
-				const file = e.target.files[0];
-				const reader = new FileReader();
+				const file = e.target.files?.[0];
+				if (!file) return;
 
-				reader.onload = async (e) => {
-					const res = await importConfig(localStorage.token, JSON.parse(e.target.result)).catch(
-						(error) => {
-							toast.error(`${error}`);
-						}
-					);
-
-					if (res) {
-						toast.success($i18n.t('Config imported successfully'));
-					}
-					e.target.value = null;
-				};
-
-				reader.readAsText(file);
+				pendingImportFile = file;
+				showImportConfirm = true;
+				e.target.value = null;
 			}}
 		/>
 
 		<AdminSettingsCard
 			title="Config"
-			description="Import or export instance configuration as JSON."
+			description="Export instance configuration as JSON."
 			className="mb-3"
 		>
-			<div>
-				<div class="py-0.5 flex w-full justify-between">
-					<div class="self-center text-xs">{$i18n.t('Import Config')}</div>
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							document.getElementById('config-json-input').click();
-						}}
-						type="button"
-					>
-						<span class="self-center">{$i18n.t('Import')}</span>
-					</button>
-				</div>
-			</div>
-
 			<div>
 				<div class="py-0.5 flex w-full justify-between">
 					<div class="self-center text-xs">{$i18n.t('Export Config')}</div>
@@ -117,6 +126,21 @@
 				</div>
 			</div>
 		</AdminSettingsCard>
+
+		<AdminDangerZone title="Danger Zone" description="Importing config overwrites current settings.">
+			<div class="flex w-full justify-between">
+				<div class="self-center text-xs font-medium">{$i18n.t('Import Config')}</div>
+				<button
+					class="text-xs"
+					type="button"
+					on:click={() => {
+						document.getElementById('config-json-input')?.click();
+					}}
+				>
+					{$i18n.t('Import')}
+				</button>
+			</div>
+		</AdminDangerZone>
 
 		{#if $config?.features.enable_admin_export ?? true}
 			<AdminSettingsCard

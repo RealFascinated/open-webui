@@ -11,22 +11,22 @@
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 
-	import { chatId, mobile, selectedFolder, showSidebar, user } from '$lib/stores';
+	import { chatId, mobile, selectedProject, showSidebar, user } from '$lib/stores';
 
 	import {
-		deleteFolderById,
-		updateFolderIsExpandedById,
-		updateFolderById,
-		updateFolderParentIdById,
-		getFolderById,
-		createNewFolder,
-		getSharedFolderChats
-	} from '$lib/apis/folders';
+		deleteProjectById,
+		updateProjectIsExpandedById,
+		updateProjectById,
+		updateProjectParentIdById,
+		getProjectById,
+		createNewProject,
+		getSharedProjectChats
+	} from '$lib/apis/projects';
 	import {
 		getChatById,
-		getChatsByFolderId,
-		getChatListByFolderId,
-		updateChatFolderIdById,
+		getChatsByProjectId,
+		getChatListByProjectId,
+		updateChatProjectIdById,
 		importChats
 	} from '$lib/apis/chats';
 
@@ -39,37 +39,37 @@
 	import EllipsisHorizontal from '$lib/components/icons/EllipsisHorizontal.svelte';
 
 	import ChatItem from './ChatItem.svelte';
-	import FolderMenu from './Folders/FolderMenu.svelte';
-	import FolderShareModal from './Folders/FolderShareModal.svelte';
+	import ProjectMenu from './Projects/ProjectMenu.svelte';
+	import ProjectShareModal from './Projects/ProjectShareModal.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
-	import FolderModal from './Folders/FolderModal.svelte';
+	import ProjectModal from './Projects/ProjectModal.svelte';
 	import Emoji from '$lib/components/common/Emoji.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
-	export let folderRegistry = {};
+	export let projectRegistry = {};
 	export let open = false;
 
-	export let folders;
-	export let folderId;
+	export let projects;
+	export let projectId;
 	export let shiftKey = false;
 
 	export let className = '';
 
-	export let deleteFolderContents = true;
+	export let deleteProjectContents = true;
 
 	export let parentDragged = false;
 
 	export let onDelete = (e) => {};
 	export let onItemMove = (e) => {};
 
-	let folderElement;
+	let projectElement;
 
-	let showFolderModal = false;
+	let showProjectModal = false;
 	let showShareModal = false;
 	let edit = false;
 
-	let showCreateSubFolderModal = false;
-	let createSubFolderParentId = null;
+	let showCreateSubProjectModal = false;
+	let createSubProjectParentId = null;
 
 	let draggedOver = false;
 	let dragged = false;
@@ -81,7 +81,7 @@
 	const onDragOver = (e) => {
 		e.preventDefault();
 		e.stopPropagation();
-		if (dragged || parentDragged || folders[folderId]?.shared) {
+		if (dragged || parentDragged || projects[projectId]?.shared) {
 			return;
 		}
 		draggedOver = true;
@@ -94,7 +94,7 @@
 			return;
 		}
 
-		if (folderElement.contains(e.target)) {
+		if (projectElement.contains(e.target)) {
 			console.log('Dropped on the Button');
 
 			if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
@@ -113,7 +113,7 @@
 									const fileContent = JSON.parse(event.target.result);
 									open = true;
 									dispatch('import', {
-										folderId: folderId,
+										projectId: projectId,
 										items: fileContent
 									});
 								} catch (error) {
@@ -129,7 +129,7 @@
 
 						console.log(file);
 					} else {
-						// Handle the drag-and-drop data for folders or chats (same as before)
+						// Handle the drag-and-drop data for projects or chats (same as before)
 						const dataTransfer = e.dataTransfer.getData('text/plain');
 
 						try {
@@ -138,13 +138,13 @@
 
 							const { type, id, item } = data;
 
-							if (type === 'folder') {
+							if (type === 'project') {
 								open = true;
-								if (id === folderId) {
+								if (id === projectId) {
 									return;
 								}
 								// Move the folder
-								const res = await updateFolderParentIdById(localStorage.token, id, folderId).catch(
+								const res = await updateProjectParentIdById(localStorage.token, id, projectId).catch(
 									(error) => {
 										toast.error(`${error}`);
 										return null;
@@ -171,7 +171,7 @@
 											chat: item.chat,
 											meta: item?.meta ?? {},
 											pinned: false,
-											folder_id: null,
+											project_id: null,
 											created_at: item?.created_at ?? null,
 											updated_at: item?.updated_at ?? null
 										}
@@ -183,18 +183,18 @@
 
 								if (chat) {
 									// Move the chat
-									const res = await updateChatFolderIdById(
+									const res = await updateChatProjectIdById(
 										localStorage.token,
 										chat.id,
-										folderId
+										projectId
 									).catch((error) => {
 										toast.error(`${error}`);
 										return null;
 									});
 
 									onItemMove({
-										originFolderId: chat.folder_id,
-										targetFolderId: folderId,
+										originProjectId: chat.project_id,
+										targetProjectId: projectId,
 										e
 									});
 
@@ -214,7 +214,7 @@
 				}
 			}
 
-			setFolderItems();
+			setProjectItems();
 			draggedOver = false;
 		}
 	};
@@ -243,14 +243,14 @@
 		event.dataTransfer.setData(
 			'text/plain',
 			JSON.stringify({
-				type: 'folder',
-				id: folderId
+				type: 'project',
+				id: projectId
 			})
 		);
 		event.dataTransfer.setData('application/x-open-webui-drag', '');
 
 		dragged = true;
-		folderElement.style.opacity = '0.5'; // Optional: Visual cue to show it's being dragged
+		projectElement.style.opacity = '0.5'; // Optional: Visual cue to show it's being dragged
 	};
 
 	const onDrag = (event) => {
@@ -263,53 +263,53 @@
 	const onDragEnd = (event) => {
 		event.stopPropagation();
 
-		folderElement.style.opacity = '1'; // Reset visual cue after drag
+		projectElement.style.opacity = '1'; // Reset visual cue after drag
 		dragged = false;
 	};
 
 	onMount(async () => {
-		open = folders[folderId].is_expanded;
-		folderRegistry[folderId] = {
-			setFolderItems: () => {
-				setFolderItems();
+		open = projects[projectId].is_expanded;
+		projectRegistry[projectId] = {
+			setProjectItems: () => {
+				setProjectItems();
 			}
 		};
-		if (folderElement) {
-			folderElement.addEventListener('dragover', onDragOver);
-			folderElement.addEventListener('drop', onDrop);
-			folderElement.addEventListener('dragleave', onDragLeave);
+		if (projectElement) {
+			projectElement.addEventListener('dragover', onDragOver);
+			projectElement.addEventListener('drop', onDrop);
+			projectElement.addEventListener('dragleave', onDragLeave);
 
 			// Event listener for when dragging starts
-			folderElement.addEventListener('dragstart', onDragStart);
+			projectElement.addEventListener('dragstart', onDragStart);
 			// Event listener for when dragging occurs (optional)
-			folderElement.addEventListener('drag', onDrag);
+			projectElement.addEventListener('drag', onDrag);
 			// Event listener for when dragging ends
-			folderElement.addEventListener('dragend', onDragEnd);
+			projectElement.addEventListener('dragend', onDragEnd);
 		}
 
-		if (folders[folderId]?.new) {
-			delete folders[folderId].new;
+		if (projects[projectId]?.new) {
+			delete projects[projectId].new;
 			await tick();
 			renameHandler();
 		}
 	});
 
 	onDestroy(() => {
-		if (folderElement) {
-			folderElement.addEventListener('dragover', onDragOver);
-			folderElement.removeEventListener('drop', onDrop);
-			folderElement.removeEventListener('dragleave', onDragLeave);
+		if (projectElement) {
+			projectElement.addEventListener('dragover', onDragOver);
+			projectElement.removeEventListener('drop', onDrop);
+			projectElement.removeEventListener('dragleave', onDragLeave);
 
-			folderElement.removeEventListener('dragstart', onDragStart);
-			folderElement.removeEventListener('drag', onDrag);
-			folderElement.removeEventListener('dragend', onDragEnd);
+			projectElement.removeEventListener('dragstart', onDragStart);
+			projectElement.removeEventListener('drag', onDrag);
+			projectElement.removeEventListener('dragend', onDragEnd);
 		}
 	});
 
 	let showDeleteConfirm = false;
 
 	const deleteHandler = async () => {
-		const res = await deleteFolderById(localStorage.token, folderId, deleteFolderContents).catch(
+		const res = await deleteProjectById(localStorage.token, projectId, deleteProjectContents).catch(
 			(error) => {
 				toast.error(`${error}`);
 				return null;
@@ -317,50 +317,50 @@
 		);
 
 		if (res) {
-			toast.success($i18n.t('Folder deleted successfully'));
-			onDelete(folderId);
+			toast.success($i18n.t('Project deleted successfully'));
+			onDelete(projectId);
 		}
 	};
 
 	const updateHandler = async ({ name, meta, data }) => {
 		if (name === '') {
-			toast.error($i18n.t('Folder name cannot be empty.'));
+			toast.error($i18n.t('Project name cannot be empty.'));
 			return;
 		}
 
-		const currentName = folders[folderId].name;
+		const currentName = projects[projectId].name;
 
 		name = name.trim();
-		folders[folderId].name = name;
+		projects[projectId].name = name;
 
-		const res = await updateFolderById(localStorage.token, folderId, {
+		const res = await updateProjectById(localStorage.token, projectId, {
 			name,
 			...(meta ? { meta } : {}),
 			...(data ? { data } : {})
 		}).catch((error) => {
 			toast.error(`${error}`);
 
-			folders[folderId].name = currentName;
+			projects[projectId].name = currentName;
 			return null;
 		});
 
 		if (res) {
-			folders[folderId].name = name;
+			projects[projectId].name = name;
 			if (data) {
-				folders[folderId].data = data;
+				projects[projectId].data = data;
 			}
 
-			// toast.success($i18n.t('Folder name updated successfully'));
-			toast.success($i18n.t('Folder updated successfully'));
+			// toast.success($i18n.t('Project name updated successfully'));
+			toast.success($i18n.t('Project updated successfully'));
 
-			if ($selectedFolder?.id === folderId) {
-				const folder = await getFolderById(localStorage.token, folderId).catch((error) => {
+			if ($selectedProject?.id === projectId) {
+				const fetchedProject = await getProjectById(localStorage.token, projectId).catch((error) => {
 					toast.error(`${error}`);
 					return null;
 				});
 
-				if (folder) {
-					await selectedFolder.set(folder);
+				if (fetchedProject) {
+					await selectedProject.set(fetchedProject);
 				}
 			}
 			dispatch('update');
@@ -368,7 +368,7 @@
 	};
 
 	const isExpandedUpdateHandler = async () => {
-		const res = await updateFolderIsExpandedById(localStorage.token, folderId, open).catch(
+		const res = await updateProjectIsExpandedById(localStorage.token, projectId, open).catch(
 			(error) => {
 				toast.error(`${error}`);
 				return null;
@@ -386,17 +386,17 @@
 	};
 
 	let chats = null;
-	export const setFolderItems = async () => {
+	export const setProjectItems = async () => {
 		await tick();
 		if (open) {
-			// Always use getSharedFolderChats so owners also see chats
+			// Always use getSharedProjectChats so owners also see chats
 			// created by users who have write access to this folder.
 			try {
-				const res = await getSharedFolderChats(localStorage.token, folderId);
+				const res = await getSharedProjectChats(localStorage.token, projectId);
 				chats = res?.chats ?? [];
 			} catch (error) {
 				// Fallback to regular API
-				chats = await getChatListByFolderId(localStorage.token, folderId).catch((error) => {
+				chats = await getChatListByProjectId(localStorage.token, projectId).catch((error) => {
 					toast.error(`${error}`);
 					return [];
 				});
@@ -407,19 +407,19 @@
 	};
 
 	$: if (open) {
-		setFolderItems();
+		setProjectItems();
 	}
 
 	const renameHandler = async () => {
 		console.log('Edit');
 		await tick();
-		name = folders[folderId].name;
+		name = projects[projectId].name;
 		edit = true;
 
 		await tick();
 		await tick();
 
-		const input = document.getElementById(`folder-${folderId}-input`);
+		const input = document.getElementById(`folder-${projectId}-input`);
 		if (input) {
 			input.focus();
 			input.select();
@@ -427,7 +427,7 @@
 	};
 
 	const exportHandler = async () => {
-		const chats = await getChatsByFolderId(localStorage.token, folderId).catch((error) => {
+		const chats = await getChatsByProjectId(localStorage.token, projectId).catch((error) => {
 			toast.error(`${error}`);
 			return null;
 		});
@@ -439,18 +439,18 @@
 			type: 'application/json'
 		});
 
-		saveAs(blob, `folder-${folders[folderId].name}-export-${Date.now()}.json`);
+		saveAs(blob, `folder-${projects[projectId].name}-export-${Date.now()}.json`);
 	};
 
-	const createSubFolderHandler = async ({ name, meta, data, parent_id }) => {
+	const createSubProjectHandler = async ({ name, meta, data, parent_id }) => {
 		if (name === '') {
-			toast.error($i18n.t('Folder name cannot be empty.'));
+			toast.error($i18n.t('Project name cannot be empty.'));
 			return;
 		}
 
 		name = name.trim();
 
-		const res = await createNewFolder(localStorage.token, {
+		const res = await createNewProject(localStorage.token, {
 			name,
 			data,
 			meta,
@@ -461,7 +461,7 @@
 		});
 
 		if (res) {
-			toast.success($i18n.t('Folder created successfully'));
+			toast.success($i18n.t('Project created successfully'));
 			dispatch('update');
 		}
 	};
@@ -469,39 +469,39 @@
 
 <DeleteConfirmDialog
 	bind:show={showDeleteConfirm}
-	title={$i18n.t('Delete folder?')}
+	title={$i18n.t('Delete project?')}
 	on:confirm={() => {
 		deleteHandler();
 	}}
 >
 	<div class=" text-sm text-gray-700 dark:text-gray-300 flex-1 line-clamp-3 mb-2">
 		<!-- {$i18n.t('This will delete <strong>{{NAME}}</strong> and <strong>all its contents</strong>.', {
-				NAME: folders[folderId].name
+				NAME: projects[projectId].name
 			})} -->
 
 		{$i18n.t(`Are you sure you want to delete "{{NAME}}"?`, {
-			NAME: folders[folderId].name
+			NAME: projects[projectId].name
 		})}
 	</div>
 
 	<div class="flex items-center gap-1.5">
-		<input type="checkbox" bind:checked={deleteFolderContents} />
+		<input type="checkbox" bind:checked={deleteProjectContents} />
 
 		<div class="text-xs text-gray-500">
-			{$i18n.t('Delete all contents inside this folder')}
+			{$i18n.t('Delete all contents inside this project')}
 		</div>
 	</div>
 </DeleteConfirmDialog>
 
-<FolderModal bind:show={showFolderModal} edit={true} {folderId} onSubmit={updateHandler} />
+<ProjectModal bind:show={showProjectModal} edit={true} {projectId} onSubmit={updateHandler} />
 
-<FolderModal
-	bind:show={showCreateSubFolderModal}
-	parentId={createSubFolderParentId}
-	onSubmit={createSubFolderHandler}
+<ProjectModal
+	bind:show={showCreateSubProjectModal}
+	parentId={createSubProjectParentId}
+	onSubmit={createSubProjectHandler}
 />
 
-<FolderShareModal bind:show={showShareModal} folder={folders[folderId]} />
+<ProjectShareModal bind:show={showShareModal} project={projects[projectId]} />
 
 {#if dragged && x && y}
 	<DragGhost {x} {y}>
@@ -509,14 +509,14 @@
 			<div class="flex items-center gap-1">
 				<FolderOpen className="size-3.5" strokeWidth="2" />
 				<div class=" text-xs text-white line-clamp-1">
-					{folders[folderId].name}
+					{projects[projectId].name}
 				</div>
 			</div>
 		</div>
 	</DragGhost>
 {/if}
 
-<div bind:this={folderElement} class="relative {className}" draggable={!folders[folderId]?.shared}>
+<div bind:this={projectElement} class="relative {className}" draggable={!projects[projectId]?.shared}>
 	{#if draggedOver}
 		<div
 			class="absolute top-0 left-0 w-full h-full rounded-xs bg-gray-100/50 dark:bg-gray-700/20 bg-opacity-50 dark:bg-opacity-10 z-50 pointer-events-none touch-none"
@@ -533,15 +533,15 @@
 	>
 		<div class="w-full group">
 			<div
-				id="folder-{folderId}-button"
-				class="relative w-full py-1 px-1.5 rounded-xl flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-gray-900 transition {$selectedFolder?.id ===
-				folderId
+				id="folder-{projectId}-button"
+				class="relative w-full py-1 px-1.5 rounded-xl flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-gray-900 transition {$selectedProject?.id ===
+				projectId
 					? 'bg-gray-100 dark:bg-gray-900 selected'
 					: ''}"
 				role="button"
 				tabindex="0"
 				on:dblclick={(e) => {
-					if (folders[folderId]?.shared) return;
+					if (projects[projectId]?.shared) return;
 					if (clickTimer) {
 						clearTimeout(clickTimer); // cancel the single-click action
 						clickTimer = null;
@@ -556,13 +556,13 @@
 					}
 
 					clickTimer = setTimeout(async () => {
-						const folder = await getFolderById(localStorage.token, folderId).catch((error) => {
+						const fetchedProject = await getProjectById(localStorage.token, projectId).catch((error) => {
 							toast.error(`${error}`);
 							return null;
 						});
 
-						if (folder) {
-							await selectedFolder.set({ ...folders[folderId], ...folder });
+						if (fetchedProject) {
+							await selectedProject.set({ ...projects[projectId], ...fetchedProject });
 						}
 
 						await goto('/');
@@ -592,9 +592,9 @@
 						isExpandedUpdateDebounceHandler();
 					}}
 				>
-					{#if folders[folderId]?.meta?.icon}
+					{#if projects[projectId]?.meta?.icon}
 						<div class="flex group-hover:hidden transition-all">
-							<Emoji className="size-3.5" shortCode={folders[folderId].meta.icon} />
+							<Emoji className="size-3.5" shortCode={projects[projectId].meta.icon} />
 						</div>
 
 						<div class="hidden group-hover:flex transition-all p-[1px]">
@@ -618,7 +618,7 @@
 				<div class="translate-y-[0.5px] flex-1 justify-start text-start line-clamp-1">
 					{#if edit}
 						<input
-							id="folder-{folderId}-input"
+							id="folder-{projectId}-input"
 							type="text"
 							bind:value={name}
 							on:blur={() => {
@@ -643,17 +643,17 @@
 							class="w-full h-full bg-transparent outline-hidden"
 						/>
 					{:else}
-						{folders[folderId].name}
+						{projects[projectId].name}
 					{/if}
 				</div>
 
-				{#if !folders[folderId]?.shared}
+				{#if !projects[projectId]?.shared}
 					<button
 						class="absolute z-10 right-2 invisible group-hover:visible self-center flex items-center dark:text-gray-300"
 					>
-						<FolderMenu
+						<ProjectMenu
 							onEdit={() => {
-								showFolderModal = true;
+								showProjectModal = true;
 							}}
 							onShare={() => {
 								showShareModal = true;
@@ -664,28 +664,28 @@
 							onExport={() => {
 								exportHandler();
 							}}
-							onCreateSubFolder={() => {
-								createSubFolderParentId = folderId;
-								showCreateSubFolderModal = true;
+							onCreateSubProject={() => {
+								createSubProjectParentId = projectId;
+								showCreateSubProjectModal = true;
 							}}
 						>
 							<div class="p-1 dark:hover:bg-gray-850 rounded-lg touch-auto">
 								<EllipsisHorizontal className="size-4" strokeWidth="2.5" />
 							</div>
-						</FolderMenu>
+						</ProjectMenu>
 					</button>
 				{/if}
 			</div>
 		</div>
 
 		<div slot="content" class="w-full">
-			{#if (folders[folderId]?.childrenIds ?? []).length > 0 || (chats ?? []).length > 0}
+			{#if (projects[projectId]?.childrenIds ?? []).length > 0 || (chats ?? []).length > 0}
 				<div
 					class="ml-3 pl-1 mt-[1px] flex flex-col overflow-y-auto scrollbar-hidden border-s border-gray-100 dark:border-gray-900"
 				>
-					{#if folders[folderId]?.childrenIds}
-						{@const children = folders[folderId]?.childrenIds
-							.map((id) => folders[id])
+					{#if projects[projectId]?.childrenIds}
+						{@const children = projects[projectId]?.childrenIds
+							.map((id) => projects[id])
 							.sort((a, b) =>
 								a.name.localeCompare(b.name, undefined, {
 									numeric: true,
@@ -693,11 +693,11 @@
 								})
 							)}
 
-						{#each children as childFolder (`${folderId}-${childFolder.id}`)}
+						{#each children as childFolder (`${projectId}-${childFolder.id}`)}
 							<svelte:self
-								bind:folderRegistry
-								{folders}
-								folderId={childFolder.id}
+								bind:projectRegistry
+								{projects}
+								projectId={childFolder.id}
 								{shiftKey}
 								parentDragged={dragged}
 								{onItemMove}
@@ -722,8 +722,8 @@
 							createdAt={chat.created_at}
 							updatedAt={chat.updated_at}
 							lastReadAt={chat.last_read_at}
-							ownerName={folders[folderId]?.shared ? (chat.owner_name ?? null) : null}
-							ownerUserId={folders[folderId]?.shared && chat.owner_name ? chat.user_id : null}
+							ownerName={projects[projectId]?.shared ? (chat.owner_name ?? null) : null}
+							ownerUserId={projects[projectId]?.shared && chat.owner_name ? chat.user_id : null}
 							readonly={chat.user_id !== $user?.id}
 							{shiftKey}
 							on:change={(e) => {

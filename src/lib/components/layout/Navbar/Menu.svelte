@@ -17,7 +17,7 @@
 		theme,
 		user,
 		settings,
-		folders,
+		projects,
 		showEmbeds,
 		artifactContents
 	} from '$lib/stores';
@@ -443,7 +443,7 @@
 			{#if !readOnly && !$temporaryChatEnabled && chat?.id}
 				<hr class="border-gray-50/30 dark:border-gray-800/30 my-1" />
 
-				{#if $folders.length > 0}
+				{#if $projects.length > 0}
 					<DropdownSub maxWidth={200}>
 						<button
 							slot="trigger"
@@ -454,8 +454,8 @@
 
 							<div class="flex items-center">{$i18n.t('Move')}</div>
 						</button>
-						{#each $folders.sort((a, b) => b.updated_at - a.updated_at) as folder}
-							{#if folder?.id}
+						{#each $projects.sort((a, b) => b.updated_at - a.updated_at) as folder}
+							{#if project?.id}
 								<button
 									draggable="false"
 									class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl overflow-hidden w-full"

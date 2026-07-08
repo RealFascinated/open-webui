@@ -7,27 +7,24 @@
 	export let dirty = false;
 	export let saving = false;
 	export let saveLabel = 'Save';
-	export let autoSave = false;
 	export let onSave: () => void = () => {};
 	export let onDiscard: (() => void) | null = null;
 </script>
 
+{#if dirty || saving}
 <div class="sticky bottom-0 z-10 mt-4 pb-1">
 	<div
 		class="rounded-2xl border border-gray-100/30 dark:border-gray-850/30 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl px-4 py-3.5"
 	>
 		<div class="flex items-center justify-between gap-3">
 			<div class="text-xs text-gray-500 dark:text-gray-500 min-w-0">
-				{#if autoSave}
-					{$i18n.t('Changes are saved automatically')}
-				{:else if dirty}
+				{#if dirty}
 					{$i18n.t('You have unsaved changes')}
 				{:else}
-					{$i18n.t('All changes saved')}
+					{$i18n.t('Saving...')}
 				{/if}
 			</div>
 
-			{#if !autoSave}
 			<div class="flex items-center gap-2 shrink-0">
 				{#if dirty && onDiscard}
 					<button
@@ -52,7 +49,7 @@
 					{$i18n.t(saveLabel)}
 				</button>
 			</div>
-			{/if}
 		</div>
 	</div>
 </div>
+{/if}

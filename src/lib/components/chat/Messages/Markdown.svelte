@@ -2,6 +2,7 @@
 	import { marked } from 'marked';
 
 	import markedExtension from '$lib/utils/marked/extension';
+	import { setAntArtifactStreamingEnabled } from '$lib/utils/marked/ant-artifact-extension';
 	import markedKatexExtension from '$lib/utils/marked/katex-extension';
 	import { disableSingleTilde } from '$lib/utils/marked/strikethrough-extension';
 	import { mentionExtension } from '$lib/utils/marked/mention-extension';
@@ -66,6 +67,8 @@
 	const parseTokens = () => {
 		if (content === lastContent) return;
 		lastContent = content;
+
+		setAntArtifactStreamingEnabled(!done);
 
 		const processed = replaceTokens(processResponseContent(content), model?.name, $user?.name);
 		if (processed === lastParsedContent) return;

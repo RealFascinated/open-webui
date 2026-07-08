@@ -224,7 +224,7 @@ class FeaturesPermissions(BaseModel):
     api_keys: bool = False
     notes: bool = True
     channels: bool = True
-    folders: bool = True
+    projects: bool = True
     direct_tool_servers: bool = False
 
     web_search: bool = True

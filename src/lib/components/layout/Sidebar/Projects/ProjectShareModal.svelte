@@ -5,7 +5,7 @@
 	import Modal from '$lib/components/common/Modal.svelte';
 	import AccessControl from '$lib/components/workspace/common/AccessControl.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
-	import { getFolderById, updateFolderAccessById } from '$lib/apis/folders';
+	import { getProjectById, updateProjectAccessById } from '$lib/apis/projects';
 	import { user } from '$lib/stores';
 
 	type AccessGrant = {
@@ -16,35 +16,35 @@
 	};
 
 	export let show = false;
-	export let folder: unknown = null;
+	export let project: unknown = null;
 
 	let accessGrants: AccessGrant[] = [];
 	let loading = false;
 
 	// Fetch fresh folder data (with access_grants) when modal opens
-	$: if (show && folder?.id) {
+	$: if (show && project?.id) {
 		loadAccessGrants();
 	}
 
 	const loadAccessGrants = async () => {
 		loading = true;
 		try {
-			const freshFolder = await getFolderById(localStorage.token, folder.id);
-			if (freshFolder) {
-				accessGrants = freshFolder.access_grants ?? [];
+			const freshProject = await getProjectById(localStorage.token, project.id);
+			if (freshProject) {
+				accessGrants = freshProject.access_grants ?? [];
 			}
 		} catch (e) {
 			console.error('Failed to load folder access grants', e);
-			accessGrants = folder?.access_grants ?? [];
+			accessGrants = project?.access_grants ?? [];
 		} finally {
 			loading = false;
 		}
 	};
 
 	const handleAccessChange = async () => {
-		if (!folder) return;
+		if (!project) return;
 		try {
-			const res = await updateFolderAccessById(localStorage.token, folder.id, accessGrants);
+			const res = await updateProjectAccessById(localStorage.token, project.id, accessGrants);
 			if (res) {
 				accessGrants = res.access_grants ?? accessGrants;
 			}
@@ -58,7 +58,7 @@
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-3 pb-1">
 			<div class=" text-lg font-medium self-center font-primary">
-				{$i18n.t('Share')}: {folder?.name ?? ''}
+				{$i18n.t('Share')}: {project?.name ?? ''}
 			</div>
 			<button
 				class="self-center"
@@ -75,7 +75,7 @@
 				bind:accessGrants
 				onChange={handleAccessChange}
 				accessRoles={['read', 'write']}
-				share={$user?.role === 'admin' || $user?.permissions?.sharing?.folders}
+				share={$user?.role === 'admin' || $user?.permissions?.sharing?.projects}
 				sharePublic={false}
 				shareUsers={$user?.role === 'admin' || $user?.permissions?.access_grants?.allow_users}
 			/>

@@ -413,6 +413,10 @@ ENABLE_MEMORY_BACKGROUND_REVIEW = os.getenv('ENABLE_MEMORY_BACKGROUND_REVIEW', '
 MEMORIES_REVIEW_INTERVAL_TURNS = int(os.getenv('MEMORIES_REVIEW_INTERVAL_TURNS', '10'))
 MEMORIES_USER_CHAR_LIMIT = int(os.getenv('MEMORIES_USER_CHAR_LIMIT', '2000'))
 MEMORIES_CONTEXT_CHAR_LIMIT = int(os.getenv('MEMORIES_CONTEXT_CHAR_LIMIT', '2000'))
+MEMORIES_USER_COUNT_LIMIT = int(os.getenv('MEMORIES_USER_COUNT_LIMIT', '5'))
+MEMORIES_CONTEXT_COUNT_LIMIT = int(os.getenv('MEMORIES_CONTEXT_COUNT_LIMIT', '5'))
+MEMORIES_DEDUP_THRESHOLD = float(os.getenv('MEMORIES_DEDUP_THRESHOLD', '0.88'))
+MEMORIES_ALWAYS_INCLUDE_PATHS = os.getenv('MEMORIES_ALWAYS_INCLUDE_PATHS', 'core')
 
 CODE_INTERPRETER_ENGINE = os.getenv('CODE_INTERPRETER_ENGINE', 'pyodide')
 
@@ -1471,6 +1475,10 @@ IMAGES_GEMINI_API_KEY = os.getenv('IMAGES_GEMINI_API_KEY', GEMINI_API_KEY)
 
 IMAGES_GEMINI_ENDPOINT_METHOD = os.getenv('IMAGES_GEMINI_ENDPOINT_METHOD', '')
 
+IMAGES_GEMINI_WEB_SECURE_1PSID = os.getenv('IMAGES_GEMINI_WEB_SECURE_1PSID', '')
+IMAGES_GEMINI_WEB_SECURE_1PSIDTS = os.getenv('IMAGES_GEMINI_WEB_SECURE_1PSIDTS', '')
+IMAGES_GEMINI_WEB_COOKIE_PATH = os.getenv('IMAGES_GEMINI_WEB_COOKIE_PATH', '')
+
 ENABLE_IMAGE_EDIT = os.getenv('ENABLE_IMAGE_EDIT', '').lower() == 'true'
 
 IMAGE_EDIT_ENGINE = os.getenv('IMAGE_EDIT_ENGINE', 'openai')
@@ -1794,7 +1802,7 @@ USER_PERMISSIONS_NOTES_ALLOW_PUBLIC_SHARING = (
     os.getenv('USER_PERMISSIONS_NOTES_ALLOW_PUBLIC_SHARING', 'False').lower() == 'true'
 )
 
-USER_PERMISSIONS_FOLDERS_ALLOW_SHARING = os.getenv('USER_PERMISSIONS_FOLDERS_ALLOW_SHARING', 'False').lower() == 'true'
+USER_PERMISSIONS_PROJECTS_ALLOW_SHARING = os.getenv('USER_PERMISSIONS_PROJECTS_ALLOW_SHARING', 'False').lower() == 'true'
 
 
 USER_PERMISSIONS_CALENDAR_ALLOW_PUBLIC_SHARING = (
@@ -1871,7 +1879,7 @@ USER_PERMISSIONS_FEATURES_CODE_INTERPRETER = (
     os.getenv('USER_PERMISSIONS_FEATURES_CODE_INTERPRETER', 'True').lower() == 'true'
 )
 
-USER_PERMISSIONS_FEATURES_FOLDERS = os.getenv('USER_PERMISSIONS_FEATURES_FOLDERS', 'True').lower() == 'true'
+USER_PERMISSIONS_FEATURES_PROJECTS = os.getenv('USER_PERMISSIONS_FEATURES_PROJECTS', 'True').lower() == 'true'
 
 USER_PERMISSIONS_FEATURES_NOTES = os.getenv('USER_PERMISSIONS_FEATURES_NOTES', 'True').lower() == 'true'
 
@@ -1917,7 +1925,7 @@ DEFAULT_USER_PERMISSIONS = {
         'public_skills': USER_PERMISSIONS_WORKSPACE_SKILLS_ALLOW_PUBLIC_SHARING,
         'notes': USER_PERMISSIONS_NOTES_ALLOW_SHARING,
         'public_notes': USER_PERMISSIONS_NOTES_ALLOW_PUBLIC_SHARING,
-        'folders': USER_PERMISSIONS_FOLDERS_ALLOW_SHARING,
+        'projects': USER_PERMISSIONS_PROJECTS_ALLOW_SHARING,
         'public_chats': USER_PERMISSIONS_CHAT_ALLOW_PUBLIC_SHARING,
         'public_calendars': USER_PERMISSIONS_CALENDAR_ALLOW_PUBLIC_SHARING,
     },
@@ -1947,7 +1955,7 @@ DEFAULT_USER_PERMISSIONS = {
         'api_keys': USER_PERMISSIONS_FEATURES_API_KEYS,
         'notes': USER_PERMISSIONS_FEATURES_NOTES,
         'artifacts': True,
-        'folders': USER_PERMISSIONS_FEATURES_FOLDERS,
+        'projects': USER_PERMISSIONS_FEATURES_PROJECTS,
         'channels': USER_PERMISSIONS_FEATURES_CHANNELS,
         'direct_tool_servers': USER_PERMISSIONS_FEATURES_DIRECT_TOOL_SERVERS,
         # Chat features
@@ -1966,9 +1974,9 @@ DEFAULT_USER_PERMISSIONS = {
 
 USER_PERMISSIONS = DEFAULT_USER_PERMISSIONS
 
-ENABLE_FOLDERS = os.getenv('ENABLE_FOLDERS', 'True').lower() == 'true'
+ENABLE_PROJECTS = os.getenv('ENABLE_PROJECTS', 'True').lower() == 'true'
 
-FOLDER_MAX_FILE_COUNT = os.getenv('FOLDER_MAX_FILE_COUNT', '')
+PROJECT_MAX_FILE_COUNT = os.getenv('PROJECT_MAX_FILE_COUNT', '')
 
 ENABLE_CHANNELS = os.getenv('ENABLE_CHANNELS', 'False').lower() == 'true'
 
@@ -2762,6 +2770,10 @@ DEFAULT_CONFIG = {
     'memories.review_interval_turns': MEMORIES_REVIEW_INTERVAL_TURNS,
     'memories.user_char_limit': MEMORIES_USER_CHAR_LIMIT,
     'memories.context_char_limit': MEMORIES_CONTEXT_CHAR_LIMIT,
+    'memories.user_count_limit': MEMORIES_USER_COUNT_LIMIT,
+    'memories.context_count_limit': MEMORIES_CONTEXT_COUNT_LIMIT,
+    'memories.dedup_threshold': MEMORIES_DEDUP_THRESHOLD,
+    'memories.always_include_paths': MEMORIES_ALWAYS_INCLUDE_PATHS,
     'code_interpreter.engine': CODE_INTERPRETER_ENGINE,
     'code_interpreter.prompt_template': CODE_INTERPRETER_PROMPT_TEMPLATE,
     'code_interpreter.jupyter.url': CODE_INTERPRETER_JUPYTER_URL,
@@ -2947,6 +2959,9 @@ DEFAULT_CONFIG = {
     'image_generation.gemini.api_base_url': IMAGES_GEMINI_API_BASE_URL,
     'image_generation.gemini.api_key': IMAGES_GEMINI_API_KEY,
     'image_generation.gemini.endpoint_method': IMAGES_GEMINI_ENDPOINT_METHOD,
+    'image_generation.gemini_web.secure_1psid': IMAGES_GEMINI_WEB_SECURE_1PSID,
+    'image_generation.gemini_web.secure_1psidts': IMAGES_GEMINI_WEB_SECURE_1PSIDTS,
+    'image_generation.gemini_web.cookie_path': IMAGES_GEMINI_WEB_COOKIE_PATH,
     'images.edit.enable': ENABLE_IMAGE_EDIT,
     'images.edit.engine': IMAGE_EDIT_ENGINE,
     'images.edit.model': IMAGE_EDIT_MODEL,
@@ -3007,8 +3022,8 @@ DEFAULT_CONFIG = {
     'ui.pending_user_overlay_content': PENDING_USER_OVERLAY_CONTENT,
     'ui.watermark': RESPONSE_WATERMARK,
     'user.permissions': USER_PERMISSIONS,
-    'folders.enable': ENABLE_FOLDERS,
-    'folders.max_file_count': FOLDER_MAX_FILE_COUNT,
+    'projects.enable': ENABLE_PROJECTS,
+    'projects.max_file_count': PROJECT_MAX_FILE_COUNT,
     'channels.enable': ENABLE_CHANNELS,
     'calendar.enable': ENABLE_CALENDAR,
     'automations.enable': ENABLE_AUTOMATIONS,

@@ -149,3 +149,52 @@ export const filterAdminSearch = (
 
 	return scored.slice(0, limit).map((entry) => entry.item);
 };
+
+const ADMIN_SEARCH_RECENTS_KEY = 'open-webui-admin-search-recents';
+const ADMIN_SEARCH_RECENTS_MAX = 8;
+
+type StoredAdminSearchRecent = Pick<AdminSearchItem, 'id' | 'title' | 'description' | 'href' | 'category'>;
+
+export const getAdminSearchRecents = (): StoredAdminSearchRecent[] => {
+	if (typeof localStorage === 'undefined') return [];
+
+	try {
+		const raw = localStorage.getItem(ADMIN_SEARCH_RECENTS_KEY);
+		if (!raw) return [];
+		const parsed = JSON.parse(raw);
+		return Array.isArray(parsed) ? parsed : [];
+	} catch {
+		return [];
+	}
+};
+
+export const recordAdminSearchVisit = (item: AdminSearchItem) => {
+	if (typeof localStorage === 'undefined') return;
+
+	const entry: StoredAdminSearchRecent = {
+		id: item.id,
+		title: item.title,
+		description: item.description,
+		href: item.href,
+		category: item.category
+	};
+
+	const next = [
+		entry,
+		...getAdminSearchRecents().filter((recent) => recent.id !== item.id)
+	].slice(0, ADMIN_SEARCH_RECENTS_MAX);
+
+	localStorage.setItem(ADMIN_SEARCH_RECENTS_KEY, JSON.stringify(next));
+};
+
+export const getRecentAdminSearchResults = (
+	index: AdminSearchItem[],
+	limit = ADMIN_SEARCH_RECENTS_MAX
+): AdminSearchItem[] => {
+	const recents = getAdminSearchRecents();
+	const byId = new Map(index.map((item) => [item.id, item]));
+
+	return recents
+		.map((recent) => byId.get(recent.id) ?? recent)
+		.slice(0, limit);
+};

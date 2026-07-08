@@ -2033,11 +2033,18 @@ export const renderVegaVisualization = async (spec: string, lang: string = '') =
 	return svg;
 };
 
-export type { AntArtifact } from './ant-artifact';
+	export type { AntArtifact } from './ant-artifact';
 export {
 	parseAntArtifacts,
+	parseAntArtifactsForStream,
+	scanAntArtifactBlocks,
 	serializeAntArtifact,
 	hasCompleteAntArtifact,
+	hasAntArtifactActivity,
+	hasAntArtifactOpenTag,
+	hasStreamingAntArtifact,
+	isArtifactComplete,
+	getOrphanStreamingArtifacts,
 	mergeAssistantArtifactText,
 	mapMimeToArtifactType
 } from './ant-artifact';

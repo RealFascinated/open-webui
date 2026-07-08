@@ -1,4 +1,6 @@
 import { buildReactHtml } from './react-artifact';
+import type { ArtifactCanvasTheme } from './artifact-theme';
+import { injectArtifactCanvasTheme } from './artifact-theme';
 
 export type ArtifactMeta = {
 	mime_type?: string;
@@ -45,15 +47,22 @@ export function artifactEditableSource(
 }
 
 /** HTML to load in an iframe preview. */
-export function artifactPreviewHtml(code: string, meta: string | null | undefined, type?: string): string {
+export function artifactPreviewHtml(
+	code: string,
+	meta: string | null | undefined,
+	type?: string,
+	canvasTheme: ArtifactCanvasTheme = 'light'
+): string {
 	const parsed = parseArtifactMeta(meta);
+	let html: string;
 	if (parsed.react_source) {
-		return buildReactHtml(parsed.react_source);
-	}
-	if (parsed.mime_type === 'text/markdown' || type === 'markdown') {
+		html = buildReactHtml(parsed.react_source, canvasTheme);
+	} else if (parsed.mime_type === 'text/markdown' || type === 'markdown') {
 		return code;
+	} else {
+		html = code;
 	}
-	return code;
+	return injectArtifactCanvasTheme(html, canvasTheme);
 }
 
 export function artifactIsMarkdown(type: string, meta: string | null | undefined): boolean {

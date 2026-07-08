@@ -4,7 +4,7 @@
 
 	import { WEBUI_BASE_URL } from '$lib/constants';
 	import { settings } from '$lib/stores';
-	import { parseAntArtifacts } from '$lib/utils';
+	import { parseAntArtifactsForStream } from '$lib/utils';
 	import AntArtifactCard from './AntArtifactCard.svelte';
 
 	export let id: string;
@@ -17,7 +17,7 @@
 	$: html = text ? DOMPurify.sanitize(text) : null;
 
 	// Fallback for legacy/partial html tokens that still contain antArtifact
-	$: antArtifacts = text ? parseAntArtifacts(text) : [];
+	$: antArtifacts = text ? parseAntArtifactsForStream(text) : [];
 	$: isAntArtifact = antArtifacts.length > 0;
 
 	$: visualizationMatch = text?.match(/<visualization\s+([^>]*)>([\s\S]*?)<\/visualization>/i);
@@ -31,7 +31,11 @@
 {#if token.type === 'html' && isAntArtifact}
 	<div data-token-id={id}>
 	{#each antArtifacts as artifact}
-		<AntArtifactCard {artifact} {onPreview} />
+		<AntArtifactCard
+			{artifact}
+			streaming={artifact.complete === false}
+			{onPreview}
+		/>
 	{/each}
 	</div>
 {:else if token.type === 'html' && isVisualization}

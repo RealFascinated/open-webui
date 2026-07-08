@@ -11,7 +11,7 @@ import uuid
 from open_webui.internal.db import Base, JSONField, get_async_db_context
 from open_webui.models.automations import AutomationRun
 from open_webui.models.chat_messages import ChatMessage, ChatMessages
-from open_webui.models.folders import Folders
+from open_webui.models.projects import Projects
 from open_webui.models.tags import Tag, TagModel, Tags
 from open_webui.utils.misc import get_output_text, sanitize_data_for_db, sanitize_text_for_db
 from open_webui.utils.chat_retry import upsert_status_entry
@@ -58,7 +58,7 @@ class Chat(Base):  # database table mapping for chat entity
     pinned = Column(Boolean, default=False, nullable=True)
 
     meta = Column(JSON, server_default='{}')
-    folder_id = Column(Text, nullable=True)
+    project_id = Column(Text, nullable=True)
 
     tasks = Column(JSON, nullable=True)
     summary = Column(Text, nullable=True)
@@ -67,11 +67,11 @@ class Chat(Base):  # database table mapping for chat entity
 
     __table_args__ = (
         # Performance indexes for common queries
-        Index('folder_id_idx', 'folder_id'),
+        Index('project_id_idx', 'project_id'),
         Index('user_id_pinned_idx', 'user_id', 'pinned'),
         Index('user_id_archived_idx', 'user_id', 'archived'),
         Index('updated_at_user_id_idx', 'updated_at', 'user_id'),
-        Index('folder_id_user_id_idx', 'folder_id', 'user_id'),
+        Index('project_id_user_id_idx', 'project_id', 'user_id'),
     )
 
 
@@ -90,7 +90,7 @@ class ChatModel(BaseModel):
     pinned: bool | None = False
 
     meta: dict = {}
-    folder_id: str | None = None
+    project_id: str | None = None
 
     tasks: list | None = None
     summary: str | None = None
@@ -135,7 +135,7 @@ class ChatFileModel(BaseModel):
 
 class ChatForm(BaseModel):
     chat: dict
-    folder_id: str | None = None
+    project_id: str | None = None
 
 
 class ChatImportForm(ChatForm):
@@ -169,7 +169,7 @@ class ChatResponse(BaseModel):
     archived: bool
     pinned: bool | None = False
     meta: dict = {}
-    folder_id: str | None = None
+    project_id: str | None = None
 
     tasks: list | None = None
     summary: str | None = None
@@ -361,7 +361,7 @@ class ChatTable:
                         form_data.chat['title'] if 'title' in form_data.chat else 'New Chat'
                     ),
                     'chat': self._clean_null_bytes(form_data.chat),
-                    'folder_id': form_data.folder_id,
+                    'project_id': form_data.project_id,
                     'created_at': int(time.time()),
                     'updated_at': int(time.time()),
                     'last_read_at': int(time.time()),
@@ -400,7 +400,7 @@ class ChatTable:
                 'chat': self._clean_null_bytes(form_data.chat),
                 'meta': form_data.meta,
                 'pinned': form_data.pinned,
-                'folder_id': form_data.folder_id,
+                'project_id': form_data.project_id,
                 'created_at': (form_data.created_at if form_data.created_at else int(time.time())),
                 'updated_at': (form_data.updated_at if form_data.updated_at else int(time.time())),
             }
@@ -414,20 +414,20 @@ class ChatTable:
         db: AsyncSession | None = None,
     ) -> list[ChatModel]:
         async with get_async_db_context(db) as session:
-            # Validate folder_id references — clear any that don't exist
-            folder_ids = {f.folder_id for f in chat_import_forms if f.folder_id}
+            # Validate project_id references — clear any that don't exist
+            project_ids = {f.project_id for f in chat_import_forms if f.project_id}
             existing = set()
-            for fid in folder_ids:
-                if await Folders.get_folder_by_id_and_user_id(fid, user_id, db=session):
+            for fid in project_ids:
+                if await Projects.get_project_by_id_and_user_id(fid, user_id, db=session):
                     existing.add(fid)
 
             cleared = 0
             for form in chat_import_forms:
-                if form.folder_id and form.folder_id not in existing:
-                    form.folder_id = None
+                if form.project_id and form.project_id not in existing:
+                    form.project_id = None
                     cleared += 1
             if cleared:
-                log.info('Import: cleared %d dangling folder_id(s) for user %s', cleared, user_id)
+                log.info('Import: cleared %d dangling project_id(s) for user %s', cleared, user_id)
 
             chats = []
 
@@ -927,7 +927,7 @@ class ChatTable:
             async with get_async_db_context(db) as session:
                 chat = await session.get(Chat, id)
                 chat.archived = not chat.archived
-                chat.folder_id = None
+                chat.project_id = None
                 chat.updated_at = int(time.time())
                 chat.last_read_at = int(time.time())
                 await session.commit()
@@ -1078,7 +1078,7 @@ class ChatTable:
         self,
         user_id: str,
         include_archived: bool = False,
-        include_folders: bool = False,
+        include_projects: bool = False,
         include_pinned: bool = False,
         skip: int | None = None,
         limit: int | None = None,
@@ -1089,8 +1089,8 @@ class ChatTable:
                 user_id=user_id
             )
 
-            if not include_folders:
-                stmt = stmt.filter_by(folder_id=None)
+            if not include_projects:
+                stmt = stmt.filter_by(project_id=None)
 
             if not include_pinned:
                 stmt = stmt.filter(or_(Chat.pinned == False, Chat.pinned == None))
@@ -1292,14 +1292,14 @@ class ChatTable:
         except Exception:
             return False
 
-    async def get_chat_folder_id(self, id: str, user_id: str, db: AsyncSession | None = None) -> str | None:
+    async def get_chat_project_id(self, id: str, user_id: str, db: AsyncSession | None = None) -> str | None:
         """
-        Fetch only the folder_id column for a chat, without loading the full
+        Fetch only the project_id column for a chat, without loading the full
         JSON blob. Returns None if chat doesn't exist or doesn't belong to user.
         """
         try:
             async with get_async_db_context(db) as session:
-                result = await session.execute(select(Chat.folder_id).filter_by(id=id, user_id=user_id))
+                result = await session.execute(select(Chat.project_id).filter_by(id=id, user_id=user_id))
                 row = result.first()
                 return row[0] if row else None
         except Exception:
@@ -1419,11 +1419,11 @@ class ChatTable:
         ]
 
         # Extract folder names
-        folders = await Folders.search_folders_by_names(
+        projects_list = await Projects.search_projects_by_names(
             user_id,
-            [word.replace('folder:', '') for word in search_text_words if word.startswith('folder:')],
+            [word.replace('project:', '') for word in search_text_words if word.startswith('project:')],
         )
-        folder_ids = [folder.id for folder in folders]
+        project_ids = [project.id for project in projects_list]
 
         is_pinned = None
         if 'pinned:true' in search_text_words:
@@ -1448,7 +1448,7 @@ class ChatTable:
             for word in search_text_words
             if (
                 not word.startswith('tag:')
-                and not word.startswith('folder:')
+                and not word.startswith('project:')
                 and not word.startswith('pinned:')
                 and not word.startswith('archived:')
                 and not word.startswith('shared:')
@@ -1474,8 +1474,8 @@ class ChatTable:
                 else:
                     stmt = stmt.filter(Chat.share_id.is_(None))
 
-            if folder_ids:
-                stmt = stmt.filter(Chat.folder_id.in_(folder_ids))
+            if project_ids:
+                stmt = stmt.filter(Chat.project_id.in_(project_ids))
 
             stmt = stmt.order_by(Chat.updated_at.desc(), Chat.id)
 
@@ -1586,9 +1586,9 @@ class ChatTable:
             # Validate and return chats
             return [ChatModel.model_validate(chat) for chat in all_chats]
 
-    async def get_chats_by_folder_id_and_user_id(
+    async def get_chats_by_project_id_and_user_id(
         self,
-        folder_id: str,
+        project_id: str,
         user_id: str,
         skip: int = 0,
         limit: int = 60,
@@ -1597,7 +1597,7 @@ class ChatTable:
         async with get_async_db_context(db) as session:
             stmt = (
                 select(Chat.id, Chat.title, Chat.updated_at, Chat.created_at, Chat.last_read_at)
-                .filter_by(folder_id=folder_id, user_id=user_id)
+                .filter_by(project_id=project_id, user_id=user_id)
                 .filter(or_(Chat.pinned == False, Chat.pinned == None))
                 .filter_by(archived=False)
                 .order_by(Chat.updated_at.desc(), Chat.id)
@@ -1623,9 +1623,9 @@ class ChatTable:
                 for chat in all_chats
             ]
 
-    async def get_all_chats_by_folder_id(
+    async def get_all_chats_by_project_id(
         self,
-        folder_id: str,
+        project_id: str,
         skip: int = 0,
         limit: int = 60,
         db: AsyncSession | None = None,
@@ -1634,7 +1634,7 @@ class ChatTable:
         async with get_async_db_context(db) as session:
             stmt = (
                 select(Chat.id, Chat.title, Chat.user_id, Chat.updated_at, Chat.created_at, Chat.last_read_at)
-                .filter_by(folder_id=folder_id)
+                .filter_by(project_id=project_id)
                 .filter(or_(Chat.pinned == False, Chat.pinned == None))
                 .filter_by(archived=False)
                 .order_by(Chat.updated_at.desc(), Chat.id)
@@ -1659,13 +1659,13 @@ class ChatTable:
                 for chat in all_chats
             ]
 
-    async def get_chats_by_folder_ids_and_user_id(
-        self, folder_ids: list[str], user_id: str, db: AsyncSession | None = None
+    async def get_chats_by_project_ids_and_user_id(
+        self, project_ids: list[str], user_id: str, db: AsyncSession | None = None
     ) -> list[ChatModel]:
         async with get_async_db_context(db) as session:
             stmt = (
                 select(Chat)
-                .filter(Chat.folder_id.in_(folder_ids), Chat.user_id == user_id)
+                .filter(Chat.project_id.in_(project_ids), Chat.user_id == user_id)
                 .filter(or_(Chat.pinned == False, Chat.pinned == None))
                 .filter_by(archived=False)
                 .order_by(Chat.updated_at.desc())
@@ -1675,13 +1675,13 @@ class ChatTable:
             all_chats = result.scalars().all()
             return [ChatModel.model_validate(chat) for chat in all_chats]
 
-    async def update_chat_folder_id_by_id_and_user_id(
-        self, id: str, user_id: str, folder_id: str, db: AsyncSession | None = None
+    async def update_chat_project_id_by_id_and_user_id(
+        self, id: str, user_id: str, project_id: str, db: AsyncSession | None = None
     ) -> ChatModel | None:
         try:
             async with get_async_db_context(db) as session:
                 chat = await session.get(Chat, id)
-                chat.folder_id = folder_id
+                chat.project_id = project_id
                 chat.updated_at = int(time.time())
                 chat.last_read_at = int(time.time())
                 chat.pinned = False
@@ -1818,29 +1818,29 @@ class ChatTable:
                     orphans.append(tag_id)
             await Tags.delete_tags_by_ids_and_user_id(orphans, user_id, db=session)
 
-    async def count_chats_by_folder_id_and_user_id(
-        self, folder_id: str, user_id: str, db: AsyncSession | None = None
+    async def count_chats_by_project_id_and_user_id(
+        self, project_id: str, user_id: str, db: AsyncSession | None = None
     ) -> int:
         async with get_async_db_context(db) as session:
-            result = await session.execute(select(func.count(Chat.id)).filter_by(user_id=user_id, folder_id=folder_id))
+            result = await session.execute(select(func.count(Chat.id)).filter_by(user_id=user_id, project_id=project_id))
             count = result.scalar()
 
-            log.info(f"Count of chats for folder '{folder_id}': {count}")
+            log.info(f"Count of chats for folder '{project_id}': {count}")
             return count
 
-    async def count_chats_by_folder_ids_and_user_id(
-        self, folder_ids: list[str], user_id: str, db: AsyncSession | None = None
+    async def count_chats_by_project_ids_and_user_id(
+        self, project_ids: list[str], user_id: str, db: AsyncSession | None = None
     ) -> int:
-        if not folder_ids:
+        if not project_ids:
             return 0
 
         async with get_async_db_context(db) as session:
             result = await session.execute(
-                select(func.count(Chat.id)).filter(Chat.user_id == user_id, Chat.folder_id.in_(folder_ids))
+                select(func.count(Chat.id)).filter(Chat.user_id == user_id, Chat.project_id.in_(project_ids))
             )
             count = result.scalar()
 
-            log.info(f"Count of chats for folders '{folder_ids}': {count}")
+            log.info(f"Count of chats for projects '{project_ids}': {count}")
             return count
 
     async def delete_tag_by_id_and_user_id_and_tag_name(
@@ -1907,34 +1907,34 @@ class ChatTable:
         except Exception:
             return False
 
-    async def delete_chats_by_user_id_and_folder_id(
-        self, user_id: str, folder_id: str, db: AsyncSession | None = None
+    async def delete_chats_by_user_id_and_project_id(
+        self, user_id: str, project_id: str, db: AsyncSession | None = None
     ) -> bool:
         try:
             async with get_async_db_context(db) as session:
-                chat_ids_stmt = select(Chat.id).filter_by(user_id=user_id, folder_id=folder_id)
+                chat_ids_stmt = select(Chat.id).filter_by(user_id=user_id, project_id=project_id)
                 await session.execute(
                     update(AutomationRun).filter(AutomationRun.chat_id.in_(chat_ids_stmt)).values(chat_id=None)
                 )
                 await session.execute(delete(ChatMessage).filter(ChatMessage.chat_id.in_(chat_ids_stmt)))
-                await session.execute(delete(Chat).filter_by(user_id=user_id, folder_id=folder_id))
+                await session.execute(delete(Chat).filter_by(user_id=user_id, project_id=project_id))
                 await session.commit()
 
                 return True
         except Exception:
             return False
 
-    async def move_chats_by_user_id_and_folder_id(
+    async def move_chats_by_user_id_and_project_id(
         self,
         user_id: str,
-        folder_id: str,
-        new_folder_id: str | None,
+        project_id: str,
+        new_project_id: str | None,
         db: AsyncSession | None = None,
     ) -> bool:
         try:
             async with get_async_db_context(db) as session:
                 await session.execute(
-                    update(Chat).filter_by(user_id=user_id, folder_id=folder_id).values(folder_id=new_folder_id)
+                    update(Chat).filter_by(user_id=user_id, project_id=project_id).values(project_id=new_project_id)
                 )
                 await session.commit()
 

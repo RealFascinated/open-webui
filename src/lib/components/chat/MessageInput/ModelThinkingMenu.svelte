@@ -144,7 +144,7 @@
 	$: resolvedThink = getResolvedThink($settings);
 	$: thinkingEnabled = isThinkingEnabled(resolvedThink);
 	$: currentEffort = getThinkingEffort(resolvedThink);
-	$: effortSuffix = thinkingEnabled && !$mobile ? effortLabel(currentEffort) : '';
+	$: effortSuffix = thinkingEnabled ? effortLabel(currentEffort) : '';
 
 	const onModelChange = (event: CustomEvent<string>) => {
 		const id = event.detail;

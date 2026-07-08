@@ -33,6 +33,7 @@
 	import Banner from '$lib/components/common/Banner.svelte';
 	import Markdown from '$lib/components/chat/Messages/Markdown.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import AdminListSearchBar from '$lib/components/admin/AdminListSearchBar.svelte';
 	import ProfilePreview from '$lib/components/channel/Messages/Message/ProfilePreview.svelte';
 	import UserPreviewModal from '$lib/components/admin/UserPreviewModal.svelte';
 
@@ -162,7 +163,7 @@
 {/if}
 
 {#if users === null || total === null}
-	<div class="my-10">
+	<div class="my-10 flex justify-center">
 		<Spinner className="size-5" />
 	</div>
 {:else}
@@ -193,36 +194,17 @@
 			</div>
 		</div>
 
-		<div class="flex gap-1">
-			<div class=" flex w-full space-x-2">
-				<div class="flex flex-1">
-					<div class=" self-center ml-1 mr-3">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 20 20"
-							fill="currentColor"
-							class="w-4 h-4"
-						>
-							<path
-								fill-rule="evenodd"
-								d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-								clip-rule="evenodd"
-							/>
-						</svg>
-					</div>
-					<input
-						class=" w-full text-sm pr-4 py-1 rounded-r-xl outline-hidden bg-transparent"
-						bind:value={query}
-						on:input={handleSearchInput}
-						aria-label={$i18n.t('Search')}
-						placeholder={$i18n.t('Search')}
-					/>
-				</div>
-
-				<div>
+		<div class="flex gap-1 w-full md:max-w-sm md:ml-auto">
+			<AdminListSearchBar
+				bind:value={query}
+				placeholder="Search"
+				onInput={handleSearchInput}
+				inputId="admin-users-search"
+			>
+				<div class="px-3 pb-2 flex justify-end border-t border-gray-100/30 dark:border-gray-850/30">
 					<Tooltip content={$i18n.t('Add User')}>
 						<button
-							class=" p-2 rounded-xl hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850 transition font-medium text-sm flex items-center space-x-1"
+							class="p-2 rounded-xl hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850 transition font-medium text-sm flex items-center space-x-1"
 							on:click={() => {
 								showAddUserModal = !showAddUserModal;
 							}}
@@ -231,7 +213,7 @@
 						</button>
 					</Tooltip>
 				</div>
-			</div>
+			</AdminListSearchBar>
 		</div>
 	</div>
 

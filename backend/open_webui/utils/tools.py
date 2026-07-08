@@ -50,7 +50,7 @@ from open_webui.tools.builtin import (
     calculate_timestamp,
     create_automation,
     create_calendar_event,
-    create_folder,
+    create_project,
     create_tasks,
     currency_convert,
     delete_automation,
@@ -68,10 +68,10 @@ from open_webui.tools.builtin import (
     list_automations,
     list_artifacts,
     list_calendars,
-    list_folders,
+    list_projects,
     list_memories,
     list_memory_paths,
-    move_chat_to_folder,
+    move_chat_to_project,
     map_display,
     present_options,
     query_knowledge_bases,
@@ -512,7 +512,7 @@ async def get_builtin_tools(
         'channels.enable',
         'automations.enable',
         'calendar.enable',
-        'folders.enable',
+        'projects.enable',
         'artifacts.enable',
     )
 
@@ -534,9 +534,9 @@ async def get_builtin_tools(
     # Otherwise, provide all KB browsing tools
     model_knowledge = model.get('info', {}).get('meta', {}).get('knowledge', [])
     # Merge folder-attached knowledge so builtin tools can search it
-    folder_knowledge = extra_params.get('__metadata__', {}).get('folder_knowledge')
-    if folder_knowledge:
-        model_knowledge = list(model_knowledge or []) + list(folder_knowledge)
+    project_knowledge = extra_params.get('__metadata__', {}).get('project_knowledge')
+    if project_knowledge:
+        model_knowledge = list(model_knowledge or []) + list(project_knowledge)
     if is_builtin_tool_enabled('knowledge'):
         builtin_functions.append(kb_exec)
         builtin_functions.append(query_knowledge_files)
@@ -576,8 +576,8 @@ async def get_builtin_tools(
                 archive_chat,
             ]
         )
-        if config.get('folders.enable') and await has_user_permission('folders'):
-            builtin_functions.extend([list_folders, create_folder, move_chat_to_folder])
+        if config.get('projects.enable') and await has_user_permission('projects'):
+            builtin_functions.extend([list_projects, create_project, move_chat_to_project])
 
     # Add memory tools when memory is enabled and the model allows this builtin category.
     if (

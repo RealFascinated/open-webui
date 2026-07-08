@@ -1,23 +1,23 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 
-type FolderForm = {
+type ProjectForm = {
 	name?: string;
 	data?: Record<string, unknown>;
 	meta?: Record<string, unknown>;
 	parent_id?: string | null;
 };
 
-export const createNewFolder = async (token: string, folderForm: FolderForm) => {
+export const createNewProject = async (token: string, projectForm: ProjectForm) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
 			authorization: `Bearer ${token}`
 		},
-		body: JSON.stringify(folderForm)
+		body: JSON.stringify(projectForm)
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
@@ -35,10 +35,10 @@ export const createNewFolder = async (token: string, folderForm: FolderForm) => 
 	return res;
 };
 
-export const getFolders = async (token: string = '') => {
+export const getProjects = async (token: string = '') => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -66,10 +66,10 @@ export const getFolders = async (token: string = '') => {
 	return res;
 };
 
-export const getFolderById = async (token: string, id: string) => {
+export const getProjectById = async (token: string, id: string) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/${id}`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/${id}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -97,17 +97,17 @@ export const getFolderById = async (token: string, id: string) => {
 	return res;
 };
 
-export const updateFolderById = async (token: string, id: string, folderForm: FolderForm) => {
+export const updateProjectById = async (token: string, id: string, projectForm: ProjectForm) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/${id}/update`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/${id}/update`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
 			authorization: `Bearer ${token}`
 		},
-		body: JSON.stringify(folderForm)
+		body: JSON.stringify(projectForm)
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
@@ -129,14 +129,14 @@ export const updateFolderById = async (token: string, id: string, folderForm: Fo
 	return res;
 };
 
-export const updateFolderIsExpandedById = async (
+export const updateProjectIsExpandedById = async (
 	token: string,
 	id: string,
 	isExpanded: boolean
 ) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/${id}/update/expanded`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/${id}/update/expanded`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -167,10 +167,10 @@ export const updateFolderIsExpandedById = async (
 	return res;
 };
 
-export const updateFolderParentIdById = async (token: string, id: string, parentId?: string) => {
+export const updateProjectParentIdById = async (token: string, id: string, parentId?: string) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/${id}/update/parent`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/${id}/update/parent`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -201,13 +201,13 @@ export const updateFolderParentIdById = async (token: string, id: string, parent
 	return res;
 };
 
-export const deleteFolderById = async (token: string, id: string, deleteContents: boolean) => {
+export const deleteProjectById = async (token: string, id: string, deleteContents: boolean) => {
 	let error = null;
 
 	const searchParams = new URLSearchParams();
 	searchParams.append('delete_contents', deleteContents ? 'true' : 'false');
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/${id}?${searchParams.toString()}`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/${id}?${searchParams.toString()}`, {
 		method: 'DELETE',
 		headers: {
 			Accept: 'application/json',
@@ -235,10 +235,10 @@ export const deleteFolderById = async (token: string, id: string, deleteContents
 	return res;
 };
 
-export const updateFolderAccessById = async (token: string, id: string, accessGrants: object[]) => {
+export const updateProjectAccessById = async (token: string, id: string, accessGrants: object[]) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/${id}/access/update`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/${id}/access/update`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -263,10 +263,10 @@ export const updateFolderAccessById = async (token: string, id: string, accessGr
 	return res;
 };
 
-export const getSharedFolders = async (token: string) => {
+export const getSharedProjects = async (token: string) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/shared`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/shared`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -290,10 +290,10 @@ export const getSharedFolders = async (token: string) => {
 	return res;
 };
 
-export const getSharedFolderChats = async (token: string, folderId: string) => {
+export const getSharedProjectChats = async (token: string, projectId: string) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/${folderId}/shared/chats`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/${projectId}/shared/chats`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',

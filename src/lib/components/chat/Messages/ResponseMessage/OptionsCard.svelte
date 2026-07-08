@@ -3,6 +3,7 @@
 
 	export let options: { question?: string; options?: string[] } = {};
 	export let disabled = false;
+	export let showQuestion = true;
 
 	let selected: string | null = null;
 
@@ -14,9 +15,9 @@
 </script>
 
 <div
-	class="my-2 rounded-2xl border border-gray-50 dark:border-gray-850 bg-white dark:bg-gray-900 px-4 py-3.5"
+	class="rounded-2xl border border-gray-50 dark:border-gray-850 bg-white dark:bg-gray-900 px-4 py-3.5"
 >
-	{#if options.question}
+	{#if showQuestion && options.question}
 		<div class="text-sm font-medium text-gray-800 dark:text-gray-100 mb-2.5">{options.question}</div>
 	{/if}
 	<div class="flex flex-wrap gap-2">

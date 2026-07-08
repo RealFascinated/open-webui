@@ -8,6 +8,8 @@
 	import {
 		buildAdminSearchIndex,
 		filterAdminSearch,
+		getRecentAdminSearchResults,
+		recordAdminSearchVisit,
 		type AdminSearchItem
 	} from '$lib/utils/adminSearch';
 
@@ -23,7 +25,11 @@
 		enableAdminAnalytics: $config?.features?.enable_admin_analytics ?? true
 	});
 
-	$: results = filterAdminSearch(query, searchIndex, 12);
+	$: results = query.trim()
+		? filterAdminSearch(query, searchIndex, 12)
+		: getRecentAdminSearchResults(searchIndex, 8);
+
+	$: showingRecents = !query.trim() && results.length > 0;
 
 	$: if (results.length > 0 && selectedIndex >= results.length) {
 		selectedIndex = 0;
@@ -35,6 +41,7 @@
 	};
 
 	const navigate = async (item: AdminSearchItem) => {
+		recordAdminSearchVisit(item);
 		show = false;
 		reset();
 		await goto(item.href);
@@ -93,9 +100,14 @@
 		<div class="max-h-[min(24rem,50vh)] overflow-y-auto py-1">
 			{#if results.length === 0}
 				<div class="px-4 py-8 text-center text-sm text-gray-500">
-					{$i18n.t('No results found')}
+					{query.trim() ? $i18n.t('No results found') : $i18n.t('No recent admin pages yet')}
 				</div>
 			{:else}
+				{#if showingRecents}
+					<div class="px-3 pt-1 pb-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">
+						{$i18n.t('Recent')}
+					</div>
+				{/if}
 				{#each results as item, idx (item.id)}
 					<button
 						type="button"

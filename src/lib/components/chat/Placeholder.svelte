@@ -4,19 +4,20 @@
 	import DOMPurify from 'dompurify';
 
 	import { onMount, getContext, tick, createEventDispatcher } from 'svelte';
+	import { getChatGreetingKey, type ChatGreetingKey } from '$lib/utils/chatGreeting';
 	import { blur, fade } from 'svelte/transition';
 
 	const dispatch = createEventDispatcher();
 
 	import { getChatList } from '$lib/apis/chats';
-	import { updateFolderById } from '$lib/apis/folders';
+	import { updateProjectById } from '$lib/apis/projects';
 
 	import {
 		config,
 		user,
 		models as _models,
 		temporaryChatEnabled,
-		selectedFolder,
+		selectedProject,
 		chats,
 		currentChatPage,
 		type Model
@@ -28,8 +29,8 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import EyeSlash from '$lib/components/icons/EyeSlash.svelte';
 	import MessageInput from './MessageInput.svelte';
-	import FolderPlaceholder from './Placeholder/FolderPlaceholder.svelte';
-	import FolderTitle from './Placeholder/FolderTitle.svelte';
+	import ProjectPlaceholder from './Placeholder/ProjectPlaceholder.svelte';
+	import ProjectTitle from './Placeholder/ProjectTitle.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -54,8 +55,6 @@
 
 	export let showCommands = false;
 
-	export let imageGenerationEnabled = false;
-	export let codeInterpreterEnabled = false;
 	export let webSearchEnabled = false;
 
 	export let onUpload: (...args: unknown[]) => unknown = (e) => {};
@@ -69,6 +68,11 @@
 
 	let models = [];
 	let selectedModelIdx = 0;
+	let greetingKey: ChatGreetingKey = 'Hello, {{name}}';
+
+	onMount(() => {
+		greetingKey = getChatGreetingKey();
+	});
 
 	$: if (selectedModels.length > 0) {
 		selectedModelIdx = models.length - 1;
@@ -78,12 +82,12 @@
 
 	// True when viewing a shared folder the current user doesn't own AND lacks write access
 	$: folderReadOnly =
-		$selectedFolder != null &&
-		$selectedFolder.user_id !== $user?.id &&
-		$selectedFolder.permission !== 'write';
+		$selectedProject != null &&
+		$selectedProject.user_id !== $user?.id &&
+		$selectedProject.permission !== 'write';
 
 	// True when the current user does NOT own this folder (hide management menus)
-	$: folderNotOwned = $selectedFolder != null && $selectedFolder.user_id !== $user?.id;
+	$: folderNotOwned = $selectedProject != null && $selectedProject.user_id !== $user?.id;
 </script>
 
 <div class="m-auto w-full max-w-6xl px-2 @2xl:px-20 translate-y-6 py-24 text-center">
@@ -103,11 +107,11 @@
 		class="w-full text-3xl text-gray-800 dark:text-gray-100 text-center flex items-center gap-4 font-primary"
 	>
 		<div class="w-full flex flex-col justify-center items-center">
-			{#if $selectedFolder}
-				<FolderTitle
-					folder={$selectedFolder}
+			{#if $selectedProject}
+				<ProjectTitle
+					project={$selectedProject}
 					readOnly={folderNotOwned}
-					onUpdate={async (folder) => {
+					onUpdate={async (project) => {
 						await chats.set(await getChatList(localStorage.token, $currentChatPage));
 						currentChatPage.set(1);
 					}}
@@ -115,7 +119,7 @@
 						await chats.set(await getChatList(localStorage.token, $currentChatPage));
 						currentChatPage.set(1);
 
-						selectedFolder.set(null);
+						selectedProject.set(null);
 					}}
 				/>
 			{:else}
@@ -163,7 +167,7 @@
 						class="text-3xl @sm:text-3xl line-clamp-1 flex items-center"
 						in:fade={{ duration: 100 }}
 					>
-						{$i18n.t('Hello, {{name}}', { name: $user?.name })}
+						{$i18n.t(greetingKey, { name: $user?.name })}
 					</div>
 				</div>
 
@@ -217,7 +221,7 @@
 			{/if}
 
 			<div class="text-base font-normal @md:max-w-3xl w-full py-3 {atSelectedModel ? 'mt-2' : ''}">
-				{#if !($selectedFolder && folderReadOnly)}
+				{#if !($selectedProject && folderReadOnly)}
 					<MessageInput
 						bind:this={messageInput}
 						{history}
@@ -228,8 +232,6 @@
 						bind:selectedToolIds
 						bind:selectedSkillIds
 						bind:selectedFilterIds
-						bind:imageGenerationEnabled
-						bind:codeInterpreterEnabled
 						bind:webSearchEnabled
 						bind:atSelectedModel
 						bind:showCommands
@@ -251,12 +253,12 @@
 		</div>
 	</div>
 
-	{#if $selectedFolder}
+	{#if $selectedProject}
 		<div
 			class="mx-auto px-4 md:max-w-3xl md:px-6 font-primary min-h-62"
 			in:fade={{ duration: 200, delay: 200 }}
 		>
-			<FolderPlaceholder folder={$selectedFolder} />
+			<ProjectPlaceholder project={$selectedProject} />
 		</div>
 	{:else}
 		<div class="mx-auto max-w-2xl font-primary mt-2" in:fade={{ duration: 200, delay: 200 }}>

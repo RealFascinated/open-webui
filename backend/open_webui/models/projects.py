@@ -13,14 +13,14 @@ log = logging.getLogger(__name__)
 
 
 ####################
-# Folder DB Schema
+# Project DB Schema
 # Let every room in this house shelter someone who needs it,
 # and let no chamber stand empty while there is want.
 ####################
 
 
-class Folder(Base):
-    __tablename__ = 'folder'
+class Project(Base):
+    __tablename__ = 'project'
     id = Column(Text, primary_key=True, unique=True)
     parent_id = Column(Text, nullable=True)
     user_id = Column(Text)
@@ -33,7 +33,7 @@ class Folder(Base):
     updated_at = Column(BigInteger)
 
 
-class FolderModel(BaseModel):
+class ProjectModel(BaseModel):
     id: str
     parent_id: Optional[str] = None
     user_id: str
@@ -48,21 +48,21 @@ class FolderModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class FolderMetadataResponse(BaseModel):
+class ProjectMetadataResponse(BaseModel):
     icon: Optional[str] = None
 
 
-class FolderNameIdResponse(BaseModel):
+class ProjectNameIdResponse(BaseModel):
     id: str
     name: str
-    meta: Optional[FolderMetadataResponse] = None
+    meta: Optional[ProjectMetadataResponse] = None
     parent_id: Optional[str] = None
     is_expanded: bool = False
     created_at: int
     updated_at: int
 
 
-class SharedFolderResponse(BaseModel):
+class SharedProjectResponse(BaseModel):
     id: str
     name: str
     parent_id: Optional[str] = None
@@ -81,7 +81,7 @@ class SharedFolderResponse(BaseModel):
 ####################
 
 
-class FolderForm(BaseModel):
+class ProjectForm(BaseModel):
     name: str
     data: Optional[dict] = None
     meta: Optional[dict] = None
@@ -89,24 +89,24 @@ class FolderForm(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
-class FolderUpdateForm(BaseModel):
+class ProjectUpdateForm(BaseModel):
     name: Optional[str] = None
     data: Optional[dict] = None
     meta: Optional[dict] = None
     model_config = ConfigDict(extra='forbid')
 
 
-class FolderTable:
-    async def insert_new_folder(
+class ProjectTable:
+    async def insert_new_project(
         self,
         user_id: str,
-        form_data: FolderForm,
+        form_data: ProjectForm,
         parent_id: Optional[str] = None,
         db: Optional[AsyncSession] = None,
-    ) -> Optional[FolderModel]:
+    ) -> Optional[ProjectModel]:
         async with get_async_db_context(db) as db:
             id = str(uuid.uuid4())
-            folder = FolderModel(
+            project = ProjectModel(
                 **{
                     'id': id,
                     'user_id': user_id,
@@ -117,50 +117,50 @@ class FolderTable:
                 }
             )
             try:
-                result = Folder(**folder.model_dump())
+                result = Project(**project.model_dump())
                 db.add(result)
                 await db.commit()
                 await db.refresh(result)
                 if result:
-                    return FolderModel.model_validate(result)
+                    return ProjectModel.model_validate(result)
                 else:
                     return None
             except Exception as e:
-                log.exception(f'Error inserting a new folder: {e}')
+                log.exception(f'Error inserting a new project: {e}')
                 return None
 
-    async def get_folder_by_id_and_user_id(
+    async def get_project_by_id_and_user_id(
         self, id: str, user_id: str, db: Optional[AsyncSession] = None
-    ) -> Optional[FolderModel]:
+    ) -> Optional[ProjectModel]:
         try:
             async with get_async_db_context(db) as db:
-                result = await db.execute(select(Folder).filter_by(id=id, user_id=user_id))
-                folder = result.scalars().first()
+                result = await db.execute(select(Project).filter_by(id=id, user_id=user_id))
+                project = result.scalars().first()
 
-                if not folder:
+                if not project:
                     return None
 
-                return FolderModel.model_validate(folder)
+                return ProjectModel.model_validate(project)
         except Exception:
             return None
 
-    async def get_folder_by_id(self, id: str, db: Optional[AsyncSession] = None) -> Optional[FolderModel]:
-        """Fetch folder by ID only (no user_id filter). Used for shared access."""
+    async def get_project_by_id(self, id: str, db: Optional[AsyncSession] = None) -> Optional[ProjectModel]:
+        """Fetch project by ID only (no user_id filter). Used for shared access."""
         try:
             async with get_async_db_context(db) as db:
-                result = await db.execute(select(Folder).filter_by(id=id))
-                folder = result.scalars().first()
-                if not folder:
+                result = await db.execute(select(Project).filter_by(id=id))
+                project = result.scalars().first()
+                if not project:
                     return None
-                return FolderModel.model_validate(folder)
+                return ProjectModel.model_validate(project)
         except Exception:
             return None
 
-    async def get_shared_folder_ids_for_user(
+    async def get_shared_project_ids_for_user(
         self, user_id: str, user_group_ids: set[str], db: Optional[AsyncSession] = None
     ) -> dict[str, str]:
         """
-        Returns {folder_id: highest_permission} for all folders shared with user.
+        Returns {project_id: highest_permission} for all projects shared with user.
         Checks direct user grants, group grants, and public (user:*) grants.
         """
         from open_webui.models.access_grants import AccessGrant
@@ -176,13 +176,13 @@ class FolderTable:
                 )
             result = await db.execute(
                 select(AccessGrant).filter(
-                    AccessGrant.resource_type == 'folder',
+                    AccessGrant.resource_type == 'project',
                     or_(*conditions),
                 )
             )
             grants = result.scalars().all()
 
-            # Build {folder_id: highest_permission} ('write' > 'read')
+            # Build {project_id: highest_permission} ('write' > 'read')
             folder_perms = {}
             for g in grants:
                 existing = folder_perms.get(g.resource_id)
@@ -190,129 +190,129 @@ class FolderTable:
                     folder_perms[g.resource_id] = g.permission
             return folder_perms
 
-    async def get_children_folders_by_id_and_user_id(
+    async def get_children_projects_by_id_and_user_id(
         self, id: str, user_id: str, db: Optional[AsyncSession] = None
-    ) -> Optional[list[FolderModel]]:
+    ) -> Optional[list[ProjectModel]]:
         try:
             async with get_async_db_context(db) as db:
-                folders = []
+                projects = []
 
-                async def get_children(folder):
-                    children = await self.get_folders_by_parent_id_and_user_id(folder.id, user_id, db=db)
+                async def get_children(project):
+                    children = await self.get_projects_by_parent_id_and_user_id(project.id, user_id, db=db)
                     for child in children:
                         await get_children(child)
-                        folders.append(child)
+                        projects.append(child)
 
-                result = await db.execute(select(Folder).filter_by(id=id, user_id=user_id))
-                folder = result.scalars().first()
-                if not folder:
+                result = await db.execute(select(Project).filter_by(id=id, user_id=user_id))
+                project = result.scalars().first()
+                if not project:
                     return None
 
-                await get_children(folder)
-                return folders
+                await get_children(project)
+                return projects
         except Exception:
             return None
 
-    async def get_folders_by_user_id(self, user_id: str, db: Optional[AsyncSession] = None) -> list[FolderModel]:
+    async def get_projects_by_user_id(self, user_id: str, db: Optional[AsyncSession] = None) -> list[ProjectModel]:
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(Folder).filter_by(user_id=user_id))
-            return [FolderModel.model_validate(folder) for folder in result.scalars().all()]
+            result = await db.execute(select(Project).filter_by(user_id=user_id))
+            return [ProjectModel.model_validate(project) for project in result.scalars().all()]
 
-    async def get_folder_by_parent_id_and_user_id_and_name(
+    async def get_project_by_parent_id_and_user_id_and_name(
         self,
         parent_id: Optional[str],
         user_id: str,
         name: str,
         db: Optional[AsyncSession] = None,
-    ) -> Optional[FolderModel]:
+    ) -> Optional[ProjectModel]:
         try:
             async with get_async_db_context(db) as db:
-                # Check if folder exists
+                # Check if project exists
                 result = await db.execute(
-                    select(Folder).filter_by(parent_id=parent_id, user_id=user_id).filter(Folder.name.ilike(name))
+                    select(Project).filter_by(parent_id=parent_id, user_id=user_id).filter(Project.name.ilike(name))
                 )
-                folder = result.scalars().first()
+                project = result.scalars().first()
 
-                if not folder:
+                if not project:
                     return None
 
-                return FolderModel.model_validate(folder)
+                return ProjectModel.model_validate(project)
         except Exception as e:
-            log.error(f'get_folder_by_parent_id_and_user_id_and_name: {e}')
+            log.error(f'get_project_by_parent_id_and_user_id_and_name: {e}')
             return None
 
-    async def get_folders_by_parent_id_and_user_id(
+    async def get_projects_by_parent_id_and_user_id(
         self, parent_id: Optional[str], user_id: str, db: Optional[AsyncSession] = None
-    ) -> list[FolderModel]:
+    ) -> list[ProjectModel]:
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(Folder).filter_by(parent_id=parent_id, user_id=user_id))
-            return [FolderModel.model_validate(folder) for folder in result.scalars().all()]
+            result = await db.execute(select(Project).filter_by(parent_id=parent_id, user_id=user_id))
+            return [ProjectModel.model_validate(project) for project in result.scalars().all()]
 
-    async def get_folder_ids_by_id_and_user_id_in_subtree(
+    async def get_project_ids_by_id_and_user_id_in_subtree(
         self, id: str, user_id: str, db: Optional[AsyncSession] = None
     ) -> list[str]:
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(Folder).filter_by(id=id, user_id=user_id))
-            folder = result.scalars().first()
-            if not folder:
+            result = await db.execute(select(Project).filter_by(id=id, user_id=user_id))
+            project = result.scalars().first()
+            if not project:
                 return []
 
-            folder_ids = [folder.id]
-            folders = [FolderModel.model_validate(folder)]
-            while folders:
-                current_folder = folders.pop()
-                children = await self.get_folders_by_parent_id_and_user_id(current_folder.id, user_id, db=db)
-                folder_ids.extend(child.id for child in children)
-                folders.extend(children)
+            project_ids = [project.id]
+            projects = [ProjectModel.model_validate(project)]
+            while projects:
+                current_folder = projects.pop()
+                children = await self.get_projects_by_parent_id_and_user_id(current_folder.id, user_id, db=db)
+                project_ids.extend(child.id for child in children)
+                projects.extend(children)
 
-            return folder_ids
+            return project_ids
 
-    async def update_folder_parent_id_by_id_and_user_id(
+    async def update_project_parent_id_by_id_and_user_id(
         self,
         id: str,
         user_id: str,
         parent_id: str,
         db: Optional[AsyncSession] = None,
-    ) -> Optional[FolderModel]:
+    ) -> Optional[ProjectModel]:
         try:
             async with get_async_db_context(db) as db:
-                result = await db.execute(select(Folder).filter_by(id=id, user_id=user_id))
-                folder = result.scalars().first()
+                result = await db.execute(select(Project).filter_by(id=id, user_id=user_id))
+                project = result.scalars().first()
 
-                if not folder:
+                if not project:
                     return None
 
-                folder.parent_id = parent_id
-                folder.updated_at = int(time.time())
+                project.parent_id = parent_id
+                project.updated_at = int(time.time())
 
                 await db.commit()
 
-                return FolderModel.model_validate(folder)
+                return ProjectModel.model_validate(project)
         except Exception as e:
             log.error(f'update_folder: {e}')
             return
 
-    async def update_folder_by_id_and_user_id(
+    async def update_project_by_id_and_user_id(
         self,
         id: str,
         user_id: str,
-        form_data: FolderUpdateForm,
+        form_data: ProjectUpdateForm,
         db: Optional[AsyncSession] = None,
-    ) -> Optional[FolderModel]:
+    ) -> Optional[ProjectModel]:
         try:
             async with get_async_db_context(db) as db:
-                result = await db.execute(select(Folder).filter_by(id=id, user_id=user_id))
-                folder = result.scalars().first()
+                result = await db.execute(select(Project).filter_by(id=id, user_id=user_id))
+                project = result.scalars().first()
 
-                if not folder:
+                if not project:
                     return None
 
                 form_data = form_data.model_dump(exclude_unset=True)
 
                 existing_result = await db.execute(
-                    select(Folder).filter_by(
+                    select(Project).filter_by(
                         name=form_data.get('name'),
-                        parent_id=folder.parent_id,
+                        parent_id=project.parent_id,
                         user_id=user_id,
                     )
                 )
@@ -321,106 +321,106 @@ class FolderTable:
                 if existing_folder and existing_folder.id != id:
                     return None
 
-                folder.name = form_data.get('name', folder.name)
+                project.name = form_data.get('name', project.name)
                 if 'data' in form_data:
-                    folder.data = {
-                        **(folder.data or {}),
+                    project.data = {
+                        **(project.data or {}),
                         **form_data['data'],
                     }
 
                 if 'meta' in form_data:
-                    folder.meta = {
-                        **(folder.meta or {}),
+                    project.meta = {
+                        **(project.meta or {}),
                         **form_data['meta'],
                     }
 
-                folder.updated_at = int(time.time())
+                project.updated_at = int(time.time())
                 await db.commit()
 
-                return FolderModel.model_validate(folder)
+                return ProjectModel.model_validate(project)
         except Exception as e:
             log.error(f'update_folder: {e}')
             return
 
-    async def update_folder_is_expanded_by_id_and_user_id(
+    async def update_project_is_expanded_by_id_and_user_id(
         self, id: str, user_id: str, is_expanded: bool, db: Optional[AsyncSession] = None
-    ) -> Optional[FolderModel]:
+    ) -> Optional[ProjectModel]:
         try:
             async with get_async_db_context(db) as db:
-                result = await db.execute(select(Folder).filter_by(id=id, user_id=user_id))
-                folder = result.scalars().first()
+                result = await db.execute(select(Project).filter_by(id=id, user_id=user_id))
+                project = result.scalars().first()
 
-                if not folder:
+                if not project:
                     return None
 
-                folder.is_expanded = is_expanded
-                folder.updated_at = int(time.time())
+                project.is_expanded = is_expanded
+                project.updated_at = int(time.time())
 
                 await db.commit()
 
-                return FolderModel.model_validate(folder)
+                return ProjectModel.model_validate(project)
         except Exception as e:
             log.error(f'update_folder: {e}')
             return
 
-    async def delete_folder_by_id_and_user_id(
+    async def delete_project_by_id_and_user_id(
         self, id: str, user_id: str, db: Optional[AsyncSession] = None
     ) -> list[str]:
         try:
-            folder_ids = []
+            project_ids = []
             async with get_async_db_context(db) as db:
-                result = await db.execute(select(Folder).filter_by(id=id, user_id=user_id))
-                folder = result.scalars().first()
-                if not folder:
-                    return folder_ids
+                result = await db.execute(select(Project).filter_by(id=id, user_id=user_id))
+                project = result.scalars().first()
+                if not project:
+                    return project_ids
 
-                folder_ids.append(folder.id)
+                project_ids.append(project.id)
 
-                # Delete all children folders
-                async def delete_children(folder):
-                    folder_children = await self.get_folders_by_parent_id_and_user_id(folder.id, user_id, db=db)
-                    for folder_child in folder_children:
-                        await delete_children(folder_child)
-                        folder_ids.append(folder_child.id)
+                # Delete all children projects
+                async def delete_children(project):
+                    project_children = await self.get_projects_by_parent_id_and_user_id(project.id, user_id, db=db)
+                    for project_child in project_children:
+                        await delete_children(project_child)
+                        project_ids.append(project_child.id)
 
-                        child_result = await db.execute(select(Folder).filter_by(id=folder_child.id))
+                        child_result = await db.execute(select(Project).filter_by(id=project_child.id))
                         child_folder = child_result.scalars().first()
                         await db.delete(child_folder)
                         await db.commit()
 
-                await delete_children(folder)
-                await db.delete(folder)
+                await delete_children(project)
+                await db.delete(project)
                 await db.commit()
-                return folder_ids
+                return project_ids
         except Exception as e:
             log.error(f'delete_folder: {e}')
             return []
 
-    def normalize_folder_name(self, name: str) -> str:
+    def normalize_project_name(self, name: str) -> str:
         # Replace _ and space with a single space, lower case, collapse multiple spaces
         name = re.sub(r'[\s_]+', ' ', name)
         return name.strip().lower()
 
-    async def search_folders_by_names(
+    async def search_projects_by_names(
         self, user_id: str, queries: list[str], db: Optional[AsyncSession] = None
-    ) -> list[FolderModel]:
+    ) -> list[ProjectModel]:
         """
-        Search for folders for a user where the name matches any of the queries, treating _ and space as equivalent, case-insensitive.
+        Search for projects for a user where the name matches any of the queries, treating _ and space as equivalent, case-insensitive.
         """
-        normalized_queries = [self.normalize_folder_name(q) for q in queries]
+        normalized_queries = [self.normalize_project_name(q) for q in queries]
         if not normalized_queries:
             return []
 
         results = {}
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(Folder).filter_by(user_id=user_id))
-            folders = result.scalars().all()
-            for folder in folders:
-                if self.normalize_folder_name(folder.name) in normalized_queries:
-                    results[folder.id] = FolderModel.model_validate(folder)
+            result = await db.execute(select(Project).filter_by(user_id=user_id))
+            projects = result.scalars().all()
+            for project in projects:
+                if self.normalize_project_name(project.name) in normalized_queries:
+                    results[project.id] = ProjectModel.model_validate(project)
 
-                    # get children folders
-                    children = await self.get_children_folders_by_id_and_user_id(folder.id, user_id, db=db)
+                    # get children projects
+                    children = await self.get_children_projects_by_id_and_user_id(project.id, user_id, db=db)
                     if children:
                         for child in children:
                             results[child.id] = child
@@ -432,22 +432,22 @@ class FolderTable:
             results = list(results.values())
             return results
 
-    async def search_folders_by_name_contains(
+    async def search_projects_by_name_contains(
         self, user_id: str, query: str, db: Optional[AsyncSession] = None
-    ) -> list[FolderModel]:
+    ) -> list[ProjectModel]:
         """
         Partial match: normalized name contains (as substring) the normalized query.
         """
-        normalized_query = self.normalize_folder_name(query)
+        normalized_query = self.normalize_project_name(query)
         results = []
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(Folder).filter_by(user_id=user_id))
-            folders = result.scalars().all()
-            for folder in folders:
-                norm_name = self.normalize_folder_name(folder.name)
+            result = await db.execute(select(Project).filter_by(user_id=user_id))
+            projects = result.scalars().all()
+            for project in projects:
+                norm_name = self.normalize_project_name(project.name)
                 if normalized_query in norm_name:
-                    results.append(FolderModel.model_validate(folder))
+                    results.append(ProjectModel.model_validate(project))
         return results
 
 
-Folders = FolderTable()
+Projects = ProjectTable()

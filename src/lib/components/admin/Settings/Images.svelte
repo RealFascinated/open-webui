@@ -20,6 +20,11 @@
 	import CodeEditorModal from '$lib/components/common/CodeEditorModal.svelte';
 	import AdminSaveBar from '../AdminSaveBar.svelte';
 	import AdminSettingsCard from '../AdminSettingsCard.svelte';
+	import {
+		GEMINI_WEB_IMAGE_MODELS,
+		defaultModelForImageEngine,
+		isOpenAIImageModelId
+	} from '$lib/constants/geminiWebImageModels';
 	const dispatch = createEventDispatcher();
 
 	const i18n = getContext('i18n');
@@ -30,6 +35,61 @@
 
 	let models = null;
 	let config = null;
+	let modelsEngine = '';
+
+	const syncModelForEngine = (engine: string) => {
+		if (!config) return;
+
+		const validIds = new Set((models ?? []).map((model) => model.id));
+		const currentModel = config.IMAGE_GENERATION_MODEL;
+		const needsReset =
+			!currentModel ||
+			(engine === 'gemini_web' && isOpenAIImageModelId(currentModel)) ||
+			(validIds.size > 0 && !validIds.has(currentModel));
+
+		if (needsReset) {
+			config.IMAGE_GENERATION_MODEL = defaultModelForImageEngine(engine);
+		}
+	};
+
+	const getModels = async (engine = config?.IMAGE_GENERATION_ENGINE) => {
+		if (!engine) {
+			models = [];
+			return;
+		}
+
+		if (engine === 'gemini_web') {
+			models = GEMINI_WEB_IMAGE_MODELS;
+			syncModelForEngine(engine);
+
+			const remoteModels = await getImageGenerationModels(localStorage.token, engine).catch((error) => {
+				toast.error(`${error}`);
+				return null;
+			});
+
+			if (remoteModels?.length) {
+				models = remoteModels;
+				syncModelForEngine(engine);
+			}
+
+			return;
+		}
+
+		models = await getImageGenerationModels(localStorage.token, engine).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+
+		syncModelForEngine(engine);
+	};
+
+	$: if (config?.ENABLE_IMAGE_GENERATION && config?.IMAGE_GENERATION_ENGINE) {
+		const engine = config.IMAGE_GENERATION_ENGINE;
+		if (engine !== modelsEngine) {
+			modelsEngine = engine;
+			getModels(engine);
+		}
+	}
 
 	let showComfyUIWorkflowEditor = false;
 	let REQUIRED_WORKFLOW_NODES = [
@@ -106,13 +166,6 @@
 		dirty = false;
 	};
 
-	const getModels = async () => {
-		models = await getImageGenerationModels(localStorage.token).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
-	};
-
 	const updateConfigHandler = async () => {
 		if (
 			config.IMAGE_GENERATION_ENGINE === 'automatic1111' &&
@@ -137,6 +190,14 @@
 			config.ENABLE_IMAGE_GENERATION = false;
 
 			return null;
+		} else if (
+			config.IMAGE_GENERATION_ENGINE === 'gemini_web' &&
+			config.IMAGES_GEMINI_WEB_SECURE_1PSID === ''
+		) {
+			toast.error($i18n.t('Gemini Web __Secure-1PSID cookie is required.'));
+			config.ENABLE_IMAGE_GENERATION = false;
+
+			return null;
 		}
 
 		const res = await updateConfig(localStorage.token, {
@@ -158,7 +219,8 @@
 		if (res) {
 			if (res.ENABLE_IMAGE_GENERATION) {
 				backendConfig.set(await getBackendConfig());
-				getModels();
+				modelsEngine = '';
+				await getModels(res.IMAGE_GENERATION_ENGINE);
 			}
 
 			return res;
@@ -243,7 +305,8 @@
 		}
 
 		if (config.ENABLE_IMAGE_GENERATION) {
-			getModels();
+			modelsEngine = '';
+			await getModels(config.IMAGE_GENERATION_ENGINE);
 		}
 
 		if (config.COMFYUI_WORKFLOW) {
@@ -338,32 +401,6 @@
 							<div class="flex w-full justify-between items-center">
 								<div class="text-xs pr-2">
 									<div class="shrink-0">
-										{$i18n.t('Model')}
-									</div>
-								</div>
-
-								<Tooltip content={$i18n.t('Enter Model ID')} placement="top-start">
-									<input
-										list="model-list"
-										class=" text-right text-sm bg-transparent outline-hidden max-w-full w-52"
-										bind:value={config.IMAGE_GENERATION_MODEL}
-										placeholder={$i18n.t('Select a model')}
-										required
-									/>
-
-									<datalist id="model-list">
-										{#each models ?? [] as model}
-											<option value={model.id}>{model.name}</option>
-										{/each}
-									</datalist>
-								</Tooltip>
-							</div>
-						</div>
-
-						<div class="mb-2.5">
-							<div class="flex w-full justify-between items-center">
-								<div class="text-xs pr-2">
-									<div class="shrink-0">
 										{$i18n.t('Image Size')}
 									</div>
 								</div>
@@ -432,9 +469,49 @@
 								<option value="comfyui">{$i18n.t('ComfyUI')}</option>
 								<option value="automatic1111">{$i18n.t('Automatic1111')}</option>
 								<option value="gemini">{$i18n.t('Gemini')}</option>
+								<option value="gemini_web">{$i18n.t('Gemini Web (App)')}</option>
 							</select>
 						</div>
 					</div>
+
+					{#if config.ENABLE_IMAGE_GENERATION}
+						<div class="mb-2.5">
+							<div class="flex w-full justify-between items-center">
+								<div class="text-xs pr-2">
+									<div class="shrink-0">
+										{$i18n.t('Model')}
+									</div>
+								</div>
+
+								{#if config?.IMAGE_GENERATION_ENGINE === 'gemini_web'}
+									<select
+										class="w-fit max-w-52 pr-8 cursor-pointer rounded-sm px-2 text-xs bg-transparent outline-hidden text-right"
+										bind:value={config.IMAGE_GENERATION_MODEL}
+									>
+										{#each models ?? [] as model}
+											<option value={model.id}>{model.name}</option>
+										{/each}
+									</select>
+								{:else}
+									<Tooltip content={$i18n.t('Enter Model ID')} placement="top-start">
+										<input
+											list="model-list"
+											class=" text-right text-sm bg-transparent outline-hidden max-w-full w-52"
+											bind:value={config.IMAGE_GENERATION_MODEL}
+											placeholder={$i18n.t('Select a model')}
+											required
+										/>
+
+										<datalist id="model-list">
+											{#each models ?? [] as model}
+												<option value={model.id}>{model.name}</option>
+											{/each}
+										</datalist>
+									</Tooltip>
+								{/if}
+							</div>
+						</div>
+					{/if}
 
 					{#if config?.IMAGE_GENERATION_ENGINE === 'openai'}
 						<div class="mb-2.5">
@@ -896,6 +973,75 @@
 									<option value="predict">predict</option>
 									<option value="generateContent">generateContent</option>
 								</select>
+							</div>
+						</div>
+					{:else if config?.IMAGE_GENERATION_ENGINE === 'gemini_web'}
+						<div class="mb-2.5">
+							<div class="text-xs text-gray-500 dark:text-gray-400">
+								{$i18n.t(
+									'Experimental: uses gemini.google.com session cookies instead of the paid Developer API. Export __Secure-1PSID and __Secure-1PSIDTS from your browser while logged in to Gemini.'
+								)}
+							</div>
+						</div>
+
+						<div class="mb-2.5">
+							<div class="flex w-full justify-between items-center">
+								<div class="text-xs pr-2 shrink-0">
+									<div class="">
+										{$i18n.t('Gemini Web __Secure-1PSID')}
+									</div>
+								</div>
+
+								<div class="flex w-full">
+									<div class="flex-1">
+										<SensitiveInput
+											inputClassName="text-right w-full"
+											placeholder={$i18n.t('Cookie value')}
+											bind:value={config.IMAGES_GEMINI_WEB_SECURE_1PSID}
+											required={true}
+										/>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="mb-2.5">
+							<div class="flex w-full justify-between items-center">
+								<div class="text-xs pr-2 shrink-0">
+									<div class="">
+										{$i18n.t('Gemini Web __Secure-1PSIDTS')}
+									</div>
+								</div>
+
+								<div class="flex w-full">
+									<div class="flex-1">
+										<SensitiveInput
+											inputClassName="text-right w-full"
+											placeholder={$i18n.t('Cookie value (optional)')}
+											bind:value={config.IMAGES_GEMINI_WEB_SECURE_1PSIDTS}
+										/>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="mb-2.5">
+							<div class="flex w-full justify-between items-center">
+								<div class="text-xs pr-2 shrink-0">
+									<div class="">
+										{$i18n.t('Gemini Web Cookie Path')}
+									</div>
+								</div>
+
+								<div class="flex w-full">
+									<div class="flex-1">
+										<input
+											class="w-full text-sm bg-transparent outline-hidden text-right"
+											placeholder={$i18n.t('Optional path for refreshed cookies')}
+											bind:value={config.IMAGES_GEMINI_WEB_COOKIE_PATH}
+										/>
+									</div>
+								</div>
 							</div>
 						</div>
 					{/if}

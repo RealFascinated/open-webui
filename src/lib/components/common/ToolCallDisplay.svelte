@@ -14,7 +14,6 @@
 	import Markdown from '../chat/Messages/Markdown.svelte';
 	import WrenchSolid from '../icons/WrenchSolid.svelte';
 	import CheckCircle from '../icons/CheckCircle.svelte';
-	import Image from './Image.svelte';
 	import FullHeightIframe from './FullHeightIframe.svelte';
 	import { settings } from '$lib/stores';
 
@@ -87,7 +86,6 @@
 	export let resultContent: string = '';
 
 	$: result = resultContent || decode(attributes?.result ?? '');
-	$: files = parseJSONString(decode(attributes?.files ?? ''));
 	$: embeds = parseJSONString(decode(attributes?.embeds ?? ''));
 	$: args =
 		open || (Array.isArray(embeds) && embeds.length > 0) ? decode(attributes?.arguments ?? '') : '';
@@ -259,23 +257,6 @@
 					{/if}
 				</div>
 			</div>
-		{/if}
-	{/if}
-
-	<!-- Files display (images etc.) when done -->
-	{#if isDone}
-		{#if typeof files === 'object'}
-			{#each files ?? [] as file, idx}
-				{#if typeof file === 'string'}
-					{#if file.startsWith('data:image/')}
-						<Image id={`${componentId}-tool-call-result-${idx}`} src={file} alt="Image" />
-					{/if}
-				{:else if typeof file === 'object'}
-					{#if (file.type === 'image' || (file?.content_type ?? '').startsWith('image/')) && file.url}
-						<Image id={`${componentId}-tool-call-result-${idx}`} src={file.url} alt="Image" />
-					{/if}
-				{/if}
-			{/each}
 		{/if}
 	{/if}
 </div>

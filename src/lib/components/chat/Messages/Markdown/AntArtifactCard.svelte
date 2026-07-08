@@ -1,25 +1,55 @@
 <script lang="ts">
 	import type { AntArtifact } from '$lib/utils/ant-artifact';
+	import {
+		artifactSelectionFromAntArtifact,
+		getArtifactVersionPosition,
+		type ArtifactSelection
+	} from '$lib/utils/artifact-contents';
+	import { artifactContents } from '$lib/stores';
 	import Cube from '$lib/components/icons/Cube.svelte';
 	import Document from '$lib/components/icons/Document.svelte';
+	import Spinner from '$lib/components/common/Spinner.svelte';
 
 	export let artifact: AntArtifact;
-	export let onPreview: (key: string) => void = () => {};
+	export let streaming = false;
+	export let onPreview: (selection: ArtifactSelection) => void = () => {};
+
+	$: isStreaming = streaming || artifact.complete === false;
+	$: selection = artifactSelectionFromAntArtifact(artifact);
+	$: versionInfo = !isStreaming
+		? getArtifactVersionPosition($artifactContents, selection)
+		: null;
+
+	const openPreview = () => onPreview(selection);
 </script>
 
 {#if artifact.artifactType}
-	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 	<div
-		class="group w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850 transition-colors cursor-pointer my-1"
-		on:click={() => onPreview(artifact.identifier || artifact.content)}
+		class="group w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border transition-colors cursor-pointer my-1
+			{isStreaming
+			? 'border-sky-200 dark:border-sky-900/50 bg-sky-50/70 dark:bg-sky-950/20 hover:bg-sky-50 dark:hover:bg-sky-950/30'
+			: 'border-gray-200 dark:border-gray-800 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850'}"
+		on:click={openPreview}
+		on:keydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				openPreview();
+			}
+		}}
+		role="button"
+		tabindex="0"
 	>
 		<div
-			class="shrink-0 flex items-center justify-center size-8 rounded-lg border border-gray-200 dark:border-gray-700
-				{artifact.artifactType === 'react'
-				? 'bg-sky-50 dark:bg-sky-900/30 text-sky-500 dark:text-sky-400'
-				: 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400'}"
+			class="shrink-0 flex items-center justify-center size-8 rounded-lg border
+				{isStreaming
+				? 'border-sky-200 dark:border-sky-800 bg-white dark:bg-sky-950/40 text-sky-500 dark:text-sky-400'
+				: artifact.artifactType === 'react'
+					? 'border-gray-200 dark:border-gray-700 bg-sky-50 dark:bg-sky-900/30 text-sky-500 dark:text-sky-400'
+					: 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400'}"
 		>
-			{#if artifact.artifactType === 'markdown'}
+			{#if isStreaming}
+				<Spinner className="size-4" />
+			{:else if artifact.artifactType === 'markdown'}
 				<Document className="size-4" />
 			{:else}
 				<Cube className="size-4" />
@@ -29,14 +59,32 @@
 			<div class="text-sm font-medium text-gray-800 dark:text-gray-100 truncate leading-snug">
 				{artifact.title}
 			</div>
-			<div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-none">
-				{artifact.artifactType === 'react'
-					? 'React component'
-					: artifact.artifactType === 'svg'
-						? 'SVG image'
-						: artifact.artifactType === 'markdown'
-							? 'Markdown document'
-							: 'HTML page'}
+			<div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-none flex items-center gap-1.5 flex-wrap">
+				{#if isStreaming}
+					<span>Building artifact…</span>
+				{:else}
+					<span>
+						{#if artifact.artifactType === 'react'}
+							React component
+						{:else if artifact.artifactType === 'svg'}
+							SVG image
+						{:else if artifact.artifactType === 'markdown'}
+							Markdown document
+						{:else}
+							HTML page
+						{/if}
+					</span>
+					{#if versionInfo}
+						<span
+							class="tabular-nums px-1.5 py-0.5 rounded-md bg-gray-200/80 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-medium"
+							title={versionInfo.total > 1
+								? `Version ${versionInfo.version} of ${versionInfo.total}`
+								: 'Version 1'}
+						>
+							v{versionInfo.version}{versionInfo.total > 1 ? `/${versionInfo.total}` : ''}
+						</span>
+					{/if}
+				{/if}
 			</div>
 		</div>
 		<div

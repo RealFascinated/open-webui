@@ -20,7 +20,7 @@
 		getChatPinnedStatusById,
 		toggleChatPinnedStatusById
 	} from '$lib/apis/chats';
-	import { chats, folders, settings, theme, user } from '$lib/stores';
+	import { chats, projects, settings, theme, user } from '$lib/stores';
 	import { createMessagesList } from '$lib/utils';
 	import { getOutputText } from '$lib/components/chat/Messages/structuredOutput';
 	import { downloadChatAsPDF } from '$lib/apis/utils';
@@ -405,7 +405,7 @@
 				</button>
 			{/if}
 
-			{#if chatId && $folders.length > 0}
+			{#if chatId && $projects.length > 0}
 				<DropdownSub
 					contentClass="select-none rounded-2xl p-1 z-50 bg-white dark:bg-gray-850 dark:text-white border border-gray-100 dark:border-gray-800 shadow-lg max-h-52 overflow-y-auto scrollbar-hidden"
 				>
@@ -418,19 +418,19 @@
 						<div class="flex items-center">{$i18n.t('Move')}</div>
 					</button>
 
-					{#each $folders.sort((a, b) => b.updated_at - a.updated_at) as folder}
+					{#each $projects.sort((a, b) => b.updated_at - a.updated_at) as project}
 						<button
 							draggable="false"
 							class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl overflow-hidden w-full"
 							on:click={() => {
-								moveChatHandler(chatId, folder.id);
+								moveChatHandler(chatId, project.id);
 							}}
 						>
 							<div class="shrink-0">
 								<Folder />
 							</div>
 
-							<div class="truncate">{folder?.name ?? 'Folder'}</div>
+							<div class="truncate">{project?.name ?? 'Project'}</div>
 						</button>
 					{/each}
 				</DropdownSub>

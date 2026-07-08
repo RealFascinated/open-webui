@@ -31,18 +31,17 @@
 	import Heart from '../icons/Heart.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import GarbageBin from '../icons/GarbageBin.svelte';
-	import Search from '../icons/Search.svelte';
 	import Plus from '../icons/Plus.svelte';
 	import ChevronRight from '../icons/ChevronRight.svelte';
-	import XMark from '../icons/XMark.svelte';
 	import AddFunctionMenu from './Functions/AddFunctionMenu.svelte';
 	import ImportModal from '../ImportModal.svelte';
 	import ViewSelector from '../workspace/common/ViewSelector.svelte';
 	import TagSelector from '../workspace/common/TagSelector.svelte';
 	import { capitalizeFirstLetter } from '$lib/utils';
-	import Spinner from '../common/Spinner.svelte';
 	import AdminPageHeader from './AdminPageHeader.svelte';
 	import AdminEmptyState from './AdminEmptyState.svelte';
+	import AdminListSearchBar from './AdminListSearchBar.svelte';
+	import Spinner from '../common/Spinner.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -352,33 +351,11 @@
 		<div
 			class="py-2 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100/30 dark:border-gray-850/30"
 		>
-			<div class="px-3.5 flex flex-1 items-center w-full space-x-2 py-0.5 pb-2">
-				<div class="flex flex-1">
-					<div class=" self-center ml-1 mr-3">
-						<Search className="size-3.5" />
-					</div>
-					<input
-						class=" w-full text-sm pr-4 py-1 rounded-r-xl outline-hidden bg-transparent"
-						bind:value={query}
-						on:input={handleSearchInput}
-						placeholder={$i18n.t('Search Functions')}
-					/>
-
-					{#if query}
-						<div class="self-center pl-1.5 translate-y-[0.5px] rounded-l-xl bg-transparent">
-							<button
-								class="p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-								on:click={() => {
-									query = '';
-									handleSearchInput();
-								}}
-							>
-								<XMark className="size-3" strokeWidth="2" />
-							</button>
-						</div>
-					{/if}
-				</div>
-			</div>
+			<AdminListSearchBar
+				bind:value={query}
+				placeholder="Search Functions"
+				onInput={handleSearchInput}
+			/>
 
 			<div
 				class="px-3 flex w-full bg-transparent overflow-x-auto scrollbar-none"

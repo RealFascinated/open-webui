@@ -46,7 +46,7 @@ def build_react_html(jsx_code: str) -> str:
     registry = '\n    '.join(registry_lines)
 
     return f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-ows-artifact-theme="light">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -55,9 +55,19 @@ def build_react_html(jsx_code: str) -> str:
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 {conditional_scripts}
+<style id="ows-artifact-canvas">
+  html {{ color-scheme: light; }}
+  body {{
+    margin: 0;
+    padding: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #ffffff;
+    color: #111827;
+  }}
+  #root {{ min-height: 100%; }}
+</style>
 <style>
   *, *::before, *::after {{ box-sizing: border-box; }}
-  body {{ margin: 0; padding: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
 </style>
 </head>
 <body>

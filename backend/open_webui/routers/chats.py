@@ -28,13 +28,13 @@ from open_webui.models.chats import (
     ChatUsageStatsListResponse,
     MessageStats,
 )
-from open_webui.models.folders import Folders
+from open_webui.models.projects import Projects
 from open_webui.models.shared_chats import SharedChatResponse, SharedChats
 from open_webui.models.tags import TagModel, Tags
 from open_webui.socket.main import get_event_emitter
 from open_webui.tasks import has_active_tasks, stop_item_tasks
 from open_webui.utils.access_control import filter_allowed_access_grants, has_permission
-from open_webui.utils.access_control.folders import has_folder_access
+from open_webui.utils.access_control.projects import has_project_access
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.context_compaction import compact_chat_branch
 from open_webui.utils.misc import get_message_list
@@ -46,7 +46,7 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-SEARCH_FILTER_PREFIXES = ('tag:', 'folder:', 'pinned:', 'archived:', 'shared:')
+SEARCH_FILTER_PREFIXES = ('tag:', 'project:', 'pinned:', 'archived:', 'shared:')
 
 CHAT_CONFIG_KEYS = {
     'ENABLE_CONTEXT_COMPACTION': 'chat.context_compaction.enable',
@@ -139,7 +139,7 @@ async def get_session_user_chat_list(
     user=Depends(get_verified_user),
     page: int | None = None,
     include_pinned: bool | None = False,
-    include_folders: bool | None = False,
+    include_projects: bool | None = False,
     db: AsyncSession = Depends(get_async_session),
 ):
     try:
@@ -149,7 +149,7 @@ async def get_session_user_chat_list(
 
             return await Chats.get_chat_title_id_list_by_user_id(
                 user.id,
-                include_folders=include_folders,
+                include_projects=include_projects,
                 include_pinned=include_pinned,
                 skip=skip,
                 limit=limit,
@@ -158,7 +158,7 @@ async def get_session_user_chat_list(
         else:
             return await Chats.get_chat_title_id_list_by_user_id(
                 user.id,
-                include_folders=include_folders,
+                include_projects=include_projects,
                 include_pinned=include_pinned,
                 db=db,
             )
@@ -645,16 +645,16 @@ async def create_new_chat(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    # Reject a folder_id that doesn't belong to the caller. Without this the
+    # Reject a project_id that doesn't belong to the caller. Without this the
     # row is persisted with a dangling foreign reference — no read path
     # surfaces it across users (all chat reads are user_id-filtered), but
     # the row state is meaningless and downstream consumers shouldn't have
     # to assume the column is clean. Also catches non-UUID / nonexistent IDs.
-    if form_data.folder_id is not None:
-        if not await Folders.get_folder_by_id_and_user_id(form_data.folder_id, user.id, db=db):
+    if form_data.project_id is not None:
+        if not await Projects.get_project_by_id_and_user_id(form_data.project_id, user.id, db=db):
             # Check shared folder write access
-            shared_folder = await Folders.get_folder_by_id(form_data.folder_id, db=db)
-            if not shared_folder or not await has_folder_access(user.id, shared_folder, 'write', db):
+            shared_folder = await Projects.get_project_by_id(form_data.project_id, db=db)
+            if not shared_folder or not await has_project_access(user.id, shared_folder, 'write', db):
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=ERROR_MESSAGES.NOT_FOUND,
@@ -667,7 +667,7 @@ async def create_new_chat(
             EVENTS.CHAT_CREATED,
             actor=user,
             subject_id=chat.id,
-            data={'title': chat.title, 'folder_id': chat.folder_id},
+            data={'title': chat.title, 'project_id': chat.project_id},
         )
         return ChatResponse(**chat.model_dump())
     except Exception as e:
@@ -764,28 +764,28 @@ async def search_user_chats(
 
 
 ############################
-# GetChatsByFolderId
+# GetChatsByProjectId
 ############################
 
 
-@router.get('/folder/{folder_id}', response_model=list[ChatResponse])
-async def get_chats_by_folder_id(
-    folder_id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
+@router.get('/project/{project_id}', response_model=list[ChatResponse])
+async def get_chats_by_project_id(
+    project_id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
 ):
-    folder_ids = [folder_id]
-    children_folders = await Folders.get_children_folders_by_id_and_user_id(folder_id, user.id, db=db)
-    if children_folders:
-        folder_ids.extend([folder.id for folder in children_folders])
+    project_ids = [project_id]
+    children_projects = await Projects.get_children_projects_by_id_and_user_id(project_id, user.id, db=db)
+    if children_projects:
+        project_ids.extend([project.id for project in children_projects])
 
     return [
         ChatResponse(**chat.model_dump())
-        for chat in await Chats.get_chats_by_folder_ids_and_user_id(folder_ids, user.id, db=db)
+        for chat in await Chats.get_chats_by_project_ids_and_user_id(project_ids, user.id, db=db)
     ]
 
 
-@router.get('/folder/{folder_id}/list')
-async def get_chat_list_by_folder_id(
-    folder_id: str,
+@router.get('/project/{project_id}/list')
+async def get_chat_list_by_project_id(
+    project_id: str,
     page: int | None = 1,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
@@ -794,7 +794,7 @@ async def get_chat_list_by_folder_id(
         limit = 10
         skip = (page - 1) * limit
 
-        chats = await Chats.get_chats_by_folder_id_and_user_id(folder_id, user.id, skip=skip, limit=limit, db=db)
+        chats = await Chats.get_chats_by_project_id_and_user_id(project_id, user.id, skip=skip, limit=limit, db=db)
         return [
             {'title': chat.title, 'id': chat.id, 'updated_at': chat.updated_at, 'last_read_at': chat.last_read_at}
             for chat in chats
@@ -1189,12 +1189,12 @@ async def get_chat_by_id(id: str, user=Depends(get_verified_user), db: AsyncSess
             if has_grant:
                 chat = await Chats.get_chat_by_id(id, db=db)
 
-            # Check folder-based access (shared folders)
+            # Check project-based access (shared projects)
             if not chat:
                 candidate = await Chats.get_chat_by_id(id, db=db)
-                if candidate and candidate.folder_id:
-                    folder = await Folders.get_folder_by_id(candidate.folder_id, db=db)
-                    if folder and await has_folder_access(user.id, folder, 'read', db):
+                if candidate and candidate.project_id:
+                    folder = await Projects.get_project_by_id(candidate.project_id, db=db)
+                    if folder and await has_project_access(user.id, folder, 'read', db):
                         chat = candidate
 
     if chat:
@@ -1551,7 +1551,7 @@ async def clone_chat_by_id(
                         'chat': updated_chat,
                         'meta': chat.meta,
                         'pinned': chat.pinned,
-                        'folder_id': chat.folder_id,
+                        'project_id': chat.project_id,
                     }
                 )
             ],
@@ -1634,7 +1634,7 @@ async def clone_shared_chat_by_id(
                     'chat': updated_chat,
                     'meta': chat.meta,
                     'pinned': chat.pinned,
-                    'folder_id': chat.folder_id,
+                    'project_id': chat.project_id,
                 }
             )
         ],
@@ -1841,43 +1841,43 @@ async def get_shared_chat_access_by_id(
 
 
 ############################
-# UpdateChatFolderIdById
+# UpdateChatProjectIdById
 ############################
 
 
-class ChatFolderIdForm(BaseModel):
-    folder_id: str | None = None
+class ChatProjectIdForm(BaseModel):
+    project_id: str | None = None
 
 
-@router.post('/{id}/folder', response_model=ChatResponse | None)
-async def update_chat_folder_id_by_id(
+@router.post('/{id}/project', response_model=ChatResponse | None)
+async def update_chat_project_id_by_id(
     request: Request,
     id: str,
-    form_data: ChatFolderIdForm,
+    form_data: ChatProjectIdForm,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     chat = await Chats.get_chat_by_id_and_user_id(id, user.id, db=db)
     if chat:
         # Same ownership check as the create path — reject foreign / dangling
-        # folder_id values. None is allowed (moves the chat out of any folder).
-        if form_data.folder_id is not None:
-            if not await Folders.get_folder_by_id_and_user_id(form_data.folder_id, user.id, db=db):
+        # project_id values. None is allowed (moves the chat out of any folder).
+        if form_data.project_id is not None:
+            if not await Projects.get_project_by_id_and_user_id(form_data.project_id, user.id, db=db):
                 # Check shared folder write access
-                shared_folder = await Folders.get_folder_by_id(form_data.folder_id, db=db)
-                if not shared_folder or not await has_folder_access(user.id, shared_folder, 'write', db):
+                shared_folder = await Projects.get_project_by_id(form_data.project_id, db=db)
+                if not shared_folder or not await has_project_access(user.id, shared_folder, 'write', db):
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail=ERROR_MESSAGES.NOT_FOUND,
                     )
 
-        chat = await Chats.update_chat_folder_id_by_id_and_user_id(id, user.id, form_data.folder_id, db=db)
+        chat = await Chats.update_chat_project_id_by_id_and_user_id(id, user.id, form_data.project_id, db=db)
         await publish_event(
             request,
-            EVENTS.CHAT_FOLDER_UPDATED,
+            EVENTS.CHAT_PROJECT_UPDATED,
             actor=user,
             subject_id=id,
-            data={'folder_id': form_data.folder_id},
+            data={'project_id': form_data.project_id},
         )
         return ChatResponse(**chat.model_dump())
     else:

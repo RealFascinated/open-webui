@@ -106,7 +106,7 @@ function stringifyAttribute(value: unknown): string {
 }
 
 function isDoneStatus(status?: string): boolean {
-	return status === 'completed' || status === 'failed' || status === 'incomplete';
+	return status === 'completed' || status === 'failed' || status === 'incomplete' || status === 'cancelled';
 }
 
 function getMessageText(item: OutputItem): string {
@@ -134,9 +134,10 @@ function buildToolCallToken(item: OutputItem, toolOutputByCallId: Record<string,
 	const callId = item.call_id ?? '';
 	const resultItem = toolOutputByCallId[callId];
 	const isDone = isDoneStatus(item.status) || !!resultItem;
+	const isCancelled = item.status === 'cancelled';
 
 	return {
-		summary: isDone ? 'Tool Executed' : 'Executing...',
+		summary: isCancelled ? 'Tool Cancelled' : isDone ? 'Tool Executed' : 'Executing...',
 		text: getToolResultText(resultItem),
 		attributes: {
 			type: 'tool_calls',
@@ -294,12 +295,43 @@ export function getOrphanArtifactContent(
 	return missing.map(serializeAntArtifact).join('\n\n');
 }
 
+function appendGroupedDetailTokens(
+	displayItems: OutputDisplayItem[],
+	tokens: OutputDetailToken[],
+	hiddenToolNames?: Set<string>
+) {
+	const visibleTokens = hiddenToolNames?.size
+		? tokens.filter((token) => {
+				if (token.attributes?.type !== 'tool_calls') return true;
+				const name = token.attributes?.name ?? '';
+				return !hiddenToolNames.has(name);
+			})
+		: tokens;
+
+	if (visibleTokens.length > 1) {
+		displayItems.push({
+			type: 'detail_group',
+			id: `detail-group-${displayItems.length}`,
+			tokens: [...visibleTokens]
+		});
+	} else if (visibleTokens.length === 1) {
+		displayItems.push({
+			type: 'detail_single',
+			id: `detail-${displayItems.length}`,
+			token: visibleTokens[0]
+		});
+	}
+}
+
 export function buildOutputDisplayItems(
 	output: OutputItem[] = [],
-	content?: string | null
+	content?: string | null,
+	hiddenToolNames?: Set<string>
 ): OutputDisplayItem[] {
 	const displayItems: OutputDisplayItem[] = [];
-	const currentDetailTokens: OutputDetailToken[] = [];
+	const reasoningTokens: OutputDetailToken[] = [];
+	const messageItems: OutputDisplayItem[] = [];
+	const toolDetailTokens: OutputDetailToken[] = [];
 	const toolOutputByCallId: Record<string, OutputItem> = {};
 
 	for (const item of output) {
@@ -307,23 +339,6 @@ export function buildOutputDisplayItems(
 			toolOutputByCallId[item.call_id] = item;
 		}
 	}
-
-	const flushDetails = () => {
-		if (currentDetailTokens.length > 1) {
-			displayItems.push({
-				type: 'detail_group',
-				id: `detail-group-${displayItems.length}`,
-				tokens: [...currentDetailTokens]
-			});
-		} else if (currentDetailTokens.length === 1) {
-			displayItems.push({
-				type: 'detail_single',
-				id: `detail-${displayItems.length}`,
-				token: currentDetailTokens[0]
-			});
-		}
-		currentDetailTokens.length = 0;
-	};
 
 	output.forEach((item, index) => {
 		if (item?.type === 'function_call_output') {
@@ -333,7 +348,11 @@ export function buildOutputDisplayItems(
 		if (item?.type && GROUPABLE_OUTPUT_TYPES.has(item.type)) {
 			const token = buildDetailToken(item, index === output.length - 1, toolOutputByCallId);
 			if (token) {
-				currentDetailTokens.push(token);
+				if (item.type === 'reasoning') {
+					reasoningTokens.push(token);
+				} else {
+					toolDetailTokens.push(token);
+				}
 			}
 			return;
 		}
@@ -341,8 +360,7 @@ export function buildOutputDisplayItems(
 		if (item?.type === 'message') {
 			const text = getMessageText(item);
 			if (text.trim()) {
-				flushDetails();
-				displayItems.push({
+				messageItems.push({
 					type: 'message',
 					id: item.id ?? `message-${index}`,
 					text
@@ -353,8 +371,7 @@ export function buildOutputDisplayItems(
 
 		const fallbackText = getMessageText(item);
 		if (fallbackText.trim()) {
-			flushDetails();
-			displayItems.push({
+			messageItems.push({
 				type: 'message',
 				id: item.id ?? `output-${index}`,
 				text: fallbackText
@@ -362,7 +379,10 @@ export function buildOutputDisplayItems(
 		}
 	});
 
-	flushDetails();
+	// Reasoning stays above the answer; rich tool output stays below message text.
+	appendGroupedDetailTokens(displayItems, reasoningTokens, hiddenToolNames);
+	displayItems.push(...messageItems);
+	appendGroupedDetailTokens(displayItems, toolDetailTokens, hiddenToolNames);
 
 	const orphanArtifacts = getOrphanArtifactContent(output, content);
 	if (orphanArtifacts.trim()) {

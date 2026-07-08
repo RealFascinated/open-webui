@@ -1,26 +1,18 @@
 import {
 	mapMimeToArtifactType,
-	parseAntArtifactAttributes
+	parseAntArtifactAttributes,
+	findMatchingArtifactClose
 } from '$lib/utils/ant-artifact';
 
 const OPEN = '<antArtifact';
 const CLOSE = '</antArtifact>';
 
-function findMatchingClosingTag(src: string): number {
-	let depth = 1;
-	let index = OPEN.length;
-	while (depth > 0 && index < src.length) {
-		if (src.startsWith(OPEN, index)) {
-			depth++;
-		} else if (src.startsWith(CLOSE, index)) {
-			depth--;
-		}
-		if (depth > 0) {
-			index++;
-		}
-	}
-	return depth === 0 ? index + CLOSE.length : -1;
-}
+let allowStreamingTokens = false;
+
+/** Enable partial antArtifact tokens while a message is still streaming. */
+export const setAntArtifactStreamingEnabled = (enabled: boolean) => {
+	allowStreamingTokens = enabled;
+};
 
 function antArtifactStart(src: string) {
 	const match = src.match(/<antArtifact[\s>]/i);
@@ -31,11 +23,14 @@ function antArtifactTokenizer(src: string) {
 	const openMatch = src.match(/^<antArtifact([^>]*)>/i);
 	if (!openMatch) return;
 
-	const endIndex = findMatchingClosingTag(src);
-	if (endIndex === -1) return;
+	const endIndex = findMatchingArtifactClose(src);
+	const isComplete = endIndex !== -1;
+	if (!isComplete && !allowStreamingTokens) return;
 
-	const fullMatch = src.slice(0, endIndex);
-	const content = fullMatch.slice(openMatch[0].length, -CLOSE.length).trim();
+	const fullMatch = isComplete ? src.slice(0, endIndex) : src;
+	const content = isComplete
+		? fullMatch.slice(openMatch[0].length, -CLOSE.length).trim()
+		: fullMatch.slice(openMatch[0].length).trim();
 	const { identifier, type, title } = parseAntArtifactAttributes(openMatch[1]);
 
 	return {
@@ -45,7 +40,9 @@ function antArtifactTokenizer(src: string) {
 		mimeType: type,
 		title,
 		content,
-		artifactType: mapMimeToArtifactType(type)
+		artifactType: mapMimeToArtifactType(type),
+		complete: isComplete,
+		streaming: !isComplete
 	};
 }
 

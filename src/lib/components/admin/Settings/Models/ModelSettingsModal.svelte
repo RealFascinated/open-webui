@@ -13,7 +13,7 @@
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
+	import AdminDangerZone from '../../AdminDangerZone.svelte';
 	import ModelList from './ModelList.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Minus from '$lib/components/icons/Minus.svelte';
@@ -317,9 +317,7 @@
 															.filter(
 																([key, value]) =>
 																	value &&
-																	['web_search', 'code_interpreter', 'image_generation'].includes(
-																		key
-																	)
+																	['web_search'].includes(key)
 															)
 															.map(([key, value]) => key)}
 
@@ -419,13 +417,17 @@
 									{/if}
 								</div>
 
-								<div class="flex justify-between items-center pt-3 text-sm font-medium gap-1.5">
-									<div>
-										<Tooltip
-											content={$i18n.t('This will delete all models including custom models')}
-										>
+								<div class="pt-3">
+									<AdminDangerZone
+										title="Danger Zone"
+										description="Reset model defaults and remove all configured models."
+									>
+										<div class="flex w-full justify-between">
+											<div class="self-center text-xs font-medium">
+												{$i18n.t('Reset All Models')}
+											</div>
 											<button
-												class="text-sm font-normal text-gray-500 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 transition hover:underline"
+												class="text-xs"
 												type="button"
 												on:click={() => {
 													showResetModal = true;
@@ -433,8 +435,11 @@
 											>
 												{$i18n.t('Reset')}
 											</button>
-										</Tooltip>
-									</div>
+										</div>
+									</AdminDangerZone>
+								</div>
+
+								<div class="flex justify-end items-center pt-3 text-sm font-medium gap-1.5">
 									<button
 										class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex items-center gap-2 whitespace-nowrap {loading
 											? ' cursor-not-allowed'

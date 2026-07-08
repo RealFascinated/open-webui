@@ -20,7 +20,7 @@
 </script>
 
 <div
-	class="my-2 rounded-2xl border border-gray-50 dark:border-gray-850 bg-white dark:bg-gray-900 overflow-hidden"
+	class="rounded-2xl border border-gray-50 dark:border-gray-850 bg-white dark:bg-gray-900 overflow-hidden"
 >
 	<div class="px-4 py-3 flex items-center gap-3 border-b border-gray-50 dark:border-gray-850">
 		{#if sports.badge}

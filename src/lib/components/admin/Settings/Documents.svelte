@@ -24,15 +24,16 @@
 	import ResetUploadDirConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import ResetVectorDBConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import ReindexKnowledgeFilesConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
-	import Spinner from '$lib/components/common/Spinner.svelte';
 	import DocumentsSubNav from './DocumentsSubNav.svelte';
 	import DocumentsIntegrationSection from './Documents/DocumentsIntegrationSection.svelte';
 	import DocumentsDangerSection from './Documents/DocumentsDangerSection.svelte';
 	import DocumentsGeneralSection from './Documents/DocumentsGeneralSection.svelte';
 	import DocumentsEmbeddingSection from './Documents/DocumentsEmbeddingSection.svelte';
+	import VectorDBStatusCard from '../VectorDBStatusCard.svelte';
 	import DocumentsRetrievalSection from './Documents/DocumentsRetrievalSection.svelte';
 	import DocumentsFilesSection from './Documents/DocumentsFilesSection.svelte';
 	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import Spinner from '$lib/components/common/Spinner.svelte';
 	import { isDocumentSection } from './documentsSections';
 
 	const i18n = getContext('i18n');
@@ -348,6 +349,10 @@
 </script>
 
 <ResetUploadDirConfirmDialog
+	title={$i18n.t('Reset Upload Directory')}
+	message={$i18n.t(
+		'Are you sure you want to reset the upload directory? All uploaded files will be deleted. This action cannot be undone.'
+	)}
 	bind:show={showResetUploadDirConfirm}
 	on:confirm={async () => {
 		const res = await deleteAllFiles(localStorage.token).catch((error) => {
@@ -362,6 +367,10 @@
 />
 
 <ResetVectorDBConfirmDialog
+	title={$i18n.t('Reset Vector Storage/Knowledge')}
+	message={$i18n.t(
+		'Are you sure you want to reset vector storage? All embedded knowledge will be removed. This action cannot be undone.'
+	)}
 	bind:show={showResetConfirm}
 	on:confirm={() => {
 		const res = resetVectorDB(localStorage.token).catch((error) => {
@@ -376,6 +385,10 @@
 />
 
 <ReindexKnowledgeFilesConfirmDialog
+	title={$i18n.t('Reindex Knowledge Base Vectors')}
+	message={$i18n.t(
+		'Are you sure you want to reindex all knowledge base vectors? This may take a while.'
+	)}
 	bind:show={showReindexConfirm}
 	on:confirm={async () => {
 		const res = await reindexKnowledgeFiles(localStorage.token).catch((error) => {
@@ -411,8 +424,10 @@
 				/>
 			</div>
 
-			{#if !RAGConfig.BYPASS_EMBEDDING_AND_RETRIEVAL}
-				<div class:hidden={activeSection !== 'embedding'}>
+			<div class:hidden={activeSection !== 'embedding'}>
+				<VectorDBStatusCard bypassMode={!!RAGConfig.BYPASS_EMBEDDING_AND_RETRIEVAL} />
+
+				{#if !RAGConfig.BYPASS_EMBEDDING_AND_RETRIEVAL}
 					<DocumentsEmbeddingSection
 						bind:RAGConfig
 						bind:RAG_EMBEDDING_ENGINE
@@ -430,8 +445,8 @@
 						bind:updateEmbeddingModelLoading
 						on:updateEmbeddingModel={embeddingModelUpdateHandler}
 					/>
-				</div>
-			{/if}
+				{/if}
+			</div>
 
 			<div class:hidden={activeSection !== 'retrieval'}>
 				<DocumentsRetrievalSection bind:RAGConfig />
@@ -470,7 +485,7 @@
 			}}
 		/>
 	{:else}
-		<div class="flex items-center justify-center h-full">
+		<div class="flex items-center justify-center h-full py-16">
 			<Spinner className="size-5" />
 		</div>
 	{/if}

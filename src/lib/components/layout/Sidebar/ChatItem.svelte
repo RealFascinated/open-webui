@@ -19,7 +19,7 @@
 		getChatListByTagName,
 		getPinnedChatList,
 		updateChatById,
-		updateChatFolderIdById
+		updateChatProjectIdById
 	} from '$lib/apis/chats';
 	import {
 		chatId,
@@ -30,7 +30,7 @@
 		showSidebar,
 		currentChatPage,
 		tags,
-		selectedFolder,
+		selectedProject,
 		activeChatIds,
 		settings,
 		user
@@ -222,9 +222,9 @@
 		}
 	};
 
-	const moveChatHandler = async (chatId, folderId) => {
-		if (chatId && folderId) {
-			const res = await updateChatFolderIdById(localStorage.token, chatId, folderId).catch(
+	const moveChatHandler = async (chatId, projectId) => {
+		if (chatId && projectId) {
+			const res = await updateChatProjectIdById(localStorage.token, chatId, projectId).catch(
 				(error) => {
 					toast.error(`${error}`);
 					return null;
@@ -520,8 +520,8 @@
 			on:click={() => {
 				dispatch('select');
 
-				if ($selectedFolder) {
-					selectedFolder.set(null);
+				if ($selectedProject) {
+					selectedProject.set(null);
 				}
 
 				if ($mobile) {

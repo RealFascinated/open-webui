@@ -14,7 +14,17 @@
  * NOT available: lucide-react (ESM-only, no UMD bundle), shadcn/ui, axios, next.js,
  * framer-motion, react-motion. Use CSS transitions/keyframes for animations.
  */
-export function buildReactHtml(jsxCode: string): string {
+import {
+	type ArtifactCanvasTheme,
+	artifactCanvasStyleBlock,
+	artifactCanvasHtmlAttrs,
+	artifactCanvasTailwindDarkScript
+} from './artifact-theme';
+
+export function buildReactHtml(
+	jsxCode: string,
+	canvasTheme: ArtifactCanvasTheme = 'light'
+): string {
 	// Prevent </script> in user code from breaking the wrapping HTML page.
 	const safeCode = jsxCode.replace(/<\/(script)/gi, '<\\/$1');
 
@@ -42,7 +52,7 @@ export function buildReactHtml(jsxCode: string): string {
 		.join('\n');
 
 	return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" ${artifactCanvasHtmlAttrs(canvasTheme)}>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -51,9 +61,10 @@ export function buildReactHtml(jsxCode: string): string {
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 ${conditionalScripts}
+${artifactCanvasStyleBlock(canvasTheme)}
+${canvasTheme === 'dark' ? artifactCanvasTailwindDarkScript() : ''}
 <style>
   *, *::before, *::after { box-sizing: border-box; }
-  body { margin: 0; padding: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
 </style>
 </head>
 <body>

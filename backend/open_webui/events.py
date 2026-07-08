@@ -197,8 +197,8 @@ class EventDefinitions(BaseModel):
     CHAT_UNSHARED: EventDefinition = EventDefinition(
         name='chat.unshared', description='A chat was unshared.', message='Chat unshared'
     )
-    CHAT_FOLDER_UPDATED: EventDefinition = EventDefinition(
-        name='chat.folder_updated', description='A chat folder assignment was updated.', message='Chat folder updated'
+    CHAT_PROJECT_UPDATED: EventDefinition = EventDefinition(
+        name='chat.project_updated', description='A chat project assignment was updated.', message='Chat project updated'
     )
     CHAT_TAG_ADDED: EventDefinition = EventDefinition(
         name='chat.tag_added', description='A tag was added to a chat.', message='Chat tag added'
@@ -288,20 +288,20 @@ class EventDefinitions(BaseModel):
     FILE_DELETED_ALL: EventDefinition = EventDefinition(
         name='file.deleted_all', description='All files for a scope were deleted.', message='File deleted all'
     )
-    FOLDER_CREATED: EventDefinition = EventDefinition(
-        name='folder.created', description='A folder was created.', message='Folder created'
+    PROJECT_CREATED: EventDefinition = EventDefinition(
+        name='project.created', description='A project was created.', message='Project created'
     )
-    FOLDER_UPDATED: EventDefinition = EventDefinition(
-        name='folder.updated', description='A folder was updated.', message='Folder updated'
+    PROJECT_UPDATED: EventDefinition = EventDefinition(
+        name='project.updated', description='A project was updated.', message='Project updated'
     )
-    FOLDER_PARENT_UPDATED: EventDefinition = EventDefinition(
-        name='folder.parent_updated', description='A folder parent was updated.', message='Folder parent updated'
+    PROJECT_PARENT_UPDATED: EventDefinition = EventDefinition(
+        name='project.parent_updated', description='A project parent was updated.', message='Project parent updated'
     )
-    FOLDER_ACCESS_UPDATED: EventDefinition = EventDefinition(
-        name='folder.access_updated', description='Folder access was updated.', message='Folder access updated'
+    PROJECT_ACCESS_UPDATED: EventDefinition = EventDefinition(
+        name='project.access_updated', description='Project access was updated.', message='Project access updated'
     )
-    FOLDER_DELETED: EventDefinition = EventDefinition(
-        name='folder.deleted', description='A folder was deleted.', message='Folder deleted'
+    PROJECT_DELETED: EventDefinition = EventDefinition(
+        name='project.deleted', description='A project was deleted.', message='Project deleted'
     )
     NOTE_CREATED: EventDefinition = EventDefinition(
         name='note.created', description='A note was created.', message='Note created'

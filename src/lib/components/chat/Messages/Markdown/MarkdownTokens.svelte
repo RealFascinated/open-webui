@@ -487,8 +487,10 @@
 					type: token.mimeType,
 					title: token.title,
 					content: token.content,
-					artifactType: token.artifactType
+					artifactType: token.artifactType,
+					complete: token.complete !== false
 				}}
+				streaming={token.streaming === true || token.complete === false}
 				{onPreview}
 			/>
 		{/if}

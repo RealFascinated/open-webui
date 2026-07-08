@@ -6,8 +6,8 @@
 
 	import { tick, getContext, onMount, onDestroy } from 'svelte';
 
-	import { folders } from '$lib/stores';
-	import { getFolders } from '$lib/apis/folders';
+	import { projects } from '$lib/stores';
+	import { getProjects } from '$lib/apis/projects';
 	import { searchKnowledgeBases, searchKnowledgeFiles } from '$lib/apis/knowledge';
 	import { removeLastWordFromString, isValidHttpUrl, isYoutubeUrl, decodeString } from '$lib/utils';
 
@@ -64,11 +64,11 @@
 		}
 	};
 
-	let folderItems = [];
+	let projectItems = [];
 	let knowledgeItems = [];
 	let fileItems = [];
 
-	$: items = [...folderItems, ...knowledgeItems, ...fileItems];
+	$: items = [...projectItems, ...knowledgeItems, ...fileItems];
 
 	$: if (query !== undefined) {
 		clearTimeout(searchDebounceTimer);
@@ -82,20 +82,20 @@
 	});
 
 	const getItems = () => {
-		getFolderItems();
+		getProjectItems();
 		getKnowledgeItems();
 		getKnowledgeFileItems();
 	};
 
-	const getFolderItems = async () => {
-		folderItems = $folders
-			.map((folder) => ({
-				...folder,
-				type: 'folder',
-				description: $i18n.t('Folder'),
-				title: folder.name
+	const getProjectItems = async () => {
+		projectItems = $projects
+			.map((project) => ({
+				...project,
+				type: 'project',
+				description: $i18n.t('Project'),
+				title: project.name
 			}))
-			.filter((folder) => folder.name.toLowerCase().includes(query.toLowerCase()));
+			.filter((project) => project.name.toLowerCase().includes(query.toLowerCase()));
 	};
 
 	const getKnowledgeItems = async () => {
@@ -131,8 +131,8 @@
 	};
 
 	onMount(async () => {
-		if ($folders === null) {
-			await folders.set(await getFolders(localStorage.token));
+		if ($projects === null) {
+			await projects.set(await getProjects(localStorage.token));
 		}
 
 		await tick();
@@ -143,8 +143,8 @@
 	{#each filteredItems as item, idx}
 		{#if idx === 0 || item?.type !== items[idx - 1]?.type}
 			<div class="px-2 text-xs text-gray-500 py-1">
-				{#if item?.type === 'folder'}
-					{$i18n.t('Folders')}
+				{#if item?.type === 'project'}
+					{$i18n.t('Projects')}
 				{:else if item?.type === 'collection'}
 					{$i18n.t('Collections')}
 				{:else if item?.type === 'file'}
@@ -185,7 +185,7 @@
 					>
 						{#if item?.type === 'collection'}
 							<Database className="size-4" />
-						{:else if item?.type === 'folder'}
+						{:else if item?.type === 'project'}
 							<Folder className="size-4" />
 						{:else}
 							<DocumentPage className="size-4" />

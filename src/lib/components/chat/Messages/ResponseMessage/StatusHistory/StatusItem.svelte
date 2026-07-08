@@ -5,6 +5,7 @@
 
 	const i18n = getContext<Writable<i18nType>>('i18n');
 	import WebSearchResults from '../WebSearchResults.svelte';
+	import MemoriesUsed from '../MemoriesUsed.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
 	import { t } from 'i18next';
 
@@ -25,6 +26,9 @@
 		query?: string;
 		count?: number;
 		error?: string;
+		attempt?: number;
+		max_attempts?: number;
+		reason?: string;
 		[key: string]: unknown;
 	};
 
@@ -71,6 +75,8 @@
 					})}
 				</div>
 			</div>
+		{:else if status?.action === 'memory_context' && status?.memories}
+			<MemoriesUsed memories={status.memories} done={done || status?.done} />
 		{:else if status?.action === 'web_search_queries_generated' && status?.queries}
 			<div class="flex flex-col justify-center -space-y-0.5">
 				<div
@@ -194,7 +200,27 @@
 						? 'shimmer'
 						: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
 				>
-					{status?.description}
+					{#if status?.done}
+						{#if status?.reason === 'timeout'}
+							{$i18n.t('Model stopped responding — all {{max_attempts}} retry attempts failed', {
+								max_attempts: status.max_attempts ?? status?.description?.match(/\d+/)?.[0] ?? 3
+							})}
+						{:else}
+							{$i18n.t('Model returned no response — all {{max_attempts}} retry attempts failed', {
+								max_attempts: status.max_attempts ?? status?.description?.match(/\d+/)?.[0] ?? 3
+							})}
+						{/if}
+					{:else if status?.reason === 'timeout'}
+						{$i18n.t('Model stopped responding — retrying ({{attempt}}/{{max_attempts}})', {
+							attempt: status.attempt ?? 1,
+							max_attempts: status.max_attempts ?? 3
+						})}
+					{:else}
+						{$i18n.t('Model returned no response — retrying ({{attempt}}/{{max_attempts}})', {
+							attempt: status.attempt ?? 1,
+							max_attempts: status.max_attempts ?? 3
+						})}
+					{/if}
 				</div>
 			</div>
 		{:else}

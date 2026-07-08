@@ -146,7 +146,7 @@ from open_webui.routers import (
     evaluations,
     artifacts,
     files,
-    folders,
+    projects,
     functions,
     groups,
     images,
@@ -758,7 +758,7 @@ app.include_router(tools.router, prefix='/api/v1/tools', tags=['tools'])
 app.include_router(skills.router, prefix='/api/v1/skills', tags=['skills'])
 
 app.include_router(memories.router, prefix='/api/v1/memories', tags=['memories'])
-app.include_router(folders.router, prefix='/api/v1/folders', tags=['folders'])
+app.include_router(projects.router, prefix='/api/v1/projects', tags=['projects'])
 app.include_router(groups.router, prefix='/api/v1/groups', tags=['groups'])
 app.include_router(files.router, prefix='/api/v1/files', tags=['files'])
 app.include_router(functions.router, prefix='/api/v1/functions', tags=['functions'])
@@ -1112,7 +1112,7 @@ async def chat_completion(
             'user_message_id': user_message.get('id') if user_message else None,
             'assistant_message_id': form_data.pop('assistant_message_id', None),
             'session_id': form_data.pop('session_id', None),
-            'folder_id': form_data.pop('folder_id', None),
+            'project_id': form_data.pop('project_id', None),
             'filter_ids': form_data.pop('filter_ids', []),
             'tool_ids': form_data.get('tool_ids', None),
             'tool_servers': tool_servers,
@@ -1232,7 +1232,7 @@ async def chat_completion(
                                 'tags': [],
                                 'timestamp': int(time.time() * 1000),
                             },
-                            folder_id=metadata.get('folder_id'),
+                            project_id=metadata.get('project_id'),
                         ),
                     )
                     await publish_event(
@@ -1822,8 +1822,8 @@ async def get_app_config(request: Request):
         'ui.enable_login_form',
         'auth.enable_api_keys',
         'ui.enable_password_change_form',
-        'folders.enable',
-        'folders.max_file_count',
+        'projects.enable',
+        'projects.max_file_count',
         'channels.enable',
         'calendar.enable',
         'automations.enable',
@@ -1890,8 +1890,8 @@ async def get_app_config(request: Request):
                     'enable_pyodide_file_persistence': ENABLE_PYODIDE_FILE_PERSISTENCE,
                     'enable_public_active_users_count': ENABLE_PUBLIC_ACTIVE_USERS_COUNT,
                     'enable_easter_eggs': ENABLE_EASTER_EGGS,
-                    'enable_folders': config.get('folders.enable'),
-                    'folder_max_file_count': config.get('folders.max_file_count'),
+                    'enable_projects': config.get('projects.enable'),
+                    'project_max_file_count': config.get('projects.max_file_count'),
                     'enable_channels': config.get('channels.enable'),
                     'enable_calendar': config.get('calendar.enable'),
                     'enable_automations': config.get('automations.enable'),

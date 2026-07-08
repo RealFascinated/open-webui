@@ -19,6 +19,7 @@
 	import { getContext, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -142,12 +143,12 @@
 >
 	<div class="space-y-3">
 		{#if adminConfig !== null}
-			<div class="mb-3">
-				<div class="mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('User Access')}</div>
-
-				<hr class="border-gray-100/30 dark:border-gray-850/30 my-2" />
-
-				<div class="  mb-2.5 flex w-full justify-between">
+			<AdminSettingsCard
+				title="User Access"
+				description="Default roles, sign-up, API keys, and session lifetime."
+				className="mb-3"
+			>
+				<div class="mb-2.5 flex w-full justify-between">
 					<div class=" self-center text-xs font-medium">{$i18n.t('Default User Role')}</div>
 					<div class="flex items-center relative">
 						<select
@@ -266,10 +267,13 @@
 						</div>
 					{/if}
 				</div>
-				<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Pending Accounts')}</div>
+			</AdminSettingsCard>
 
-				<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Pending Accounts"
+				description="Messaging shown to users awaiting approval."
+				className="mb-3"
+			>
 				<div class="mb-2.5 flex w-full items-center justify-between pr-2">
 					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Show Admin Details in Account Pending Overlay')}
@@ -318,21 +322,24 @@
 						bind:value={adminConfig.PENDING_USER_OVERLAY_CONTENT}
 					/>
 				</div>
-			</div>
+			</AdminSettingsCard>
 		{/if}
 
-		<div class=" space-y-3">
-			<div class="mt-2 space-y-2 pr-1.5">
-				<div class="flex justify-between items-center text-sm">
-					<div class="  font-medium">{$i18n.t('LDAP')}</div>
+		<AdminSettingsCard
+			title="LDAP"
+			description="Directory authentication for sign-in."
+			className="mb-3"
+		>
+			<div class="flex justify-between items-center text-sm">
+				<div class="font-medium">{$i18n.t('LDAP')}</div>
 
-					<div class="mt-1">
-						<Switch bind:state={ENABLE_LDAP} />
-					</div>
+				<div class="mt-1">
+					<Switch bind:state={ENABLE_LDAP} />
 				</div>
+			</div>
 
-				{#if ENABLE_LDAP}
-					<div class="flex flex-col gap-1">
+			{#if ENABLE_LDAP}
+				<div class="flex flex-col gap-1 mt-2">
 						<div class="flex w-full gap-2">
 							<div class="w-full">
 								<div class=" self-center text-xs font-medium min-w-fit mb-1">
@@ -527,16 +534,15 @@
 						</div>
 					</div>
 				{/if}
-			</div>
-		</div>
+		</AdminSettingsCard>
+
 		{#if oauthConfig}
-			<div class="mb-3">
-				<div class="mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('OAuth / OIDC')}</div>
-
-				<hr class="border-gray-100/30 dark:border-gray-850/30 my-2" />
-
-				<div class="pr-1.5">
-					<div class="space-y-3">
+			<AdminSettingsCard
+				title="OAuth / OIDC"
+				description="Single sign-on provider configuration."
+				className="mb-3"
+			>
+				<div class="space-y-3">
 						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
 							<div class="w-full">
 								<div class="self-center text-xs font-medium min-w-fit mb-1">
@@ -788,9 +794,7 @@
 							</div>
 							<Switch bind:state={oauthConfig.OAUTH_UPDATE_PICTURE_ON_LOGIN} />
 						</div>
-					</div>
-				</div>
-			</div>
+			</AdminSettingsCard>
 		{/if}
 	</div>
 

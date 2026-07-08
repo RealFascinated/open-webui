@@ -427,7 +427,16 @@
 		return { toolServer, toolServerData, token };
 	};
 
+	const cancelledToolChatIds = new Set();
+
 	const executeTool = async (data, cb, chatId) => {
+		if (chatId && cancelledToolChatIds.has(chatId)) {
+			if (cb) {
+				cb({ error: 'Cancelled' });
+			}
+			return;
+		}
+
 		const { toolServer, toolServerData, token } = resolveToolServer(data.server?.url);
 
 		console.log('executeTool', data, toolServer);
@@ -441,6 +450,13 @@
 				toolServerData,
 				chatId
 			);
+
+			if (chatId && cancelledToolChatIds.has(chatId)) {
+				if (cb) {
+					cb({ error: 'Cancelled' });
+				}
+				return;
+			}
 
 			console.log('executeToolServer', res);
 
@@ -488,6 +504,12 @@
 		await tick();
 		const type = event?.data?.type ?? null;
 		const data = event?.data?.data ?? null;
+
+		if (type === 'chat:tasks:cancel' && event.chat_id) {
+			cancelledToolChatIds.add(event.chat_id);
+		} else if (type === 'chat:active' && event.chat_id && data?.active) {
+			cancelledToolChatIds.delete(event.chat_id);
+		}
 
 		// Calendar alerts are not chat-scoped, handle before chat_id checks
 		if (type === 'calendar:alert' && data) {

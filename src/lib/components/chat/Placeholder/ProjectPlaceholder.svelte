@@ -6,15 +6,13 @@
 
 	import { user } from '$lib/stores';
 
-	import { fade } from 'svelte/transition';
-
 	import ChatList from './ChatList.svelte';
-	import FolderKnowledge from './FolderKnowledge.svelte';
+	import ProjectKnowledge from './ProjectKnowledge.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import { getChatListByFolderId } from '$lib/apis/chats';
-	import { getSharedFolderChats } from '$lib/apis/folders';
+	import { getChatListByProjectId } from '$lib/apis/chats';
+	import { getSharedProjectChats } from '$lib/apis/projects';
 
-	export let folder: unknown = null;
+	export let project: unknown = null;
 
 	let selectedTab = 'chats';
 
@@ -24,14 +22,15 @@
 	let chatListLoading = false;
 	let allChatsLoaded = false;
 
+	$: hasKnowledge = (project?.data?.files ?? []).length > 0;
+
 	$: showOwnerInfo = Boolean(
-		folder?.shared ||
-		(folder?.user_id && folder.user_id !== $user?.id) ||
-		(folder?.access_grants?.length ?? 0) > 0
+		project?.shared ||
+		(project?.user_id && project.user_id !== $user?.id) ||
+		(project?.access_grants?.length ?? 0) > 0
 	);
 
 	const loadChats = async () => {
-		// getSharedFolderChats returns all users' chats in one shot; no pagination
 		allChatsLoaded = true;
 	};
 
@@ -41,10 +40,8 @@
 		allChatsLoaded = false;
 		chatListLoading = false;
 
-		if (folder && folder.id) {
-			// Always use the shared folder endpoint so owners also see
-			// chats created by users who have write access to this folder.
-			const res = await getSharedFolderChats(localStorage.token, folder.id).catch((error) => {
+		if (project && project.id) {
+			const res = await getSharedProjectChats(localStorage.token, project.id).catch((error) => {
 				console.error(error);
 				return null;
 			});
@@ -52,8 +49,7 @@
 				chats = res.chats;
 				allChatsLoaded = true;
 			} else {
-				// Fallback to regular API (e.g. if user has no shared access)
-				const fallback = await getChatListByFolderId(localStorage.token, folder.id, page).catch(
+				const fallback = await getChatListByProjectId(localStorage.token, project.id, page).catch(
 					() => []
 				);
 				chats = fallback || [];
@@ -63,43 +59,45 @@
 		}
 	};
 
-	$: if (folder) {
+	$: if (project) {
 		setChatList();
 	}
 </script>
 
 <div>
-	<!-- <div class="mb-1">
-		<div
-			class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent py-1 touch-auto pointer-events-auto"
-		>
-			<button
-				class="min-w-fit p-1.5 {selectedTab === 'knowledge'
-					? ''
-					: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
-				type="button"
-				on:click={() => {
-					selectedTab = 'knowledge';
-				}}>{$i18n.t('Knowledge')}</button
+	{#if hasKnowledge}
+		<div class="mb-1">
+			<div
+				class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent py-1 touch-auto pointer-events-auto"
 			>
+				<button
+					class="min-w-fit p-1.5 {selectedTab === 'knowledge'
+						? ''
+						: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+					type="button"
+					on:click={() => {
+						selectedTab = 'knowledge';
+					}}>{$i18n.t('Knowledge')}</button
+				>
 
-			<button
-				class="min-w-fit p-1.5 {selectedTab === 'chats'
-					? ''
-					: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
-				type="button"
-				on:click={() => {
-					selectedTab = 'chats';
-				}}
-			>
-				{$i18n.t('Chats')}
-			</button>
+				<button
+					class="min-w-fit p-1.5 {selectedTab === 'chats'
+						? ''
+						: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+					type="button"
+					on:click={() => {
+						selectedTab = 'chats';
+					}}
+				>
+					{$i18n.t('Chats')}
+				</button>
+			</div>
 		</div>
-	</div> -->
+	{/if}
 
 	<div class="">
-		{#if selectedTab === 'knowledge'}
-			<FolderKnowledge />
+		{#if selectedTab === 'knowledge' && hasKnowledge}
+			<ProjectKnowledge {project} />
 		{:else if selectedTab === 'chats'}
 			{#if chats !== null}
 				<ChatList

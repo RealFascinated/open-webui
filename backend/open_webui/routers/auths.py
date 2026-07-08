@@ -97,8 +97,8 @@ ADMIN_CONFIG_KEYS = {
     'JWT_EXPIRES_IN': 'auth.jwt_expiry',
     'ENABLE_COMMUNITY_SHARING': 'ui.enable_community_sharing',
     'ENABLE_MESSAGE_RATING': 'ui.enable_message_rating',
-    'ENABLE_FOLDERS': 'folders.enable',
-    'FOLDER_MAX_FILE_COUNT': 'folders.max_file_count',
+    'ENABLE_PROJECTS': 'projects.enable',
+    'PROJECT_MAX_FILE_COUNT': 'projects.max_file_count',
     'AUTOMATION_MAX_COUNT': 'automations.max_count',
     'AUTOMATION_MIN_INTERVAL': 'automations.min_interval',
     'ENABLE_AUTOMATIONS': 'automations.enable',
@@ -1136,8 +1136,8 @@ class AdminConfig(BaseModel):
     JWT_EXPIRES_IN: str
     ENABLE_COMMUNITY_SHARING: bool
     ENABLE_MESSAGE_RATING: bool
-    ENABLE_FOLDERS: bool
-    FOLDER_MAX_FILE_COUNT: int | str | None = None
+    ENABLE_PROJECTS: bool
+    PROJECT_MAX_FILE_COUNT: int | str | None = None
     AUTOMATION_MAX_COUNT: int | str | None = None
     AUTOMATION_MIN_INTERVAL: int | str | None = None
     ENABLE_AUTOMATIONS: bool
@@ -1156,7 +1156,7 @@ class AdminConfig(BaseModel):
 @router.post('/admin/config')
 async def update_admin_config(request: Request, form_data: AdminConfig, user=Depends(get_admin_user)):
     updates = config_updates(form_data.model_dump(), ADMIN_CONFIG_KEYS)
-    updates['folders.max_file_count'] = int(form_data.FOLDER_MAX_FILE_COUNT) if form_data.FOLDER_MAX_FILE_COUNT else ''
+    updates['projects.max_file_count'] = int(form_data.PROJECT_MAX_FILE_COUNT) if form_data.PROJECT_MAX_FILE_COUNT else ''
     updates['automations.max_count'] = int(form_data.AUTOMATION_MAX_COUNT) if form_data.AUTOMATION_MAX_COUNT else ''
     updates['automations.min_interval'] = (
         int(form_data.AUTOMATION_MIN_INTERVAL) if form_data.AUTOMATION_MIN_INTERVAL else ''

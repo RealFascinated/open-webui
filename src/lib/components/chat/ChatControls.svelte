@@ -9,6 +9,7 @@
 	import { v4 as uuidv4 } from 'uuid';
 
 	import { onDestroy, onMount, tick, getContext } from 'svelte';
+	import { get } from 'svelte/store';
 	import {
 		config,
 		terminalServers,
@@ -38,6 +39,11 @@
 
 	const i18n = getContext('i18n');
 
+	const CONTROLS_MIN_WIDTH_PX = 380;
+	const ARTIFACT_MIN_WIDTH_PX = 560;
+	const ARTIFACT_DEFAULT_WIDTH_PX = 720;
+	const ARTIFACT_DEFAULT_WIDTH_PERCENT = 48;
+
 	export let history;
 	export let models = [];
 
@@ -52,14 +58,16 @@
 	export let files;
 	export let modelId;
 
-	export let codeInterpreterEnabled = false;
-
 	export let pane: Pane | null = null;
 
 	let largeScreen = false;
 	let dragged = false;
-	let minSize = 0;
+	let controlsMinSize = 0;
+	let artifactMinSize = 0;
 	let paneReady = false;
+	let wasShowingArtifacts = false;
+
+	$: effectiveMinSize = $showArtifacts ? artifactMinSize : controlsMinSize;
 
 	// Tab state for Controls+Files panel
 	let activeTab = savedTab;
@@ -79,9 +87,15 @@
 	$: selectedDirectTerminalAvailable = ($settings?.terminalServers ?? []).some(
 		(s) => s.url === $selectedTerminalId
 	);
+	$: codeInterpreterActive =
+		!$selectedTerminalId &&
+		Boolean($config?.features?.enable_code_interpreter) &&
+		($user?.role === 'admin' || $user?.permissions?.features?.code_interpreter) &&
+		models.some((model) => model.info?.meta?.capabilities?.code_interpreter ?? true);
+
 	$: showFilesTab =
 		($selectedTerminalId && (selectedSystemTerminalAvailable || hasDirectToolServerAccess)) ||
-		(codeInterpreterEnabled && $config?.code?.interpreter_engine !== 'jupyter');
+		(codeInterpreterActive && $config?.code?.interpreter_engine !== 'jupyter');
 	$: showOverviewTab = hasMessages;
 
 	// Tab fallback: if active tab becomes hidden, switch to next available
@@ -166,16 +180,31 @@
 		}
 	};
 
-	export const openPane = () => {
-		if (parseInt(localStorage?.chatControlsSize)) {
-			const container = document.getElementById('chat-container');
-			let size = Math.floor(
-				(parseInt(localStorage?.chatControlsSize) / container.clientWidth) * 100
+	export const openPane = (mode: 'controls' | 'artifact' = 'controls') => {
+		const container = document.getElementById('chat-container');
+		if (!container || !pane) return;
+
+		pane.expand();
+
+		const width = container.clientWidth;
+		const minPercent = mode === 'artifact' ? artifactMinSize : controlsMinSize;
+		const savedPx = parseInt(localStorage?.chatControlsSize ?? '0', 10);
+		const savedPercent = savedPx > 0 ? Math.floor((savedPx / width) * 100) : 0;
+
+		let targetPercent = minPercent;
+		if (mode === 'artifact') {
+			const defaultPercent = Math.max(
+				artifactMinSize,
+				Math.floor((ARTIFACT_DEFAULT_WIDTH_PX / width) * 100),
+				ARTIFACT_DEFAULT_WIDTH_PERCENT
 			);
-			pane.resize(size);
-		} else {
-			pane.resize(minSize);
+			targetPercent =
+				savedPercent >= artifactMinSize ? savedPercent : Math.max(defaultPercent, artifactMinSize);
+		} else if (savedPercent >= controlsMinSize) {
+			targetPercent = savedPercent;
 		}
+
+		pane.resize(Math.max(targetPercent, minPercent));
 	};
 
 	const handleMediaQuery = async (e) => {
@@ -220,7 +249,7 @@
 
 			// If controls were persisted as open, set the pane to the saved size
 			if ($showControls && pane) {
-				openPane();
+				openPane(get(showArtifacts) ? 'artifact' : 'controls');
 			}
 
 			setTimeout(() => {
@@ -230,19 +259,27 @@
 			const container = document.getElementById('chat-container') as HTMLElement;
 			if (!container) return;
 
-			minSize = Math.floor((350 / container.clientWidth) * 100);
+			const updateMinSizes = (width: number) => {
+				controlsMinSize = Math.floor((CONTROLS_MIN_WIDTH_PX / width) * 100);
+				artifactMinSize = Math.floor((ARTIFACT_MIN_WIDTH_PX / width) * 100);
+			};
+
+			updateMinSizes(container.clientWidth);
 			resizeObserver = new ResizeObserver((entries) => {
 				for (let entry of entries) {
 					const width = entry.contentRect.width;
-					minSize = Math.floor((350 / width) * 100);
-					if ($showControls) {
-						if (pane && pane.isExpanded() && pane.getSize() < minSize) {
-							pane.resize(minSize);
+					updateMinSizes(width);
+					if ($showControls && pane) {
+						const minPercent = get(showArtifacts) ? artifactMinSize : controlsMinSize;
+						if (pane.isExpanded() && pane.getSize() < minPercent) {
+							pane.resize(minPercent);
 						} else {
-							let size = Math.floor(
-								(parseInt(localStorage?.chatControlsSize) / container.clientWidth) * 100
-							);
-							if (size < minSize && pane) pane.resize(minSize);
+							const savedPx = parseInt(localStorage?.chatControlsSize ?? '0', 10);
+							const savedPercent =
+								savedPx > 0 ? Math.floor((savedPx / width) * 100) : 0;
+							if (savedPercent > 0 && savedPercent < minPercent) {
+								pane.resize(minPercent);
+							}
 						}
 					}
 				}
@@ -277,6 +314,17 @@
 	};
 
 	$: if (paneReady && !chatId) closeHandler();
+
+	// Auto-open and size the artifact panel when generation starts.
+	$: if (paneReady && largeScreen && pane && $showArtifacts && !wasShowingArtifacts) {
+		wasShowingArtifacts = true;
+		if (!$showControls) {
+			showControls.set(true);
+		}
+		tick().then(() => openPane('artifact'));
+	} else if (!$showArtifacts) {
+		wasShowingArtifacts = false;
+	}
 
 	// Helper: is a "special" full-screen panel active?
 	$: specialPanel = $showCallOverlay || $showArtifacts || $showEmbeds;
@@ -384,7 +432,7 @@
 								/>
 							{:else if activeTab === 'files' && $selectedTerminalId}
 								<FileNav onAttach={handleTerminalAttach} {chatId} />
-							{:else if activeTab === 'files' && codeInterpreterEnabled}
+							{:else if activeTab === 'files' && codeInterpreterActive}
 								<PyodideFileNav />
 							{:else}
 								<Controls embed={true} {models} bind:chatFiles />
@@ -411,8 +459,8 @@
 		defaultSize={0}
 		onResize={(size) => {
 			if ($showControls && pane.isExpanded()) {
-				if (size < minSize) pane.resize(minSize);
-				if (size < minSize) {
+				if (size < effectiveMinSize) pane.resize(effectiveMinSize);
+				if (size < effectiveMinSize) {
 					localStorage.chatControlsSize = 0;
 				} else {
 					const container = document.getElementById('chat-container');
@@ -534,7 +582,7 @@
 									/>
 								{:else if activeTab === 'files' && $selectedTerminalId}
 									<FileNav onAttach={handleTerminalAttach} overlay={dragged} {chatId} />
-								{:else if activeTab === 'files' && codeInterpreterEnabled}
+								{:else if activeTab === 'files' && codeInterpreterActive}
 									<PyodideFileNav overlay={dragged} />
 								{:else}
 									<Controls embed={true} {models} bind:chatFiles />

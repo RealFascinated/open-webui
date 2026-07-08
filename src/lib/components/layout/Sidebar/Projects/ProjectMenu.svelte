@@ -16,7 +16,7 @@
 	export let onExport = () => {};
 	export let onShare = () => {};
 	export let onDelete = () => {};
-	export let onCreateSubFolder = () => {};
+	export let onCreateSubProject = () => {};
 
 	let show = false;
 </script>
@@ -48,11 +48,11 @@
 			<button
 				class="flex gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl w-full"
 				on:click={() => {
-					onCreateSubFolder();
+					onCreateSubProject();
 				}}
 			>
 				<Folder />
-				<div class="flex items-center">{$i18n.t('Create Folder')}</div>
+				<div class="flex items-center">{$i18n.t('Create Sub-project')}</div>
 			</button>
 
 			<hr class="border-gray-50/30 dark:border-gray-800/30 my-1" />

@@ -13,7 +13,7 @@
 		deleteChatById,
 		archiveChatById,
 		updateChatById,
-		updateChatFolderIdById,
+		updateChatProjectIdById,
 		getPinnedChatList,
 		getAllTags
 	} from '$lib/apis/chats';
@@ -134,9 +134,9 @@
 		}
 	};
 
-	const moveChatHandler = async (chatId, folderId) => {
-		if (chatId && folderId) {
-			const res = await updateChatFolderIdById(localStorage.token, chatId, folderId).catch(
+	const moveChatHandler = async (chatId, projectId) => {
+		if (chatId && projectId) {
+			const res = await updateChatProjectIdById(localStorage.token, chatId, projectId).catch(
 				(error) => {
 					toast.error(`${error}`);
 					return null;
@@ -282,7 +282,7 @@
 	let history = null;
 	let messages = null;
 
-	const searchFilterPrefixes = ['tag:', 'folder:', 'pinned:', 'archived:', 'shared:'];
+	const searchFilterPrefixes = ['tag:', 'project:', 'pinned:', 'archived:', 'shared:'];
 
 	const getSnippetQuery = (query: string) => {
 		return query

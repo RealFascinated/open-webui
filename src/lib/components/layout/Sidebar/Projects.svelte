@@ -3,63 +3,63 @@
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
-	import RecursiveFolder from './RecursiveFolder.svelte';
-	import { chatId, selectedFolder } from '$lib/stores';
+	import RecursiveProject from './RecursiveProject.svelte';
+	import { chatId, selectedProject } from '$lib/stores';
 
-	export let folderRegistry = {};
+	export let projectRegistry = {};
 
-	export let folders = {};
+	export let projects = {};
 	export let shiftKey = false;
 
-	export let onDelete = (folderId) => {};
+	export let onDelete = (projectId) => {};
 
 	let ownedList = [];
 	let sharedList = [];
 
 	$: {
-		const rootKeys = Object.keys(folders)
+		const rootKeys = Object.keys(projects)
 			.filter((key) => {
-				const f = folders[key];
+				const f = projects[key];
 				if (!f.name) return false;
-				// Root folder: no parent, or shared folder whose parent isn't in our folders
+				// Root folder: no parent, or shared folder whose parent isn't in our projects
 				if (f.shared) {
-					return !f.parent_id || !folders[f.parent_id];
+					return !f.parent_id || !projects[f.parent_id];
 				}
 				return f.parent_id === null;
 			})
 			.sort((a, b) =>
-				(folders[a].name ?? '').localeCompare(folders[b].name ?? '', undefined, {
+				(projects[a].name ?? '').localeCompare(projects[b].name ?? '', undefined, {
 					numeric: true,
 					sensitivity: 'base'
 				})
 			);
-		ownedList = rootKeys.filter((key) => !folders[key].shared);
-		sharedList = rootKeys.filter((key) => folders[key].shared);
+		ownedList = rootKeys.filter((key) => !projects[key].shared);
+		sharedList = rootKeys.filter((key) => projects[key].shared);
 	}
 
 	const onItemMove = (e) => {
-		if (e.originFolderId) {
-			folderRegistry[e.originFolderId]?.setFolderItems();
+		if (e.originProjectId) {
+			projectRegistry[e.originProjectId]?.setProjectItems();
 		}
 	};
 
 	const loadFolderItems = () => {
-		for (const folderId of Object.keys(folders)) {
-			folderRegistry[folderId]?.setFolderItems();
+		for (const projectId of Object.keys(projects)) {
+			projectRegistry[projectId]?.setProjectItems();
 		}
 	};
 
-	$: if (folders || ($selectedFolder && $chatId)) {
+	$: if (projects || ($selectedProject && $chatId)) {
 		loadFolderItems();
 	}
 </script>
 
-{#each ownedList as folderId (folderId)}
-	<RecursiveFolder
+{#each ownedList as projectId (projectId)}
+	<RecursiveProject
 		className=""
-		bind:folderRegistry
-		{folders}
-		{folderId}
+		bind:projectRegistry
+		{projects}
+		{projectId}
 		{shiftKey}
 		{onDelete}
 		{onItemMove}
@@ -79,12 +79,12 @@
 	<div class="w-full pl-2.5 text-[11px] text-gray-400 dark:text-gray-600 pt-2 pb-0.5">
 		{$i18n.t('Shared')}
 	</div>
-	{#each sharedList as folderId (folderId)}
-		<RecursiveFolder
+	{#each sharedList as projectId (projectId)}
+		<RecursiveProject
 			className=""
-			bind:folderRegistry
-			{folders}
-			{folderId}
+			bind:projectRegistry
+			{projects}
+			{projectId}
 			{shiftKey}
 			{onDelete}
 			{onItemMove}

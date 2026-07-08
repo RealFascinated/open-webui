@@ -98,12 +98,12 @@ async def has_access_to_file(
     return False
 
 
-async def get_accessible_folder_files(
+async def get_accessible_project_files(
     entries: list[dict] | None,
     user: UserModel,
     db: AsyncSession | None = None,
 ) -> list[dict]:
-    """Filter folder.data['files'] entries to those the caller can read.
+    """Filter project.data['files'] entries to those the caller can read.
 
     Each entry is expected to have 'type' ('file' or 'collection') and 'id'.
     Admins bypass all checks. Unknown types are kept as-is.

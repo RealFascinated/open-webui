@@ -22,6 +22,7 @@
 	import Modal from '$lib/components/common/Modal.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import ModelDeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
+	import AdminDangerZone from '../../../AdminDangerZone.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
 	let modelUploadInputElement: HTMLInputElement;
@@ -588,6 +589,8 @@
 </script>
 
 <ModelDeleteConfirmDialog
+	title={$i18n.t('Delete Model')}
+	message={$i18n.t('Are you sure you want to delete this model? This action cannot be undone.')}
 	bind:show={showModelDeleteConfirm}
 	on:confirm={() => {
 		deleteModelHandler();
@@ -791,8 +794,8 @@
 					{/if}
 				</div>
 
-				<div>
-					<div class=" mb-2 text-sm font-medium">{$i18n.t('Delete a model')}</div>
+				<AdminDangerZone title="Danger Zone" description="Permanently remove models from this Ollama server.">
+					<div class="mb-2 text-xs font-medium">{$i18n.t('Delete a model')}</div>
 					<div class="flex w-full">
 						<div
 							class="flex-1 mr-2 pr-1.5 rounded-lg bg-gray-50 dark:text-gray-300 dark:bg-gray-850"
@@ -834,7 +837,7 @@
 							</button>
 						</Tooltip>
 					</div>
-				</div>
+				</AdminDangerZone>
 
 				<div>
 					<div class=" mb-2 text-sm font-medium">{$i18n.t('Create a model')}</div>

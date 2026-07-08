@@ -42,6 +42,12 @@ from open_webui.utils.images.comfyui import (
     comfyui_edit_image,
     comfyui_upload_image,
 )
+from open_webui.utils.images.gemini_web import (
+    close_gemini_web_client,
+    generate_gemini_web_images,
+    get_gemini_web_model_catalog,
+    list_gemini_web_models,
+)
 from open_webui.utils.session_pool import get_session
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,6 +90,9 @@ IMAGE_CONFIG_KEYS = {
     'IMAGES_GEMINI_API_BASE_URL': 'image_generation.gemini.api_base_url',
     'IMAGES_GEMINI_API_KEY': 'image_generation.gemini.api_key',
     'IMAGES_GEMINI_ENDPOINT_METHOD': 'image_generation.gemini.endpoint_method',
+    'IMAGES_GEMINI_WEB_SECURE_1PSID': 'image_generation.gemini_web.secure_1psid',
+    'IMAGES_GEMINI_WEB_SECURE_1PSIDTS': 'image_generation.gemini_web.secure_1psidts',
+    'IMAGES_GEMINI_WEB_COOKIE_PATH': 'image_generation.gemini_web.cookie_path',
     'ENABLE_IMAGE_EDIT': 'images.edit.enable',
     'IMAGE_EDIT_ENGINE': 'images.edit.engine',
     'IMAGE_EDIT_MODEL': 'images.edit.model',
@@ -204,6 +213,8 @@ async def get_image_model(request):
         return image_config.IMAGE_GENERATION_MODEL if image_config.IMAGE_GENERATION_MODEL else 'dall-e-2'
     elif image_config.IMAGE_GENERATION_ENGINE == 'gemini':
         return image_config.IMAGE_GENERATION_MODEL if image_config.IMAGE_GENERATION_MODEL else 'imagen-3.0-generate-002'
+    elif image_config.IMAGE_GENERATION_ENGINE == 'gemini_web':
+        return image_config.IMAGE_GENERATION_MODEL if image_config.IMAGE_GENERATION_MODEL else 'gemini-3-flash'
     elif image_config.IMAGE_GENERATION_ENGINE == 'comfyui':
         return image_config.IMAGE_GENERATION_MODEL if image_config.IMAGE_GENERATION_MODEL else ''
     elif image_config.IMAGE_GENERATION_ENGINE == 'automatic1111' or image_config.IMAGE_GENERATION_ENGINE == '':
@@ -250,6 +261,10 @@ class ImagesConfig(BaseModel):
     IMAGES_GEMINI_API_BASE_URL: str
     IMAGES_GEMINI_API_KEY: str
     IMAGES_GEMINI_ENDPOINT_METHOD: str
+
+    IMAGES_GEMINI_WEB_SECURE_1PSID: str
+    IMAGES_GEMINI_WEB_SECURE_1PSIDTS: str
+    IMAGES_GEMINI_WEB_COOKIE_PATH: str
 
     ENABLE_IMAGE_EDIT: bool
     IMAGE_EDIT_ENGINE: str
@@ -300,6 +315,8 @@ async def update_config(request: Request, form_data: ImagesConfig, user=Depends(
     updates = config_updates(form_data.model_dump(), IMAGE_CONFIG_KEYS)
     updates['image_generation.comfyui.base_url'] = form_data.COMFYUI_BASE_URL.strip('/')
     updates['images.edit.comfyui.base_url'] = form_data.IMAGES_EDIT_COMFYUI_BASE_URL.strip('/')
+    if form_data.IMAGE_GENERATION_ENGINE == 'gemini_web':
+        await close_gemini_web_client()
     await Config.upsert(updates)
     await set_image_model(request, form_data.IMAGE_GENERATION_MODEL)
     values = await get_config_values(IMAGE_CONFIG_KEYS)
@@ -358,26 +375,50 @@ async def verify_url(request: Request, user=Depends(get_admin_user)):
                 return True
         except Exception:
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.INVALID_URL)
+    elif image_config.IMAGE_GENERATION_ENGINE == 'gemini_web':
+        try:
+            await list_gemini_web_models(
+                image_config.IMAGES_GEMINI_WEB_SECURE_1PSID,
+                image_config.IMAGES_GEMINI_WEB_SECURE_1PSIDTS,
+                image_config.IMAGES_GEMINI_WEB_COOKIE_PATH or None,
+            )
+            return True
+        except Exception as e:
+            log.exception(e)
+            raise HTTPException(
+                status_code=400,
+                detail=ERROR_MESSAGES.DEFAULT(e, 'Failed to connect to Gemini Web'),
+            )
     else:
         return True
 
 
 @router.get('/models')
-async def get_models(request: Request, user=Depends(get_verified_user)):
+async def get_models(request: Request, engine: str | None = None, user=Depends(get_verified_user)):
     image_config = await get_image_config()
+    selected_engine = engine or image_config.IMAGE_GENERATION_ENGINE
     try:
-        if image_config.IMAGE_GENERATION_ENGINE == 'openai':
+        if selected_engine == 'openai':
             return [
                 {'id': 'dall-e-2', 'name': 'DALL·E 2'},
                 {'id': 'dall-e-3', 'name': 'DALL·E 3'},
                 {'id': 'gpt-image-1', 'name': 'GPT-IMAGE 1'},
                 {'id': 'gpt-image-1.5', 'name': 'GPT-IMAGE 1.5'},
             ]
-        elif image_config.IMAGE_GENERATION_ENGINE == 'gemini':
+        elif selected_engine == 'gemini':
             return [
                 {'id': 'imagen-3.0-generate-002', 'name': 'imagen-3.0 generate-002'},
             ]
-        elif image_config.IMAGE_GENERATION_ENGINE == 'comfyui':
+        elif selected_engine == 'gemini_web':
+            if engine and engine != image_config.IMAGE_GENERATION_ENGINE:
+                return get_gemini_web_model_catalog()
+
+            return await list_gemini_web_models(
+                image_config.IMAGES_GEMINI_WEB_SECURE_1PSID,
+                image_config.IMAGES_GEMINI_WEB_SECURE_1PSIDTS,
+                image_config.IMAGES_GEMINI_WEB_COOKIE_PATH or None,
+            )
+        elif selected_engine == 'comfyui':
             # TODO - get models from comfyui
             headers = {'Authorization': f'Bearer {image_config.COMFYUI_API_KEY}'}
             session = await get_session()
@@ -420,7 +461,7 @@ async def get_models(request: Request, user=Depends(get_verified_user)):
                         info['CheckpointLoaderSimple']['input']['required']['ckpt_name'][0],
                     )
                 )
-        elif image_config.IMAGE_GENERATION_ENGINE == 'automatic1111' or image_config.IMAGE_GENERATION_ENGINE == '':
+        elif selected_engine == 'automatic1111' or selected_engine == '':
             session = await get_session()
             async with session.get(
                 url=f'{image_config.AUTOMATIC1111_BASE_URL}/sdapi/v1/sd-models',
@@ -729,6 +770,22 @@ async def image_generations(
 
             return images
 
+        elif image_config.IMAGE_GENERATION_ENGINE == 'gemini_web':
+            raw_images = await generate_gemini_web_images(
+                prompt=form_data.prompt,
+                secure_1psid=image_config.IMAGES_GEMINI_WEB_SECURE_1PSID,
+                secure_1psidts=image_config.IMAGES_GEMINI_WEB_SECURE_1PSIDTS,
+                cookie_path=image_config.IMAGES_GEMINI_WEB_COOKIE_PATH or None,
+                model=model or None,
+                n=form_data.n,
+            )
+
+            images = []
+            for image_data, content_type in raw_images:
+                _, url = await upload_image(request, image_data, content_type, {**metadata}, user)
+                images.append({'url': url})
+            return images
+
         elif image_config.IMAGE_GENERATION_ENGINE == 'comfyui':
             data = {
                 'prompt': form_data.prompt,
@@ -831,6 +888,8 @@ async def image_generations(
         error = e
         if isinstance(e, aiohttp.ClientResponseError):
             error = e.message
+        elif isinstance(e, (RuntimeError, ModuleNotFoundError)):
+            error = str(e)
         raise HTTPException(status_code=400, detail=ERROR_MESSAGES.DEFAULT(error))
 
 

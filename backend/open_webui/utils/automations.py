@@ -252,36 +252,28 @@ def _resolve_model_tool_ids(app, model_id: str) -> list[str]:
 
 
 async def _resolve_model_features(app, model_id: str) -> dict:
-    """Read model default features from model config.
+    """Resolve enabled model features for headless backend execution.
 
-    The frontend does this in Chat.svelte (model.info.meta.defaultFeatureIds
-    + model.info.meta.capabilities). Enables features like web_search,
-    code_interpreter, image_generation when the model has them as defaults
-    AND the capability is enabled AND the admin has enabled the feature.
+    Web search still respects per-model defaults. Image generation is enabled
+    when globally on and the model has the capability.
     """
     models = getattr(app.state, 'MODELS', {})
     model = models.get(model_id, {})
     meta = model.get('info', {}).get('meta', {})
 
-    default_feature_ids = meta.get('defaultFeatureIds', [])
-    if not default_feature_ids:
-        return {}
-
     capabilities = meta.get('capabilities') or {}
     features = {}
 
-    # code_interpreter is excluded: it requires the frontend event emitter
-    # and does not work in headless backend execution.
-    feature_checks = {
-        'web_search': await Config.get('web.search.enable'),
-        'image_generation': await Config.get('image_generation.enable'),
-    }
+    if (
+        capabilities.get('image_generation')
+        and await Config.get('image_generation.enable')
+    ):
+        features['image_generation'] = True
 
-    for feature_id in default_feature_ids:
-        if feature_id in feature_checks:
-            # Feature must be: in defaultFeatureIds + capability enabled + admin enabled
-            if capabilities.get(feature_id) and feature_checks[feature_id]:
-                features[feature_id] = True
+    default_feature_ids = meta.get('defaultFeatureIds', [])
+    if default_feature_ids and capabilities.get('web_search') and await Config.get('web.search.enable'):
+        if 'web_search' in default_feature_ids:
+            features['web_search'] = True
 
     return features
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getAllTags } from '$lib/apis/chats';
-	import { folders, tags } from '$lib/stores';
+	import { projects, tags } from '$lib/stores';
 	import { getContext, createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import Search from '$lib/components/icons/Search.svelte';
@@ -28,8 +28,8 @@
 			description: $i18n.t('search for tags')
 		},
 		{
-			name: 'folder:',
-			description: $i18n.t('search for folders')
+			name: 'project:',
+			description: $i18n.t('search for projects')
 		},
 		{
 			name: 'pinned:',
@@ -94,16 +94,16 @@
 						type: 'tag'
 					};
 				});
-		} else if (lastWord.startsWith('folder:')) {
-			filteredItems = [...$folders]
-				.filter((folder) => {
-					const folderName = lastWord.slice(7);
-					if (folderName) {
-						const id = folder.name.replaceAll(' ', '_').toLowerCase();
-						const folderId = folderName.replaceAll(' ', '_').toLowerCase();
+		} else if (lastWord.startsWith('project:')) {
+			filteredItems = [...$projects]
+				.filter((project) => {
+					const projectName = lastWord.slice(8);
+					if (projectName) {
+						const id = project.name.replaceAll(' ', '_').toLowerCase();
+						const projectQueryId = projectName.replaceAll(' ', '_').toLowerCase();
 
-						if (id !== folderId) {
-							return id.startsWith(folderId);
+						if (id !== projectQueryId) {
+							return id.startsWith(projectQueryId);
 						} else {
 							return false;
 						}
@@ -111,11 +111,11 @@
 						return true;
 					}
 				})
-				.map((folder) => {
+				.map((project) => {
 					return {
-						id: folder.name.replaceAll(' ', '_').toLowerCase(),
-						name: folder.name,
-						type: 'folder'
+						id: project.name.replaceAll(' ', '_').toLowerCase(),
+						name: project.name,
+						type: 'project'
 					};
 				});
 		} else if (lastWord.startsWith('pinned:')) {

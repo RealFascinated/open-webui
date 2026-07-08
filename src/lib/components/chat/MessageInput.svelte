@@ -57,7 +57,7 @@
 	import { generateAutoCompletion } from '$lib/apis';
 	import { deleteFileById } from '$lib/apis/files';
 	import { getChatById } from '$lib/apis/chats';
-	import { getFolderById } from '$lib/apis/folders';
+	import { getProjectById } from '$lib/apis/projects';
 	import { getNoteById } from '$lib/apis/notes';
 	import { getSessionUser } from '$lib/apis/auths';
 
@@ -138,9 +138,7 @@
 	export let selectedSkillIds = [];
 	export let selectedFilterIds = [];
 
-	export let imageGenerationEnabled = false;
 	export let webSearchEnabled = false;
-	export let codeInterpreterEnabled = false;
 
 	export const pendingOAuthTools = [];
 
@@ -181,9 +179,7 @@
 		selectedToolIds,
 		selectedSkillIds,
 		selectedFilterIds,
-		imageGenerationEnabled,
-		webSearchEnabled,
-		codeInterpreterEnabled
+		webSearchEnabled
 	});
 
 	const inputVariableHandler = async (text: string): Promise<string> => {
@@ -466,13 +462,7 @@
 	let user = null;
 	export let placeholder = '';
 
-	type ModelCapability =
-		| 'vision'
-		| 'file_upload'
-		| 'web_search'
-		| 'image_generation'
-		| 'code_interpreter'
-		| 'terminal';
+	type ModelCapability = 'vision' | 'file_upload' | 'web_search' | 'terminal';
 	type ModelCapabilitiesById = Record<string, Partial<Record<ModelCapability, boolean>>>;
 
 	let modelCapabilitiesById: ModelCapabilitiesById = {};
@@ -500,20 +490,6 @@
 	$: webSearchCapableModels = getCapableModelIds(
 		selectedModelIds,
 		'web_search',
-		modelCapabilitiesById
-	);
-
-	let imageGenerationCapableModels = [];
-	$: imageGenerationCapableModels = getCapableModelIds(
-		selectedModelIds,
-		'image_generation',
-		modelCapabilitiesById
-	);
-
-	let codeInterpreterCapableModels = [];
-	$: codeInterpreterCapableModels = getCapableModelIds(
-		selectedModelIds,
-		'code_interpreter',
 		modelCapabilitiesById
 	);
 
@@ -550,31 +526,11 @@
 		$config?.features?.enable_web_search &&
 		($_user.role === 'admin' || $_user?.permissions?.features?.web_search);
 
-	let showImageGenerationButton = false;
-	$: showImageGenerationButton =
-		selectedModelIds.length === imageGenerationCapableModels.length &&
-		$config?.features?.enable_image_generation &&
-		($_user.role === 'admin' || $_user?.permissions?.features?.image_generation);
-
-	let showCodeInterpreterButton = false;
-	$: showCodeInterpreterButton =
-		!$selectedTerminalId &&
-		selectedModelIds.length === codeInterpreterCapableModels.length &&
-		$config?.features?.enable_code_interpreter &&
-		($_user.role === 'admin' || $_user?.permissions?.features?.code_interpreter);
-
 	let showIntegrationsButton = false;
 	$: showIntegrationsButton =
-		showImageGenerationButton ||
-		showCodeInterpreterButton ||
 		showToolsButton ||
 		showSkillsButton ||
 		(toggleFilters && toggleFilters.length > 0);
-
-	// Disable code interpreter when terminal is active (mutually exclusive)
-	$: if ($selectedTerminalId && codeInterpreterEnabled) {
-		codeInterpreterEnabled = false;
-	}
 
 	// Clear selected terminal when model doesn't support terminal
 	$: if ($selectedTerminalId && terminalCapableModels.length === 0) {
@@ -893,7 +849,7 @@
 		e.preventDefault();
 		console.log(e);
 
-		// Check if the dropped data is a sidebar chat, folder, note, or model item
+		// Check if the dropped data is a sidebar chat, project, note, or model item
 		const textData = e.dataTransfer?.getData('text/plain');
 		if (textData) {
 			try {
@@ -916,18 +872,18 @@
 					dragged = false;
 					e.stopPropagation();
 					return;
-				} else if (data.type === 'folder' && data.id) {
-					// Fetch the folder to get its name, then add as a reference folder
-					const folder = await getFolderById(localStorage.token, data.id);
-					if (folder) {
-						const folderItem = {
-							type: 'folder',
-							id: folder.id,
-							name: folder.name,
+				} else if (data.type === 'project' && data.id) {
+					// Fetch the project to get its name, then add as a reference project
+					const project = await getProjectById(localStorage.token, data.id);
+					if (project) {
+						const projectItem = {
+							type: 'project',
+							id: project.id,
+							name: project.name,
 							status: 'processed'
 						};
-						if (!files.find((f) => f.id === folderItem.id)) {
-							files = [...files, folderItem];
+						if (!files.find((f) => f.id === projectItem.id)) {
+							files = [...files, projectItem];
 						}
 					}
 					dragged = false;
@@ -1643,8 +1599,6 @@
 															selectedFilterIds = [];
 
 															webSearchEnabled = false;
-															imageGenerationEnabled = false;
-															codeInterpreterEnabled = false;
 														}
 													}}
 													on:paste={async (e) => {
@@ -1705,10 +1659,6 @@
 										bind:selectedToolIds
 										bind:selectedSkillIds
 										bind:selectedFilterIds
-										{showImageGenerationButton}
-										bind:imageGenerationEnabled
-										{showCodeInterpreterButton}
-										bind:codeInterpreterEnabled
 										onShowValves={(e) => {
 											const { type, id } = e;
 											selectedValvesType = type;

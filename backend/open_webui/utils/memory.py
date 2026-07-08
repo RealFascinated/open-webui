@@ -16,6 +16,110 @@ log = logging.getLogger(__name__)
 
 MEMORY_CONTEXT_OPEN = '<memory_context>'
 MEMORY_CONTEXT_CLOSE = '</memory_context>'
+PROJECT_MEMORY_PREFIX = 'projects'
+
+
+def project_memory_path(project_id: str | None, subpath: str | None = None) -> str | None:
+    if not project_id:
+        return clean_memory_path(subpath)
+    base = f'{PROJECT_MEMORY_PREFIX}/{project_id}'
+    subpath = clean_memory_path(subpath)
+    return f'{base}/{subpath}' if subpath else base
+
+
+def memory_visible_in_scope(memory, project_id: str | None) -> bool:
+    path = memory.path or ''
+    if not path.startswith(f'{PROJECT_MEMORY_PREFIX}/'):
+        return True
+    if not project_id:
+        return False
+    project_root = f'{PROJECT_MEMORY_PREFIX}/{project_id}'
+    return path == project_root or path.startswith(f'{project_root}/')
+
+
+def parse_always_include_paths(value: str | None) -> list[str]:
+    paths = []
+    for item in (value or '').split(','):
+        cleaned = clean_memory_path(item)
+        if cleaned:
+            paths.append(cleaned)
+    return paths
+
+
+def memory_always_include(memory, always_paths: list[str] | None = None) -> bool:
+    if (memory.meta or {}).get('always_include'):
+        return True
+    path = clean_memory_path(memory.path)
+    if not path or not always_paths:
+        return False
+    return any(path == item or path.startswith(f'{item}/') for item in always_paths)
+
+
+def memory_usage_record(memory, section: str) -> dict[str, Any]:
+    meta = memory.meta or {}
+    return {
+        'id': memory.id,
+        'content': memory.content,
+        'path': memory.path,
+        'type': memory.type,
+        'section': section,
+        'created_by': meta.get('created_by'),
+    }
+
+
+def truncate_section_lines(lines: list[str], *, char_limit: int, count_limit: int) -> list[str]:
+    if not lines:
+        return []
+
+    selected: list[str] = []
+    total = 0
+    for line in lines[: max(1, count_limit)]:
+        extra = 1 if selected else 0
+        if total + len(line) + extra > char_limit:
+            break
+        selected.append(line)
+        total += len(line) + extra
+    return selected
+
+
+def render_memory_sections(
+    sections: dict[str, list[str]],
+    *,
+    user_char_limit: int,
+    context_char_limit: int,
+    user_count_limit: int,
+    context_count_limit: int,
+) -> str | None:
+    user_lines = truncate_section_lines(
+        sections.get('user', []),
+        char_limit=user_char_limit,
+        count_limit=user_count_limit,
+    )
+    neighborhood_lines = truncate_section_lines(
+        sections.get('neighborhood', []),
+        char_limit=max(250, context_char_limit // 2),
+        count_limit=max(1, context_count_limit // 2),
+    )
+    context_lines = truncate_section_lines(
+        sections.get('context', []),
+        char_limit=context_char_limit,
+        count_limit=context_count_limit,
+    )
+
+    parts: list[str] = []
+    if user_lines:
+        parts.append('[User Memory]\n' + '\n'.join(f'- {line}' for line in user_lines))
+    if neighborhood_lines:
+        parts.append('[Memory Neighborhood]\n' + '\n'.join(f'- {line}' for line in neighborhood_lines))
+    if context_lines:
+        parts.append('[Relevant Context]\n' + '\n'.join(f'- {line}' for line in context_lines))
+
+    if not parts:
+        return None
+
+    user_rendered = '\n\n'.join(part for part in parts if part.startswith('[User Memory]'))
+    context_rendered = '\n\n'.join(part for part in parts if not part.startswith('[User Memory]'))
+    return '\n\n'.join(item for item in [user_rendered, context_rendered] if item).strip() or None
 
 
 def clean_memory_content(content: str | None) -> str:
@@ -283,13 +387,103 @@ def validate_memory_operations(form_data) -> list[dict]:
     return operations
 
 
+async def select_memories_for_review(
+    request,
+    user,
+    memories: list,
+    transcript: str,
+    *,
+    project_id: str | None = None,
+    limit: int = 60,
+) -> list:
+    scoped = [memory for memory in (memories or []) if memory_visible_in_scope(memory, project_id)]
+    if not scoped:
+        return []
+
+    config = await Config.get_many(
+        'memories.always_include_paths',
+        'rag.relevance_threshold',
+    )
+    always_paths = parse_always_include_paths(config.get('memories.always_include_paths'))
+
+    selected: list = []
+    seen_ids: set[str] = set()
+
+    for memory in scoped:
+        if memory_always_include(memory, always_paths):
+            selected.append(memory)
+            seen_ids.add(memory.id)
+
+    if project_id:
+        project_root = f'{PROJECT_MEMORY_PREFIX}/{project_id}'
+        for memory in scoped:
+            if memory.id in seen_ids:
+                continue
+            path = memory.path or ''
+            if path == project_root or path.startswith(f'{project_root}/'):
+                selected.append(memory)
+                seen_ids.add(memory.id)
+
+    query = transcript.strip()[-4000:]
+    if query:
+        try:
+            from open_webui.config import RAG_EMBEDDING_QUERY_PREFIX
+            from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
+
+            vector = await request.app.state.EMBEDDING_FUNCTION(
+                query,
+                RAG_EMBEDDING_QUERY_PREFIX,
+                user=user,
+            )
+            results = await ASYNC_VECTOR_DB_CLIENT.search(
+                collection_name=f'user-memory-{user.id}',
+                vectors=[vector],
+                limit=max(12, limit),
+            )
+            threshold = float(config.get('rag.relevance_threshold') or 0.0)
+            memory_by_id = {memory.id: memory for memory in scoped}
+            if results and results.ids and results.ids[0]:
+                for idx, memory_id in enumerate(results.ids[0]):
+                    if memory_id in seen_ids:
+                        continue
+                    if (
+                        threshold > 0
+                        and results.distances
+                        and results.distances[0]
+                        and results.distances[0][idx] < threshold
+                    ):
+                        continue
+                    memory = memory_by_id.get(memory_id)
+                    if memory:
+                        selected.append(memory)
+                        seen_ids.add(memory_id)
+        except Exception as e:
+            log.debug(f'Memory review prefilter failed: {e}')
+
+    for memory in sorted(scoped, key=lambda item: item.updated_at or 0, reverse=True):
+        if memory.id in seen_ids:
+            continue
+        selected.append(memory)
+        seen_ids.add(memory.id)
+        if len(selected) >= limit:
+            break
+
+    return selected[:limit]
+
+
 def model_allows_memory(model: dict | None) -> bool:
     return ((model or {}).get('info', {}).get('meta', {}).get('capabilities') or {}).get('memory', True)
 
 
-async def add_memory_context(request, form_data: dict, user, model: dict | None = None):
+async def add_memory_context(
+    request,
+    form_data: dict,
+    user,
+    model: dict | None = None,
+    project_id: str | None = None,
+):
     if not model_allows_memory(model):
-        return form_data
+        return form_data, []
 
     user_messages = []
     for message in reversed(form_data.get('messages', [])):
@@ -305,9 +499,38 @@ async def add_memory_context(request, form_data: dict, user, model: dict | None 
 
     query = '\n\n'.join(reversed(user_messages))[-4000:]
     if not query:
-        return form_data
+        return form_data, []
 
+    config = await Config.get_many(
+        'memories.user_char_limit',
+        'memories.context_char_limit',
+        'memories.user_count_limit',
+        'memories.context_count_limit',
+        'memories.always_include_paths',
+    )
+    try:
+        user_limit = max(250, int(config.get('memories.user_char_limit') or 2000))
+    except Exception:
+        user_limit = 2000
+    try:
+        context_limit = max(250, int(config.get('memories.context_char_limit') or 2000))
+    except Exception:
+        context_limit = 2000
+    try:
+        user_count_limit = max(1, int(config.get('memories.user_count_limit') or 5))
+    except Exception:
+        user_count_limit = 5
+    try:
+        context_count_limit = max(1, int(config.get('memories.context_count_limit') or 5))
+    except Exception:
+        context_count_limit = 5
+
+    always_paths = parse_always_include_paths(config.get('memories.always_include_paths'))
     all_memories = await Memories.get_memories_by_user_id(user.id)
+    scoped_memories = [
+        memory for memory in (all_memories or []) if memory_visible_in_scope(memory, project_id)
+    ]
+
     results = None
     try:
         from open_webui.routers.memories import QueryMemoryForm, query_memory
@@ -316,28 +539,25 @@ async def add_memory_context(request, form_data: dict, user, model: dict | None 
     except Exception as e:
         log.debug(e)
 
-    sections = {'user': [], 'neighborhood': [], 'context': []}
-    seen_ids = set()
+    sections: dict[str, list[str]] = {'user': [], 'neighborhood': [], 'context': []}
+    used_memories: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    def add_memory(memory, section: str):
+        if memory.id in seen_ids:
+            return
+        seen_ids.add(memory.id)
+        sections[section].append(memory_label(memory))
+        used_memories.append(memory_usage_record(memory, section))
+
     for memory in sorted(
-        [memory for memory in (all_memories or []) if memory.type == 'user'],
+        [memory for memory in scoped_memories if memory.type == 'user' and memory_always_include(memory, always_paths)],
         key=lambda item: (item.path or '', item.updated_at),
     ):
-        seen_ids.add(memory.id)
-        sections['user'].append(memory_label(memory))
-
-    for hint in memory_path_hints(query, all_memories):
-        for memory in search_memory_rows(
-            all_memories,
-            path=hint,
-            memory_type='context',
-            limit=4,
-        ):
-            if memory.id in seen_ids:
-                continue
-            seen_ids.add(memory.id)
-            sections['neighborhood'].append(memory_label(memory))
+        add_memory(memory, 'user')
 
     if results and hasattr(results, 'documents') and results.documents:
+        memory_by_id = {memory.id: memory for memory in scoped_memories}
         for doc_idx, doc in enumerate(results.documents[0]):
             if not doc:
                 continue
@@ -349,36 +569,34 @@ async def add_memory_context(request, form_data: dict, user, model: dict | None 
             memory_id = None
             if results.ids and results.ids[0] and len(results.ids[0]) > doc_idx:
                 memory_id = results.ids[0][doc_idx]
-            if memory_id and memory_id in seen_ids:
+            if not memory_id or memory_id in seen_ids:
                 continue
-            if memory_id:
-                seen_ids.add(memory_id)
 
-            content = str(doc)
-            if metadata.get('path') and content.startswith(f'{metadata.get("path")}\n'):
-                content = content[len(metadata.get('path')) + 1 :]
-            label = f'{metadata.get("path")}: {content}' if metadata.get('path') else content
-            sections[Memories.normalize_memory_type(metadata.get('type'))].append(label)
+            memory = memory_by_id.get(memory_id)
+            if not memory:
+                continue
 
-    parts = []
-    if sections['user']:
-        parts.append('[User Memory]\n' + '\n'.join(f'- {memory}' for memory in sections['user']))
-    if sections['neighborhood']:
-        parts.append('[Memory Neighborhood]\n' + '\n'.join(f'- {memory}' for memory in sections['neighborhood']))
-    if sections['context']:
-        parts.append('[Relevant Context]\n' + '\n'.join(f'- {memory}' for memory in sections['context']))
-    if not parts:
-        return form_data
+            section = 'user' if memory.type == 'user' else 'context'
+            add_memory(memory, section)
 
-    config = await Config.get_many('memories.user_char_limit', 'memories.context_char_limit')
-    try:
-        user_limit = max(250, int(config.get('memories.user_char_limit') or 2000))
-    except Exception:
-        user_limit = 2000
-    try:
-        context_limit = max(250, int(config.get('memories.context_char_limit') or 2000))
-    except Exception:
-        context_limit = 2000
+    for hint in memory_path_hints(query, scoped_memories):
+        for memory in search_memory_rows(
+            scoped_memories,
+            path=hint,
+            memory_type='context',
+            limit=4,
+        ):
+            add_memory(memory, 'neighborhood')
+
+    rendered = render_memory_sections(
+        sections,
+        user_char_limit=user_limit,
+        context_char_limit=context_limit,
+        user_count_limit=user_count_limit,
+        context_count_limit=context_count_limit,
+    )
+    if not rendered:
+        return form_data, []
 
     messages = form_data['messages']
     if messages and messages[0].get('role') == 'system':
@@ -389,20 +607,9 @@ async def add_memory_context(request, form_data: dict, user, model: dict | None 
             if end != -1:
                 messages[0]['content'] = (content[:start] + content[end + len(MEMORY_CONTEXT_CLOSE) :]).strip()
 
-    user_parts = [part for part in parts if part.startswith('[User Memory]')]
-    context_parts = [part for part in parts if not part.startswith('[User Memory]')]
-    rendered = '\n\n'.join(
-        [
-            '\n\n'.join(user_parts)[:user_limit],
-            '\n\n'.join(context_parts)[:context_limit],
-        ]
-    ).strip()
-    if not rendered:
-        return form_data
-
     memory_context = f'{MEMORY_CONTEXT_OPEN}\n{rendered}\n{MEMORY_CONTEXT_CLOSE}'
     form_data['messages'] = add_or_update_system_message(memory_context, messages, append=True)
-    return form_data
+    return form_data, used_memories
 
 
 async def review_memory_after_turn(
@@ -474,10 +681,11 @@ async def _review_memory(
     messages: list[dict],
 ) -> None:
     existing_memories = await Memories.get_memories_by_user_id(user.id)
-    existing_lines = [
-        f'- id={memory.id} type={memory.type} path={memory.path or ""} content={memory.content}'
-        for memory in (existing_memories or [])[:80]
-    ]
+    project_id = metadata.get('project_id')
+    if not project_id and metadata.get('chat_id'):
+        from open_webui.models.chats import Chats
+
+        project_id = await Chats.get_chat_project_id(metadata.get('chat_id'), user.id)
 
     assistant_content = assistant_message.get('content', '')
     if not isinstance(assistant_content, str):
@@ -502,6 +710,19 @@ async def _review_memory(
             assistant_final = f'{assistant_final[:1000]}\n...(truncated)...\n{assistant_final[-400:]}'
         transcript_lines.append(f'assistant_final: {assistant_final}')
 
+    transcript = '\n\n'.join(transcript_lines)
+    review_memories = await select_memories_for_review(
+        request,
+        user,
+        existing_memories or [],
+        transcript,
+        project_id=project_id,
+    )
+    existing_lines = [
+        f'- id={memory.id} type={memory.type} path={memory.path or ""} content={memory.content}'
+        for memory in review_memories
+    ]
+
     model_id = model.get('id') if isinstance(model, dict) else form_data.get('model')
     operations = await _generate_memory_operations(
         request=request,
@@ -509,12 +730,93 @@ async def _review_memory(
         model_id=model_id,
         metadata=metadata,
         existing_text='\n'.join(existing_lines) if existing_lines else '(none)',
-        transcript='\n\n'.join(transcript_lines),
+        transcript=transcript,
+        project_id=project_id,
     )
     if operations:
         from open_webui.routers.memories import UpdateMemoriesForm, update_memories
 
         await update_memories(request, UpdateMemoriesForm(operations=operations, source='background_review'), user)
+
+
+async def generate_consolidation_operations(
+    *,
+    request,
+    user,
+    model_id: str,
+    metadata: dict | None = None,
+) -> list[dict[str, Any]]:
+    existing_memories = await Memories.get_memories_by_user_id(user.id)
+    existing_lines = [
+        f'- id={memory.id} type={memory.type} path={memory.path or ""} content={memory.content}'
+        for memory in (existing_memories or [])
+    ]
+    if not existing_lines:
+        return []
+
+    from open_webui.utils.chat import generate_chat_completion
+
+    review_prompt = f"""Review all saved memories and consolidate them.
+
+Goals:
+- Merge near-duplicate memories into one stronger memory.
+- Remove redundant or stale memories.
+- Move memories into clearer paths when helpful.
+- Keep project-specific memories under projects/{{project_id}}/... when their path already indicates a project.
+
+Rules:
+- Prefer replace/move/remove over duplicate add.
+- Do not invent schemas, scores, or importance fields.
+- Return only JSON in this shape:
+  {{"operations":[
+    {{"action":"add","type":"user|context","path":"...","content":"..."}},
+    {{"action":"replace","id":"...","type":"user|context","path":"...","content":"..."}},
+    {{"action":"move","id":"...","path":"..."}},
+    {{"action":"remove","id":"..."}}
+  ]}}
+- Use an empty operations array if nothing should change.
+
+Existing memories:
+{chr(10).join(existing_lines)}
+"""
+
+    response = await generate_chat_completion(
+        request,
+        form_data={
+            'model': model_id,
+            'messages': [
+                {
+                    'role': 'system',
+                    'content': "You are Open WebUI's private memory consolidator. Return only valid JSON.",
+                },
+                {'role': 'user', 'content': review_prompt},
+            ],
+            'stream': False,
+            'metadata': {
+                'task': 'memory_consolidation',
+                **(metadata or {}),
+            },
+        },
+        user=user,
+    )
+
+    if not isinstance(response, dict) or not response.get('choices'):
+        return []
+
+    response_message = response.get('choices', [{}])[0].get('message', {})
+    content = response_message.get('content') or response_message.get('reasoning_content') or ''
+    start = content.find('{')
+    end = content.rfind('}')
+    if start == -1 or end == -1 or end < start:
+        return []
+
+    try:
+        parsed = json.loads(content[start : end + 1])
+    except Exception:
+        return []
+
+    operations = parsed.get('operations') if isinstance(parsed, dict) else None
+    return operations if isinstance(operations, list) else []
 
 
 async def _generate_memory_operations(
@@ -525,8 +827,16 @@ async def _generate_memory_operations(
     metadata: dict,
     existing_text: str,
     transcript: str,
+    project_id: str | None = None,
 ) -> list[dict[str, Any]]:
     from open_webui.utils.chat import generate_chat_completion
+
+    project_hint = ''
+    if project_id:
+        project_hint = (
+            f'\n- This chat belongs to project {project_id}. '
+            f'Prefer project-specific paths like projects/{project_id}/... when the memory is about this project.'
+        )
 
     review_prompt = f"""Review the completed conversation turn and decide whether long-term memory should change.
 
@@ -541,7 +851,7 @@ Rules:
 - Use path when there is a clear path for the memory.
 - Leave path empty when there is no clear place for the memory.
 - Prefer replace/move/remove over duplicate add when an existing memory should change.
-- Do not invent type, status, trait, score, importance, or stability schemas.
+- Do not invent type, status, trait, score, importance, or stability schemas.{project_hint}
 - Return only JSON in this shape:
   {{"operations":[
     {{"action":"add","type":"user|context","path":"...","content":"..."}},

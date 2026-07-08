@@ -58,7 +58,7 @@ export const updateChatConfig = async (token: string, config: object) => {
 	return res;
 };
 
-export const createNewChat = async (token: string, chat: object, folderId: string | null) => {
+export const createNewChat = async (token: string, chat: object, projectId: string | null) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/new`, {
@@ -70,7 +70,7 @@ export const createNewChat = async (token: string, chat: object, folderId: strin
 		},
 		body: JSON.stringify({
 			chat: chat,
-			folder_id: folderId ?? null
+			project_id: projectId ?? null
 		})
 	})
 		.then(async (res) => {
@@ -189,7 +189,7 @@ export const getChatList = async (
 	token: string = '',
 	page: number | null = null,
 	include_pinned: boolean = false,
-	include_folders: boolean = false
+	include_projects: boolean = false
 ) => {
 	let error = null;
 	const searchParams = new URLSearchParams();
@@ -198,8 +198,8 @@ export const getChatList = async (
 		searchParams.append('page', `${page}`);
 	}
 
-	if (include_folders) {
-		searchParams.append('include_folders', 'true');
+	if (include_projects) {
+		searchParams.append('include_projects', 'true');
 	}
 
 	if (include_pinned) {
@@ -506,10 +506,10 @@ export const getChatListBySearchText = async (token: string, text: string, page:
 	}));
 };
 
-export const getChatsByFolderId = async (token: string, folderId: string) => {
+export const getChatsByProjectId = async (token: string, projectId: string) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/folder/${folderId}`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/project/${projectId}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -537,7 +537,7 @@ export const getChatsByFolderId = async (token: string, folderId: string) => {
 	return res;
 };
 
-export const getChatListByFolderId = async (token: string, folderId: string, page: number = 1) => {
+export const getChatListByProjectId = async (token: string, projectId: string, page: number = 1) => {
 	let error = null;
 
 	const searchParams = new URLSearchParams();
@@ -546,7 +546,7 @@ export const getChatListByFolderId = async (token: string, folderId: string, pag
 	}
 
 	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/chats/folder/${folderId}/list?${searchParams.toString()}`,
+		`${WEBUI_API_BASE_URL}/chats/project/${projectId}/list?${searchParams.toString()}`,
 		{
 			method: 'GET',
 			headers: {
@@ -991,10 +991,10 @@ export const shareChatById = async (token: string, id: string) => {
 	return res;
 };
 
-export const updateChatFolderIdById = async (token: string, id: string, folderId?: string) => {
+export const updateChatProjectIdById = async (token: string, id: string, projectId?: string) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/folder`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/project`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -1002,7 +1002,7 @@ export const updateChatFolderIdById = async (token: string, id: string, folderId
 			...(token && { authorization: `Bearer ${token}` })
 		},
 		body: JSON.stringify({
-			folder_id: folderId
+			project_id: projectId
 		})
 	})
 		.then(async (res) => {

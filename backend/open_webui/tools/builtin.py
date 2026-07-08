@@ -48,6 +48,7 @@ from open_webui.routers.memories import (
 )
 from open_webui.routers.memories import (
     add_memory as _add_memory,
+    delete_memory_by_id as _delete_memory_by_id,
 )
 from open_webui.routers.retrieval import search_web as _search_web
 from open_webui.utils.sanitize import sanitize_code
@@ -908,10 +909,13 @@ async def delete_memory(
     try:
         user = UserModel(**__user__) if __user__ else None
 
-        result = await Memories.delete_memory_by_id_and_user_id(memory_id, user.id)
+        memory = await Memories.get_memory_by_id(memory_id)
+        if not memory or memory.user_id != user.id:
+            return json.dumps({'error': 'Memory not found or access denied'})
+
+        result = await _delete_memory_by_id(memory_id, __request__, user)
 
         if result:
-            await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=f'user-memory-{user.id}', ids=[memory_id])
             return json.dumps(
                 {'status': 'success', 'message': f'Memory {memory_id} deleted'},
                 ensure_ascii=False,
@@ -1795,15 +1799,15 @@ async def archive_chat(
         return json.dumps({'error': str(e)})
 
 
-async def list_folders(
+async def list_projects(
     __request__: Request = None,
     __user__: dict = None,
 ) -> str:
     """
-    List chat folders the user can access.
-    Use the returned folder id with move_chat_to_folder (write permission required).
+    List chat projects the user can access.
+    Use the returned project id with move_chat_to_project (write permission required).
 
-    :return: JSON list of folders with id, name, parent_id, owned, and permission
+    :return: JSON list of projects with id, name, parent_id, owned, and permission
     """
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
@@ -1813,83 +1817,83 @@ async def list_folders(
 
     try:
         from open_webui.internal.db import get_async_db_context
-        from open_webui.models.folders import Folders
+        from open_webui.models.projects import Projects
         from open_webui.models.users import Users
         from open_webui.utils.access_control import has_permission
 
         user_id = __user__.get('id')
-        config = await Config.get_many('folders.enable', 'user.permissions')
+        config = await Config.get_many('projects.enable', 'user.permissions')
 
-        if config.get('folders.enable') is False:
-            return json.dumps({'error': 'Folders are disabled'})
+        if config.get('projects.enable') is False:
+            return json.dumps({'error': 'Projects are disabled'})
 
         if __user__.get('role') != 'admin' and not await has_permission(
             user_id,
-            'features.folders',
+            'features.projects',
             config.get('user.permissions'),
         ):
             return json.dumps({'error': 'Access denied'})
 
         async with get_async_db_context() as db:
-            owned_folders = await Folders.get_folders_by_user_id(user_id, db=db)
+            owned_projects = await Projects.get_projects_by_user_id(user_id, db=db)
             groups = await Groups.get_groups_by_member_id(user_id, db=db)
             group_ids = {group.id for group in groups}
-            shared_perms = await Folders.get_shared_folder_ids_for_user(user_id, group_ids, db=db)
+            shared_perms = await Projects.get_shared_project_ids_for_user(user_id, group_ids, db=db)
 
-            folders = []
+            projects = []
             seen_ids = set()
 
-            for folder in owned_folders:
-                folders.append(
+            for project in owned_projects:
+                projects.append(
                     {
-                        'id': folder.id,
-                        'name': folder.name,
-                        'parent_id': folder.parent_id,
+                        'id': project.id,
+                        'name': project.name,
+                        'parent_id': project.parent_id,
                         'owned': True,
                         'permission': 'write',
                     }
                 )
-                seen_ids.add(folder.id)
+                seen_ids.add(project.id)
 
             owner_cache = {}
-            for folder_id, permission in shared_perms.items():
-                if folder_id in seen_ids:
+            for project_id, permission in shared_perms.items():
+                if project_id in seen_ids:
                     continue
 
-                folder = await Folders.get_folder_by_id(folder_id, db=db)
-                if not folder or folder.user_id == user_id:
+                shared_project = await Projects.get_project_by_id(project_id, db=db)
+                if not shared_project or shared_project.user_id == user_id:
                     continue
 
-                if folder.user_id not in owner_cache:
-                    owner = await Users.get_user_by_id(folder.user_id, db=db)
-                    owner_cache[folder.user_id] = owner.name if owner else 'Unknown'
+                if shared_project.user_id not in owner_cache:
+                    owner = await Users.get_user_by_id(shared_project.user_id, db=db)
+                    owner_cache[shared_project.user_id] = owner.name if owner else 'Unknown'
 
-                folders.append(
+                projects.append(
                     {
-                        'id': folder.id,
-                        'name': folder.name,
-                        'parent_id': folder.parent_id,
+                        'id': shared_project.id,
+                        'name': shared_project.name,
+                        'parent_id': shared_project.parent_id,
                         'owned': False,
-                        'owner_name': owner_cache[folder.user_id],
+                        'owner_name': owner_cache[shared_project.user_id],
                         'permission': permission,
                     }
                 )
-                seen_ids.add(folder.id)
+                seen_ids.add(shared_project.id)
 
-            # Include subfolders of shared folders (inherit parent permission)
-            for entry in list(folders):
+            # Include sub-projects of shared projects (inherit parent permission)
+            for entry in list(projects):
                 if entry.get('owned'):
                     continue
-                root = await Folders.get_folder_by_id(entry['id'], db=db)
+                root = await Projects.get_project_by_id(entry['id'], db=db)
                 if not root:
                     continue
-                children = await Folders.get_children_folders_by_id_and_user_id(root.id, root.user_id, db=db)
+                children = await Projects.get_children_projects_by_id_and_user_id(root.id, root.user_id, db=db)
                 if not children:
                     continue
                 for child in children:
                     if child.id in seen_ids:
                         continue
-                    folders.append(
+                    projects.append(
                         {
                             'id': child.id,
                             'name': child.name,
@@ -1901,32 +1905,32 @@ async def list_folders(
                     )
                     seen_ids.add(child.id)
 
-            folders.sort(key=lambda f: (f.get('name') or '').lower())
+            projects.sort(key=lambda f: (f.get('name') or '').lower())
 
             return json.dumps(
                 {
-                    'folders': folders,
-                    'total': len(folders),
+                    'projects': projects,
+                    'total': len(projects),
                 },
                 ensure_ascii=False,
             )
     except Exception as e:
-        log.exception(f'list_folders error: {e}')
+        log.exception(f'list_projects error: {e}')
         return json.dumps({'error': str(e)})
 
 
-async def create_folder(
+async def create_project(
     name: str,
     parent_id: Optional[str] = None,
     __request__: Request = None,
     __user__: dict = None,
 ) -> str:
     """
-    Create a new chat folder, optionally nested under a parent folder.
+    Create a new chat project, optionally nested under a parent project.
 
-    :param name: The folder name
-    :param parent_id: Optional parent folder ID for a subfolder
-    :return: JSON with the new folder id, name, and parent_id
+    :param name: The project name
+    :param parent_id: Optional parent project ID for a sub-project
+    :return: JSON with the new project id, name, and parent_id
     """
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
@@ -1935,78 +1939,78 @@ async def create_folder(
         return json.dumps({'error': 'User context not available'})
 
     if not name or not name.strip():
-        return json.dumps({'error': 'Folder name is required'})
+        return json.dumps({'error': 'Project name is required'})
 
     try:
         from open_webui.internal.db import get_async_db_context
-        from open_webui.models.folders import FolderForm, Folders
+        from open_webui.models.projects import ProjectForm, Projects
         from open_webui.utils.access_control import has_permission
-        from open_webui.utils.access_control.folders import has_folder_access
+        from open_webui.utils.access_control.projects import has_project_access
 
         user_id = __user__.get('id')
-        config = await Config.get_many('folders.enable', 'user.permissions')
+        config = await Config.get_many('projects.enable', 'user.permissions')
 
-        if config.get('folders.enable') is False:
-            return json.dumps({'error': 'Folders are disabled'})
+        if config.get('projects.enable') is False:
+            return json.dumps({'error': 'Projects are disabled'})
 
         if __user__.get('role') != 'admin' and not await has_permission(
             user_id,
-            'features.folders',
+            'features.projects',
             config.get('user.permissions'),
         ):
             return json.dumps({'error': 'Access denied'})
 
-        form_data = FolderForm(name=name.strip(), parent_id=parent_id)
+        form_data = ProjectForm(name=name.strip(), parent_id=parent_id)
 
         async with get_async_db_context() as db:
-            existing = await Folders.get_folder_by_parent_id_and_user_id_and_name(
+            existing = await Projects.get_project_by_parent_id_and_user_id_and_name(
                 parent_id, user_id, form_data.name, db=db
             )
             if existing:
-                return json.dumps({'error': 'Folder already exists'})
+                return json.dumps({'error': 'Project already exists'})
 
             owner_id = user_id
             if parent_id:
-                parent = await Folders.get_folder_by_id(parent_id, db=db)
+                parent = await Projects.get_project_by_id(parent_id, db=db)
                 if not parent:
-                    return json.dumps({'error': 'Parent folder not found'})
+                    return json.dumps({'error': 'Parent project not found'})
                 if parent.user_id != user_id:
-                    if __user__.get('role') != 'admin' and not await has_folder_access(
+                    if __user__.get('role') != 'admin' and not await has_project_access(
                         user_id, parent, 'write', db
                     ):
-                        return json.dumps({'error': 'Write access denied for parent folder'})
+                        return json.dumps({'error': 'Write access denied for parent project'})
                     owner_id = parent.user_id
 
-            folder = await Folders.insert_new_folder(owner_id, form_data, parent_id, db=db)
-            if not folder:
-                return json.dumps({'error': 'Failed to create folder'})
+            project = await Projects.insert_new_project(owner_id, form_data, parent_id, db=db)
+            if not project:
+                return json.dumps({'error': 'Failed to create project'})
 
             return json.dumps(
                 {
                     'status': 'success',
-                    'id': folder.id,
-                    'name': folder.name,
-                    'parent_id': folder.parent_id,
+                    'id': project.id,
+                    'name': project.name,
+                    'parent_id': project.parent_id,
                 },
                 ensure_ascii=False,
             )
     except Exception as e:
-        log.exception(f'create_folder error: {e}')
+        log.exception(f'create_project error: {e}')
         return json.dumps({'error': str(e)})
 
 
-async def move_chat_to_folder(
+async def move_chat_to_project(
     chat_id: str,
-    folder_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     __request__: Request = None,
     __user__: dict = None,
 ) -> str:
     """
-    Move a chat into a folder, or remove it from its current folder.
+    Move a chat into a project, or remove it from its current project.
 
     :param chat_id: The ID of the chat to move
-    :param folder_id: Target folder ID, or omit/null to remove the chat from any folder
-    :return: JSON with success status and updated folder assignment
+    :param project_id: Target project ID, or omit/null to remove the chat from any project
+    :return: JSON with success status and updated project assignment
     """
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
@@ -2016,8 +2020,8 @@ async def move_chat_to_folder(
 
     try:
         from open_webui.internal.db import get_async_db_context
-        from open_webui.models.folders import Folders
-        from open_webui.utils.access_control.folders import has_folder_access
+        from open_webui.models.projects import Projects
+        from open_webui.utils.access_control.projects import has_project_access
 
         user_id = __user__.get('id')
 
@@ -2027,14 +2031,14 @@ async def move_chat_to_folder(
             if not chat:
                 return json.dumps({'error': 'Chat not found or access denied'})
 
-            if folder_id:
-                if not await Folders.get_folder_by_id_and_user_id(folder_id, user_id, db=db):
-                    shared_folder = await Folders.get_folder_by_id(folder_id, db=db)
-                    if not shared_folder or not await has_folder_access(user_id, shared_folder, 'write', db):
-                        return json.dumps({'error': 'Folder not found or write access denied'})
+            if project_id:
+                if not await Projects.get_project_by_id_and_user_id(project_id, user_id, db=db):
+                    shared_project = await Projects.get_project_by_id(project_id, db=db)
+                    if not shared_project or not await has_project_access(user_id, shared_project, 'write', db):
+                        return json.dumps({'error': 'Project not found or write access denied'})
 
-            updated_chat = await Chats.update_chat_folder_id_by_id_and_user_id(
-                chat_id, user_id, folder_id, db=db
+            updated_chat = await Chats.update_chat_project_id_by_id_and_user_id(
+                chat_id, user_id, project_id, db=db
             )
 
             if not updated_chat:
@@ -2045,12 +2049,12 @@ async def move_chat_to_folder(
                     'status': 'success',
                     'id': updated_chat.id,
                     'title': updated_chat.title,
-                    'folder_id': updated_chat.folder_id,
+                    'project_id': updated_chat.project_id,
                 },
                 ensure_ascii=False,
             )
     except Exception as e:
-        log.exception(f'move_chat_to_folder error: {e}')
+        log.exception(f'move_chat_to_project error: {e}')
         return json.dumps({'error': str(e)})
 
 

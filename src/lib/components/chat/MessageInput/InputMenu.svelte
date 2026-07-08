@@ -52,19 +52,12 @@
 	export let toggleFilters: { id: string; name: string; description?: string; icon?: string }[] =
 		[];
 	export let selectedFilterIds: string[] = [];
-	export let showImageGenerationButton = false;
-	export let imageGenerationEnabled = false;
-	export let showCodeInterpreterButton = false;
-	export let codeInterpreterEnabled = false;
 	export let onShowValves: (...args: unknown[]) => unknown = () => {};
 
 	$: showExtrasSection = showIntegrationsButton || showTerminalButton || showWebSearchButton;
 
 	$: showBooleanTogglesSection =
-		(toggleFilters && toggleFilters.length > 0) ||
-		showImageGenerationButton ||
-		showCodeInterpreterButton ||
-		showWebSearchButton;
+		(toggleFilters && toggleFilters.length > 0) || showWebSearchButton;
 
 	$: showIntegrationsNavSection =
 		(($_tools ?? []).length > 0 || ($toolServers ?? []).length > 0) ||
@@ -72,10 +65,7 @@
 
 	$: showNavigationExtrasSection = showTerminalButton || showIntegrationsNavSection;
 
-	$: showIntegrationsTogglesSection =
-		(toggleFilters && toggleFilters.length > 0) ||
-		showImageGenerationButton ||
-		showCodeInterpreterButton;
+	$: showIntegrationsTogglesSection = toggleFilters && toggleFilters.length > 0;
 
 	$: systemTerminals = ($terminalServers ?? []).filter((t) => t.id);
 	$: directTerminals = ($settings?.terminalServers ?? []).filter((s) => s.url);
@@ -594,10 +584,6 @@
 							bind:selectedSkillIds
 							{toggleFilters}
 							bind:selectedFilterIds
-							{showImageGenerationButton}
-							bind:imageGenerationEnabled
-							{showCodeInterpreterButton}
-							bind:codeInterpreterEnabled
 							{onShowValves}
 						/>
 					{/if}
@@ -663,10 +649,6 @@
 								bind:selectedSkillIds
 								{toggleFilters}
 								bind:selectedFilterIds
-								{showImageGenerationButton}
-								bind:imageGenerationEnabled
-								{showCodeInterpreterButton}
-								bind:codeInterpreterEnabled
 								{onShowValves}
 							/>
 						{/if}
@@ -848,10 +830,6 @@
 						bind:selectedSkillIds
 						{toggleFilters}
 						bind:selectedFilterIds
-						{showImageGenerationButton}
-						bind:imageGenerationEnabled
-						{showCodeInterpreterButton}
-						bind:codeInterpreterEnabled
 						{onShowValves}
 					/>
 				</div>
@@ -891,10 +869,6 @@
 						bind:selectedSkillIds
 						{toggleFilters}
 						bind:selectedFilterIds
-						{showImageGenerationButton}
-						bind:imageGenerationEnabled
-						{showCodeInterpreterButton}
-						bind:codeInterpreterEnabled
 						{onShowValves}
 					/>
 				</div>

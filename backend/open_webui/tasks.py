@@ -16,6 +16,23 @@ log = logging.getLogger(__name__)
 tasks: Dict[str, asyncio.Task] = {}
 item_tasks = {}
 
+# Chat/item IDs explicitly stopped via stop_item_tasks. Checked during long
+# tool-call loops so in-flight work aborts even when the underlying HTTP client
+# does not respond promptly to asyncio cancellation.
+cancelled_items: set[str] = set()
+
+
+def mark_item_cancelled(item_id: str) -> None:
+    cancelled_items.add(item_id)
+
+
+def clear_item_cancelled(item_id: str) -> None:
+    cancelled_items.discard(item_id)
+
+
+def is_item_cancelled(item_id: Optional[str]) -> bool:
+    return bool(item_id and item_id in cancelled_items)
+
 
 REDIS_TASKS_KEY = f'{REDIS_KEY_PREFIX}:tasks'
 REDIS_ITEM_TASKS_KEY = f'{REDIS_KEY_PREFIX}:tasks:item'
@@ -105,6 +122,9 @@ async def create_task(redis, coroutine, id=None):
     """
     Create a new asyncio task and add it to the global task dictionary.
     """
+    if id:
+        clear_item_cancelled(id)
+
     task_id = str(uuid4())  # Generate a unique ID for the task
     task = asyncio.create_task(coroutine)  # Create the task
 
@@ -198,6 +218,8 @@ async def stop_item_tasks(redis: Redis, item_id: str):
     """
     Stop all tasks associated with a specific item ID.
     """
+    mark_item_cancelled(item_id)
+
     task_ids = await list_task_ids_by_item_id(redis, item_id)
     if not task_ids:
         return {'status': True, 'message': f'No tasks found for item {item_id}.'}

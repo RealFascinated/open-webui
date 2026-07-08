@@ -1,6 +1,7 @@
 import ast
 import asyncio
 import base64
+import contextlib
 import copy
 import inspect
 import json
@@ -41,9 +42,10 @@ from open_webui.env import (
     GLOBAL_LOG_LEVEL,
     RAG_SYSTEM_CONTEXT,
 )
+from open_webui.utils.ant_artifact import append_missing_artifacts_to_output
 from open_webui.models.chats import Chats
 from open_webui.models.config import Config
-from open_webui.models.folders import Folders
+from open_webui.models.projects import Projects
 from open_webui.models.functions import Functions
 from open_webui.models.models import Models
 from open_webui.models.oauth_sessions import OAuthSessions
@@ -74,8 +76,9 @@ from open_webui.socket.main import (
     get_event_call,
     get_event_emitter,
 )
+from open_webui.tasks import is_item_cancelled
 from open_webui.utils.access_control import has_connection_access, has_permission
-from open_webui.utils.access_control.files import get_accessible_folder_files
+from open_webui.utils.access_control.files import get_accessible_project_files
 from open_webui.utils.chat import generate_chat_completion
 from open_webui.utils.chat_retry import (
     StreamIdleTimeoutError,
@@ -147,11 +150,37 @@ logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
 
 
-def _raise_if_cancelled() -> None:
+def _raise_if_cancelled(chat_id: str | None = None) -> None:
     """Propagate task cancellation during long tool-call loops."""
+    if is_item_cancelled(chat_id):
+        raise asyncio.CancelledError()
+
     task = asyncio.current_task()
     if task is not None and task.cancelling():
         raise asyncio.CancelledError()
+
+
+def _mark_in_progress_output_cancelled(output: list) -> None:
+    for item in output:
+        if item.get('status') == 'in_progress':
+            item['status'] = 'cancelled'
+
+
+async def _await_with_cancellation(coro, chat_id: str | None = None):
+    """Run a coroutine and cancel it when the chat task is stopped."""
+    task = asyncio.create_task(coro)
+    try:
+        while not task.done():
+            _raise_if_cancelled(chat_id)
+            done, _ = await asyncio.wait({task}, timeout=0.25)
+            if done:
+                return task.result()
+        return task.result()
+    except asyncio.CancelledError:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        raise
 
 
 # We believe in one maker of all models, seen and unseen,
@@ -1157,6 +1186,7 @@ async def chat_completion_tools_handler(
 
     skip_files = False
     sources = []
+    chat_id = metadata.get('chat_id')
 
     specs = [tool['spec'] for tool in tools.values()]
     tools_specs = json.dumps(specs, ensure_ascii=False)
@@ -1211,22 +1241,30 @@ async def chat_completion_tools_handler(
                     tool_function_params = {k: v for k, v in tool_function_params.items() if k in allowed_params}
 
                     if tool.get('direct', False):
-                        tool_result = await event_caller(
-                            {
-                                'type': 'execute:tool',
-                                'data': {
-                                    'id': str(uuid4()),
-                                    'name': tool_function_name,
-                                    'params': tool_function_params,
-                                    'server': tool.get('server', {}),
-                                    'session_id': metadata.get('session_id', None),
-                                },
-                            }
+                        tool_result = await _await_with_cancellation(
+                            event_caller(
+                                {
+                                    'type': 'execute:tool',
+                                    'data': {
+                                        'id': str(uuid4()),
+                                        'name': tool_function_name,
+                                        'params': tool_function_params,
+                                        'server': tool.get('server', {}),
+                                        'session_id': metadata.get('session_id', None),
+                                    },
+                                }
+                            ),
+                            chat_id,
                         )
                     else:
                         tool_function = tool['callable']
-                        tool_result = await tool_function(**tool_function_params)
+                        tool_result = await _await_with_cancellation(
+                            tool_function(**tool_function_params),
+                            chat_id,
+                        )
 
+                except asyncio.CancelledError:
+                    raise
                 except Exception as e:
                     tool_result = str(e)
 
@@ -1297,10 +1335,10 @@ async def chat_completion_tools_handler(
             # check if "tool_calls" in result
             if result.get('tool_calls'):
                 for tool_call in result.get('tool_calls'):
-                    _raise_if_cancelled()
+                    _raise_if_cancelled(chat_id)
                     await tool_call_handler(tool_call)
             else:
-                _raise_if_cancelled()
+                _raise_if_cancelled(chat_id)
                 await tool_call_handler(result)
 
         except Exception as e:
@@ -2057,9 +2095,13 @@ def process_messages_with_output(
 
     for message in messages:
         if message.get('role') == 'assistant' and message.get('output'):
+            output = append_missing_artifacts_to_output(
+                message.get('output'),
+                message.get('content'),
+            )
             # Use output items for clean OpenAI-format messages
             output_messages = convert_output_to_messages(
-                message['output'],
+                output,
                 raw=True,
                 reasoning_format=reasoning_format,
             )
@@ -2458,25 +2500,25 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     # Folder "Project" handling
     # Check if the request has chat_id and is inside of a folder
-    # Uses lightweight column query — only fetches folder_id, not the full chat JSON blob
+    # Uses lightweight column query — only fetches project_id, not the full chat JSON blob
     chat_id = metadata.get('chat_id', None)
-    folder_id = None
+    project_id = None
     if chat_id and user:
-        folder_id = await Chats.get_chat_folder_id(chat_id, user.id)
+        project_id = await Chats.get_chat_project_id(chat_id, user.id)
 
-    # Fallback: use folder_id from metadata (temporary chats have no DB record)
-    if not folder_id:
-        folder_id = metadata.get('folder_id', None)
+    # Fallback: use project_id from metadata (temporary chats have no DB record)
+    if not project_id:
+        project_id = metadata.get('project_id', None)
 
-    if folder_id and user:
-        folder = await Folders.get_folder_by_id_and_user_id(folder_id, user.id)
+    if project_id and user:
+        folder = await Projects.get_project_by_id_and_user_id(project_id, user.id)
 
         if folder and folder.data:
             if 'system_prompt' in folder.data:
                 form_data = await apply_system_prompt_to_body(folder.data['system_prompt'], form_data, metadata, user)
             if 'files' in folder.data:
                 # Defensive: filter to entries the caller can still read.
-                allowed_files = await get_accessible_folder_files(folder.data['files'], user)
+                allowed_files = await get_accessible_project_files(folder.data['files'], user)
                 if metadata.get('params', {}).get('function_calling') == 'legacy':
                     form_data['files'] = [
                         *allowed_files,
@@ -2485,7 +2527,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 else:
                     # Native FC: skip RAG injection, builtin tools
                     # will read folder knowledge from metadata.
-                    metadata['folder_knowledge'] = allowed_files
+                    metadata['project_knowledge'] = allowed_files
 
     # Model "Knowledge" handling
     user_message = get_last_user_message(form_data['messages'])
@@ -2574,7 +2616,21 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         if 'memory' in features and features['memory'] and await Config.get('memories.system_context.enable'):
             if track_context:
                 _record_context_snapshot(metadata, 'pre_memory', form_data.get('messages', []))
-            form_data = await add_memory_context(request, form_data, user, model)
+            form_data, used_memories = await add_memory_context(
+                request, form_data, user, model, project_id=project_id
+            )
+            if used_memories:
+                metadata['memory_context'] = used_memories
+                await event_emitter(
+                    {
+                        'type': 'status',
+                        'data': {
+                            'action': 'memory_context',
+                            'memories': used_memories,
+                            'done': True,
+                        },
+                    }
+                )
             if track_context:
                 _record_context_snapshot(metadata, 'post_memory', form_data.get('messages', []))
 
@@ -2625,7 +2681,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     tool_ids = form_data.pop('tool_ids', None)
     terminal_id = form_data.pop('terminal_id', None)
     files = form_data.pop('files', None)
-    form_data.pop('folder_id', None)
+    form_data.pop('project_id', None)
 
     # If the original caller provided tools, use them as-is (skip resolution).
     # Otherwise, save any tools that filter inlets added for merging later.
@@ -2705,14 +2761,14 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             files = []
 
         for file_item in files:
-            if file_item.get('type', 'file') == 'folder':
+            if file_item.get('type', 'file') == 'project':
                 # Get folder files
-                folder_id = file_item.get('id', None)
-                if folder_id:
-                    folder = await Folders.get_folder_by_id_and_user_id(folder_id, user.id)
+                project_id = file_item.get('id', None)
+                if project_id:
+                    folder = await Projects.get_project_by_id_and_user_id(project_id, user.id)
                     if folder and folder.data and 'files' in folder.data:
-                        files = [f for f in files if f.get('id', None) != folder_id]
-                        files = [*files, *await get_accessible_folder_files(folder.data['files'], user)]
+                        files = [f for f in files if f.get('id', None) != project_id]
+                        files = [*files, *await get_accessible_project_files(folder.data['files'], user)]
 
         # Remove duplicate files based on their content
         files = list({json.dumps(f, sort_keys=True): f for f in files}.values())
@@ -2724,7 +2780,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             for _msg in form_data.get('messages', []):
                 for _file in _msg.get('files') or []:
                     _ftype = _file.get('type')
-                    if _ftype in ('doc', 'text', 'note', 'chat', 'collection', 'folder'):
+                    if _ftype in ('doc', 'text', 'note', 'chat', 'collection', 'project'):
                         chat_has_files = True
                         break
                     if _ftype == 'file' and _file.get('id'):
@@ -2740,7 +2796,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 for _msg in (_chat.chat.get('history', {}).get('messages') or {}).values():
                     for _file in _msg.get('files') or []:
                         _ftype = _file.get('type')
-                        if _ftype in ('doc', 'text', 'note', 'chat', 'collection', 'folder'):
+                        if _ftype in ('doc', 'text', 'note', 'chat', 'collection', 'project'):
                             chat_has_files = True
                             break
                         if _ftype == 'file' and _file.get('id'):
@@ -4113,6 +4169,8 @@ async def streaming_chat_response_handler(response, ctx):
                     reasoning_tags = DEFAULT_REASONING_TAGS
 
             try:
+                chat_id = metadata.get('chat_id')
+
                 for event in events:
                     await event_emitter(
                         {
@@ -4812,7 +4870,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                 for attempt in range(CHAT_RESPONSE_MAX_EMPTY_RETRIES + 1):
                     if attempt > 0:
-                        _raise_if_cancelled()
+                        _raise_if_cancelled(chat_id)
                         retry_reason = get_retry_reason(
                             output,
                             content,
@@ -4867,7 +4925,7 @@ async def streaming_chat_response_handler(response, ctx):
                         CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS is None
                         or tool_call_iterations < CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS
                     ):
-                        _raise_if_cancelled()
+                        _raise_if_cancelled(chat_id)
                         tool_call_iterations += 1
 
                         response_tool_calls = tool_calls.pop(0)
@@ -4904,7 +4962,7 @@ async def streaming_chat_response_handler(response, ctx):
                         results = []
 
                         for tool_call in response_tool_calls:
-                            _raise_if_cancelled()
+                            _raise_if_cancelled(chat_id)
                             tool_call_id = tool_call.get('id', '')
                             tool_function_name = tool_call.get('function', {}).get('name', '')
                             tool_args = tool_call.get('function', {}).get('arguments', '{}')
@@ -4953,17 +5011,20 @@ async def streaming_chat_response_handler(response, ctx):
                                     }
 
                                     if direct_tool:
-                                        tool_result = await event_caller(
-                                            {
-                                                'type': 'execute:tool',
-                                                'data': {
-                                                    'id': str(uuid4()),
-                                                    'name': tool_function_name,
-                                                    'params': tool_function_params,
-                                                    'server': tool.get('server', {}),
-                                                    'session_id': metadata.get('session_id', None),
-                                                },
-                                            }
+                                        tool_result = await _await_with_cancellation(
+                                            event_caller(
+                                                {
+                                                    'type': 'execute:tool',
+                                                    'data': {
+                                                        'id': str(uuid4()),
+                                                        'name': tool_function_name,
+                                                        'params': tool_function_params,
+                                                        'server': tool.get('server', {}),
+                                                        'session_id': metadata.get('session_id', None),
+                                                    },
+                                                }
+                                            ),
+                                            chat_id,
                                         )
 
                                     else:
@@ -4975,8 +5036,13 @@ async def streaming_chat_response_handler(response, ctx):
                                             },
                                         )
 
-                                        tool_result = await tool_function(**tool_function_params)
+                                        tool_result = await _await_with_cancellation(
+                                            tool_function(**tool_function_params),
+                                            chat_id,
+                                        )
 
+                                except asyncio.CancelledError:
+                                    raise
                                 except Exception as e:
                                     tool_result = str(e)
                             else:
@@ -5163,7 +5229,7 @@ async def streaming_chat_response_handler(response, ctx):
                         )
 
                         try:
-                            _raise_if_cancelled()
+                            _raise_if_cancelled(chat_id)
                             new_form_data = {
                                 **form_data,
                                 'model': model_id,
@@ -5543,6 +5609,16 @@ async def streaming_chat_response_handler(response, ctx):
                         pass
 
                 async def save_cancelled_state():
+                    cancelled_output = full_output()
+                    _mark_in_progress_output_cancelled(cancelled_output)
+                    await event_emitter(
+                        {
+                            'type': 'chat:completion',
+                            'data': {
+                                'output': cancelled_output,
+                            },
+                        }
+                    )
                     await event_emitter({'type': 'chat:tasks:cancel'})
                     if not metadata.get('chat_id', '').startswith('channel:'):
                         if not ENABLE_REALTIME_CHAT_SAVE:
@@ -5551,14 +5627,14 @@ async def streaming_chat_response_handler(response, ctx):
                                 metadata['message_id'],
                                 {
                                     'done': True,
-                                    'output': output,
+                                    'output': cancelled_output,
                                 },
                             )
                         else:
                             await Chats.upsert_message_to_chat_by_id_and_message_id(
                                 metadata['chat_id'],
                                 metadata['message_id'],
-                                {'done': True},
+                                {'done': True, 'output': cancelled_output},
                             )
 
                 try:
@@ -5622,11 +5698,12 @@ async def process_non_streaming_with_retries(response, ctx):
     form_data = ctx['form_data']
     user = ctx['user']
     event_emitter = ctx.get('event_emitter')
+    chat_id = ctx.get('metadata', {}).get('chat_id')
     current_response = response
 
     for attempt in range(CHAT_RESPONSE_MAX_EMPTY_RETRIES + 1):
         if attempt > 0:
-            _raise_if_cancelled()
+            _raise_if_cancelled(chat_id)
             await emit_chat_retry_status(event_emitter, attempt, CHAT_RESPONSE_MAX_EMPTY_RETRIES, 'empty')
             current_response = await generate_chat_completion(request, form_data, user)
             if isinstance(current_response, JSONResponse) and current_response.status_code >= 400:
@@ -5642,6 +5719,22 @@ async def process_non_streaming_with_retries(response, ctx):
             return result
         if attempt >= CHAT_RESPONSE_MAX_EMPTY_RETRIES:
             await emit_chat_retry_exhausted(event_emitter, CHAT_RESPONSE_MAX_EMPTY_RETRIES, 'empty')
+            if event_emitter:
+                metadata = ctx.get('metadata', {})
+                chat_id = metadata.get('chat_id')
+                message_id = metadata.get('message_id')
+                if chat_id and message_id and not chat_id.startswith('channel:'):
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
+                        chat_id,
+                        message_id,
+                        {'done': True},
+                    )
+                await event_emitter(
+                    {
+                        'type': 'chat:completion',
+                        'data': {'done': True},
+                    }
+                )
             return result
 
     return result

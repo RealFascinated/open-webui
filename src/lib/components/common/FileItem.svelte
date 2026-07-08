@@ -121,7 +121,7 @@
 						<PageEdit />
 					{:else if type === 'chat'}
 						<ChatBubble />
-					{:else if type === 'folder'}
+					{:else if type === 'project'}
 						<Folder />
 					{:else}
 						<DocumentPage />

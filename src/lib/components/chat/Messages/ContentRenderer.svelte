@@ -13,8 +13,10 @@
 		showEmbeds
 	} from '$lib/stores';
 	import FloatingButtons from '../ContentRenderer/FloatingButtons.svelte';
-	import { hasCompleteAntArtifact, replaceOutsideCode } from '$lib/utils';
-	import { getAssistantText } from './structuredOutput';
+	import { replaceOutsideCode } from '$lib/utils';
+	import { getOrphanStreamingArtifacts, hasAntArtifactActivity } from '$lib/utils/ant-artifact';
+	import { getAssistantVisibleText } from '$lib/utils/messageRichContent';
+	import AntArtifactCard from './Markdown/AntArtifactCard.svelte';
 
 	/**
 	 * Extracts all top-level <details>...</details> blocks from content,
@@ -72,6 +74,7 @@
 	export let content;
 	/** @type {import('./structuredOutput').OutputItem[]} */
 	export let output = [];
+	export let hiddenToolNames = undefined;
 
 	export let done = true;
 	export let model = null;
@@ -125,11 +128,12 @@
 				)
 			: messageContent;
 
-	// Open the artifact panel when a complete <antArtifact> tag is detected in the stream.
+	// Open the artifact panel as soon as the model starts an antArtifact block.
 	let _lastAntArtifactSeen = false;
-	$: assistantText = getAssistantText(output, content);
+	$: assistantText = getAssistantVisibleText({ content, output });
+	$: orphanStreamingArtifacts = getOrphanStreamingArtifacts(output, content);
 	$: if ($chatId && assistantText) {
-		const has = hasCompleteAntArtifact(assistantText);
+		const has = hasAntArtifactActivity(assistantText);
 		if (has && !_lastAntArtifactSeen) {
 			_lastAntArtifactSeen = true;
 			tick().then(() => {
@@ -274,6 +278,7 @@
 			{id}
 			{output}
 			{content}
+			{hiddenToolNames}
 			{model}
 			{save}
 			{preview}
@@ -289,6 +294,13 @@
 			onUpdate={markdownUpdateHandler}
 			onPreview={previewHandler}
 		/>
+		{#each orphanStreamingArtifacts as artifact (artifact.identifier || artifact.title)}
+			<AntArtifactCard
+				{artifact}
+				streaming={artifact.complete === false}
+				onPreview={previewHandler}
+			/>
+		{/each}
 	{:else if $settings?.renderMarkdownInAssistantMessages ?? true}
 		<Markdown
 			{id}

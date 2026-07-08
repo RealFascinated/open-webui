@@ -1,23 +1,34 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { user } from '$lib/stores';
+	import type { SessionUser } from '$lib/stores';
 	import { onMount } from 'svelte';
 
-	onMount(() => {
-		if ($user?.role !== 'admin') {
-			if ($user?.permissions?.workspace?.knowledge) {
-				goto('/workspace/knowledge');
-			} else if ($user?.permissions?.workspace?.prompts) {
-				goto('/workspace/prompts');
-			} else if ($user?.permissions?.workspace?.tools) {
-				goto('/workspace/tools');
-			} else if ($user?.permissions?.workspace?.skills) {
-				goto('/workspace/skills');
-			} else {
-				goto('/');
-			}
-		} else {
-			goto('/admin/settings/models');
+	const getWorkspaceHome = (sessionUser: SessionUser | undefined) => {
+		if (!sessionUser) {
+			return '/';
 		}
+
+		if (sessionUser.role === 'admin' || sessionUser.permissions?.workspace?.knowledge) {
+			return '/workspace/knowledge';
+		}
+
+		if (sessionUser.permissions?.workspace?.prompts) {
+			return '/workspace/prompts';
+		}
+
+		if (sessionUser.permissions?.workspace?.tools) {
+			return '/workspace/tools';
+		}
+
+		if (sessionUser.permissions?.workspace?.skills) {
+			return '/workspace/skills';
+		}
+
+		return '/';
+	};
+
+	onMount(() => {
+		goto(getWorkspaceHome($user));
 	});
 </script>

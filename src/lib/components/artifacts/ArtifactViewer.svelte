@@ -16,9 +16,10 @@
 	} from '$lib/apis/artifacts';
 	import type { ArtifactWithCode } from '$lib/apis/artifacts';
 
-	import { config, settings } from '$lib/stores';
+	import { config, settings, theme } from '$lib/stores';
 	import { injectCsp } from '$lib/utils/csp';
 	import { injectStorageBridge } from '$lib/utils/artifact-storage-bridge';
+	import { resolveArtifactCanvasTheme } from '$lib/utils/artifact-theme';
 	import {
 		artifactEditableSource,
 		artifactPreviewHtml,
@@ -117,9 +118,16 @@
 
 	$: displayLabel = artifact ? artifactDisplayLabel(artifact.type, artifact.meta) : '';
 
+	$: artifactCanvasTheme = resolveArtifactCanvasTheme($theme);
+
 	$: srcdoc = (() => {
 		if (!artifact || isMarkdown || isSvg) return '';
-		let html = artifactPreviewHtml(artifact.code, artifact.meta, artifact.type);
+		let html = artifactPreviewHtml(
+			artifact.code,
+			artifact.meta,
+			artifact.type,
+			artifactCanvasTheme
+		);
 		html = injectStorageBridge(html, id);
 		html = injectCsp(html, $config?.ui?.iframe_csp ?? '');
 		return html;

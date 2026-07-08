@@ -22,7 +22,7 @@ export const DEFAULT_PERMISSIONS = {
 		public_skills: false,
 		notes: false,
 		public_notes: false,
-		folders: false,
+		projects: false,
 		public_chats: false,
 		public_calendars: false
 	},
@@ -51,7 +51,7 @@ export const DEFAULT_PERMISSIONS = {
 		api_keys: false,
 		notes: true,
 		channels: true,
-		folders: true,
+		projects: true,
 		direct_tool_servers: false,
 		web_search: true,
 		image_generation: true,

@@ -8,12 +8,12 @@
 	import { getConfig, updateConfig } from '$lib/apis/evaluations';
 
 	import Switch from '$lib/components/common/Switch.svelte';
-	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Plus from '$lib/components/icons/Plus.svelte';
 	import Model from './Evaluations/Model.svelte';
 	import ArenaModelModal from './Evaluations/ArenaModelModal.svelte';
 	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import Spinner from '$lib/components/common/Spinner.svelte';
 	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 
 	const i18n = getContext('i18n');
@@ -188,10 +188,8 @@
 				{/if}
 			</AdminSettingsCard>
 		{:else}
-			<div class="flex h-full justify-center">
-				<div class="my-auto">
-					<Spinner className="size-6" />
-				</div>
+			<div class="flex h-full justify-center py-16">
+				<Spinner className="size-6" />
 			</div>
 		{/if}
 	</div>

@@ -379,11 +379,11 @@
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
 				<div class=" self-center text-xs font-medium">
-					{$i18n.t('Folders Sharing')}
+					{$i18n.t('Projects Sharing')}
 				</div>
-				<Switch bind:state={permissions.sharing.folders} />
+				<Switch bind:state={permissions.sharing.projects} />
 			</div>
-			{#if defaultPermissions?.sharing?.folders && !permissions.sharing.folders}
+			{#if defaultPermissions?.sharing?.projects && !permissions.sharing.projects}
 				<div>
 					<div class="text-xs text-gray-500">
 						{$i18n.t('This is a default user permission and will remain enabled.')}
@@ -771,11 +771,11 @@
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
 				<div class=" self-center text-xs font-medium">
-					{$i18n.t('Folders')}
+					{$i18n.t('Projects')}
 				</div>
-				<Switch bind:state={permissions.features.folders} />
+				<Switch bind:state={permissions.features.projects} />
 			</div>
-			{#if defaultPermissions?.features?.folders && !permissions.features.folders}
+			{#if defaultPermissions?.features?.projects && !permissions.features.projects}
 				<div>
 					<div class="text-xs text-gray-500">
 						{$i18n.t('This is a default user permission and will remain enabled.')}

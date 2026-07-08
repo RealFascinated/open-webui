@@ -82,13 +82,18 @@
 					id={tab.id}
 					href={tab.href}
 					draggable="false"
-					class="px-2.5 py-1.5 min-w-fit rounded-lg lg:w-full flex items-center gap-2 transition select-none {selectedTab ===
+					class="px-2.5 py-1.5 min-w-fit rounded-lg lg:w-full flex items-center gap-2.5 transition select-none {selectedTab ===
 					tab.id
 						? 'bg-gray-100 dark:bg-gray-850 text-gray-900 dark:text-white font-medium'
 						: 'text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900/60'}"
 				>
 					{#if $$slots.icon}
-						<div class="shrink-0 self-center">
+						<div
+							class="shrink-0 self-center flex items-center justify-center size-6 rounded-md {selectedTab ===
+							tab.id
+								? 'text-gray-900 dark:text-white'
+								: 'text-gray-400 dark:text-gray-500'}"
+						>
 							<slot name="icon" {tab} />
 						</div>
 					{/if}

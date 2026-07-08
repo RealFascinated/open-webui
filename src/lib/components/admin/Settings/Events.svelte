@@ -23,6 +23,8 @@
 	import Plus from '$lib/components/icons/Plus.svelte';
 	import Cog6 from '$lib/components/icons/Cog6.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
+	import AdminEmptyState from '../AdminEmptyState.svelte';
 	import { settings } from '$lib/stores';
 
 	const i18n = getContext<Writable<i18nType>>('i18n');
@@ -687,10 +689,11 @@
 	}}
 />
 
-<div class="mb-3">
-	<div class="mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Events')}</div>
-	<hr class="border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+<AdminSettingsCard
+	title="Events"
+	description="Webhook endpoints for product and audit events."
+	className="mb-3"
+>
 	<div class="mb-2.5 flex flex-col w-full justify-between">
 		<div class="flex justify-between items-center mb-1">
 			<div class="font-medium text-xs">{$i18n.t('Webhooks')}</div>
@@ -702,58 +705,65 @@
 			</Tooltip>
 		</div>
 
-		<div class="flex flex-col gap-1">
-			{#each webhooks as webhook}
-				<div class="flex w-full gap-2 items-center">
-					<div
-						class="flex-1 min-w-0 flex gap-1.5 items-center {webhook.enabled ? '' : 'opacity-50'}"
-					>
-						<div class="outline-hidden w-full bg-transparent text-sm truncate">
-							<span class="font-medium">
-								{webhook.id === 'default' ? $i18n.t('Default webhook') : webhook.name}
-							</span>
-							<span class="text-xs text-gray-500">
-								- {urlHost(webhook.url)} - {eventSummary(webhook)} - {targetSummary(webhook)}
-							</span>
+		{#if webhooks.length > 0}
+			<div class="flex flex-col gap-1">
+				{#each webhooks as webhook}
+					<div class="flex w-full gap-2 items-center">
+						<div
+							class="flex-1 min-w-0 flex gap-1.5 items-center {webhook.enabled ? '' : 'opacity-50'}"
+						>
+							<div class="outline-hidden w-full bg-transparent text-sm truncate">
+								<span class="font-medium">
+									{webhook.id === 'default' ? $i18n.t('Default webhook') : webhook.name}
+								</span>
+								<span class="text-xs text-gray-500">
+									- {urlHost(webhook.url)} - {eventSummary(webhook)} - {targetSummary(webhook)}
+								</span>
+							</div>
+						</div>
+
+						<div class="flex gap-1 items-center">
+							<Tooltip content={$i18n.t('Configure')}>
+								<button
+									class="self-center p-1 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-850 rounded-lg transition"
+									on:click={() => editWebhook(webhook)}
+									type="button"
+								>
+									<Cog6 />
+								</button>
+							</Tooltip>
+
+							<Tooltip content={webhook.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}>
+								<Switch
+									state={webhook.enabled}
+									on:change={(event) => {
+										toggleWebhook(webhook, event.detail);
+									}}
+								/>
+							</Tooltip>
 						</div>
 					</div>
-
-					<div class="flex gap-1 items-center">
-						<Tooltip content={$i18n.t('Configure')}>
-							<button
-								class="self-center p-1 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-850 rounded-lg transition"
-								on:click={() => editWebhook(webhook)}
-								type="button"
-							>
-								<Cog6 />
-							</button>
-						</Tooltip>
-
-						<Tooltip content={webhook.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}>
-							<Switch
-								state={webhook.enabled}
-								on:change={(event) => {
-									toggleWebhook(webhook, event.detail);
-								}}
-							/>
-						</Tooltip>
-					</div>
-				</div>
-			{/each}
-		</div>
-
-		{#if webhooks.length === 0}
-			<div class="text-xs text-gray-400 dark:text-gray-500">
-				{$i18n.t('No event webhooks configured.')}
+				{/each}
 			</div>
-		{/if}
-
-		<div class="mt-1.5">
-			<div class="text-xs text-gray-500">
-				{$i18n.t(
+		{:else}
+			<AdminEmptyState
+				icon="🔔"
+				title={$i18n.t('No event webhooks configured.')}
+				description={$i18n.t(
 					'Send product events as JSON to external services. Chat destinations receive readable messages.'
 				)}
+				className="my-8 mb-12"
+			/>
+		{/if}
+
+		{#if webhooks.length > 0}
+			<div class="mt-1.5">
+				<div class="text-xs text-gray-500">
+					{$i18n.t(
+						'Send product events as JSON to external services. Chat destinations receive readable messages.'
+					)}
+				</div>
 			</div>
-		</div>
+		{/if}
 	</div>
-</div>
+</AdminSettingsCard>

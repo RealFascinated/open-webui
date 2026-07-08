@@ -23,7 +23,7 @@
 </script>
 
 <div
-	class="my-2 rounded-2xl border border-gray-50 dark:border-gray-850 bg-white dark:bg-gray-900 px-4 py-3.5"
+	class="rounded-2xl border border-gray-50 dark:border-gray-850 bg-white dark:bg-gray-900 px-4 py-3.5"
 >
 	<div class="text-xs text-gray-500 dark:text-gray-400 mb-1">
 		{currency.amount} {currency.from} → {currency.to}

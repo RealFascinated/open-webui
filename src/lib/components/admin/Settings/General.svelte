@@ -95,13 +95,12 @@
 <form class="flex flex-col space-y-3 text-sm">
 	<div class="space-y-3">
 		{#if adminConfig !== null}
-			<div class="">
-				<div class="mb-3.5">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
-					<div class="mb-2.5">
+			<AdminSettingsCard
+				title="General"
+				description="Version, documentation links, and license information."
+				className="mb-3"
+			>
+				<div class="mb-2.5">
 						<div class=" mb-1 text-xs font-medium flex space-x-2 items-center">
 							<div>
 								{$i18n.t('Version')}
@@ -253,9 +252,9 @@
 							</button> -->
 						</div>
 					</div>
-				</div>
+			</AdminSettingsCard>
 
-				<AdminSettingsCard
+			<AdminSettingsCard
 					title="Features"
 					description="Toggle product features and instance-wide behavior."
 					className="mb-3"
@@ -276,17 +275,17 @@
 
 					<div class="mb-2.5 flex w-full items-center justify-between pr-2">
 						<div class=" self-center text-xs font-medium">
-							{$i18n.t('Folders')}
+							{$i18n.t('Projects')}
 						</div>
 
-						<Switch bind:state={adminConfig.ENABLE_FOLDERS} />
+						<Switch bind:state={adminConfig.ENABLE_PROJECTS} />
 					</div>
 
-					{#if adminConfig.ENABLE_FOLDERS}
+					{#if adminConfig.ENABLE_PROJECTS}
 						<div class="mb-2.5 w-full justify-between">
 							<div class="flex w-full justify-between">
 								<div class=" self-center text-xs font-medium">
-									{$i18n.t('Folder Max File Count')}
+									{$i18n.t('Project Max File Count')}
 								</div>
 							</div>
 
@@ -296,12 +295,12 @@
 									type="number"
 									min="0"
 									placeholder={$i18n.t('Leave empty for unlimited')}
-									bind:value={adminConfig.FOLDER_MAX_FILE_COUNT}
+									bind:value={adminConfig.PROJECT_MAX_FILE_COUNT}
 								/>
 							</div>
 
 							<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-								{$i18n.t('Maximum number of files allowed per folder.')}
+								{$i18n.t('Maximum number of files allowed per project.')}
 							</div>
 						</div>
 					{/if}
@@ -406,12 +405,8 @@
 
 				<Events />
 
-				<div class="mb-3.5">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('UI')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
-					<div class="mb-2.5">
+			<AdminSettingsCard title="UI" description="Instance banners and messaging." className="mb-3">
+				<div class="mb-2.5">
 						<div class="flex w-full justify-between">
 							<div class=" self-center text-xs">
 								{$i18n.t('Banners')}
@@ -450,10 +445,9 @@
 							</button>
 						</div>
 
-						<Banners bind:banners />
-					</div>
+					<Banners bind:banners />
 				</div>
-			</div>
+			</AdminSettingsCard>
 		{/if}
 	</div>
 

@@ -241,11 +241,11 @@
 				</div>
 			</div>
 		</Dropdown>
-		<Tooltip content={$i18n.t('New Folder')}>
+		<Tooltip content={$i18n.t('New Project')}>
 			<button
 				class="shrink-0 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
 				on:click={onNewFolder}
-				aria-label={$i18n.t('New Folder')}
+				aria-label={$i18n.t('New Project')}
 			>
 				<NewFolderAlt className="size-3.5" />
 			</button>

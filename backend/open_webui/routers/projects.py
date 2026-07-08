@@ -14,12 +14,12 @@ from open_webui.events import EVENTS, publish_event
 from open_webui.internal.db import get_async_session
 from open_webui.models.config import Config
 from open_webui.models.chats import Chats
-from open_webui.models.folders import (
-    FolderForm,
-    FolderModel,
-    FolderNameIdResponse,
-    Folders,
-    FolderUpdateForm,
+from open_webui.models.projects import (
+    ProjectForm,
+    ProjectModel,
+    ProjectNameIdResponse,
+    Projects,
+    ProjectUpdateForm,
 )
 from open_webui.models.access_grants import AccessGrants
 from open_webui.models.groups import Groups
@@ -28,7 +28,7 @@ from open_webui.utils.access_control import has_permission
 from open_webui.utils.access_control import (
     filter_allowed_access_grants,
 )
-from open_webui.utils.access_control.files import get_accessible_folder_files
+from open_webui.utils.access_control.files import get_accessible_project_files
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,20 +39,20 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
-from open_webui.utils.access_control.folders import has_folder_access as _has_folder_access
+from open_webui.utils.access_control.projects import has_project_access as _has_project_access
 
 
-async def check_folders_permission(request: Request, user, db=None):
-    """Verify the folders feature is enabled and the user has permission."""
-    config = await Config.get_many('folders.enable', 'user.permissions')
-    if config.get('folders.enable') is False:
+async def check_projects_permission(request: Request, user, db=None):
+    """Verify the projects feature is enabled and the user has permission."""
+    config = await Config.get_many('projects.enable', 'user.permissions')
+    if config.get('projects.enable') is False:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
     if user.role != 'admin' and not await has_permission(
         user.id,
-        'features.folders',
+        'features.projects',
         config.get('user.permissions'),
         db=db,
     ):
@@ -63,154 +63,154 @@ async def check_folders_permission(request: Request, user, db=None):
 
 
 ############################
-# Get Folders
+# Get Projects
 ############################
 
 
-@router.get('/', response_model=list[FolderNameIdResponse])
-async def get_folders(
+@router.get('/', response_model=list[ProjectNameIdResponse])
+async def get_projects(
     request: Request,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    await check_folders_permission(request, user, db=db)
+    await check_projects_permission(request, user, db=db)
 
-    folders = await Folders.get_folders_by_user_id(user.id, db=db)
+    projects = await Projects.get_projects_by_user_id(user.id, db=db)
 
-    # Verify folder data integrity
-    folder_list = []
-    for folder in folders:
-        if folder.parent_id and not await Folders.get_folder_by_id_and_user_id(folder.parent_id, user.id, db=db):
-            folder = await Folders.update_folder_parent_id_by_id_and_user_id(folder.id, user.id, None, db=db)
+    # Verify project data integrity
+    project_list = []
+    for project in projects:
+        if project.parent_id and not await Projects.get_project_by_id_and_user_id(project.parent_id, user.id, db=db):
+            project = await Projects.update_project_parent_id_by_id_and_user_id(project.id, user.id, None, db=db)
 
-        if folder.data and 'files' in folder.data:
-            accessible_files = await get_accessible_folder_files(folder.data['files'], user, db=db)
-            if len(accessible_files) != len(folder.data.get('files', [])):
-                folder.data['files'] = accessible_files
-                await Folders.update_folder_by_id_and_user_id(
-                    folder.id, user.id, FolderUpdateForm(data=folder.data), db=db
+        if project.data and 'files' in project.data:
+            accessible_files = await get_accessible_project_files(project.data['files'], user, db=db)
+            if len(accessible_files) != len(project.data.get('files', [])):
+                project.data['files'] = accessible_files
+                await Projects.update_project_by_id_and_user_id(
+                    project.id, user.id, ProjectUpdateForm(data=project.data), db=db
                 )
 
-        folder_list.append(FolderNameIdResponse(**folder.model_dump()))
+        project_list.append(ProjectNameIdResponse(**project.model_dump()))
 
-    return folder_list
+    return project_list
 
 
 ############################
-# Create Folder
+# Create Project
 ############################
 
 
 @router.post('/')
-async def create_folder(
+async def create_project(
     request: Request,
-    form_data: FolderForm,
+    form_data: ProjectForm,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    await check_folders_permission(request, user, db=db)
-    folder = await Folders.get_folder_by_parent_id_and_user_id_and_name(
+    await check_projects_permission(request, user, db=db)
+    project = await Projects.get_project_by_parent_id_and_user_id_and_name(
         form_data.parent_id, user.id, form_data.name, db=db
     )
 
-    if folder:
+    if project:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.DEFAULT('Folder already exists'),
+            detail=ERROR_MESSAGES.DEFAULT('Project already exists'),
         )
 
-    # Check if creating a subfolder in a shared folder
+    # Check if creating a subfolder in a shared project
     if form_data.parent_id:
-        parent = await Folders.get_folder_by_id(form_data.parent_id, db=db)
+        parent = await Projects.get_project_by_id(form_data.parent_id, db=db)
         if parent and parent.user_id != user.id:
-            # Creating subfolder in someone else's shared folder
-            if user.role != 'admin' and not await _has_folder_access(user.id, parent, 'write', db):
+            # Creating subfolder in someone else's shared project
+            if user.role != 'admin' and not await _has_project_access(user.id, parent, 'write', db):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
                 )
-            # Create as the folder owner's subfolder (keep tree consistent)
+            # Create as the project owner's subfolder (keep tree consistent)
             try:
-                folder = await Folders.insert_new_folder(parent.user_id, form_data, form_data.parent_id, db=db)
+                project = await Projects.insert_new_project(parent.user_id, form_data, form_data.parent_id, db=db)
                 await publish_event(
                     request,
-                    EVENTS.FOLDER_CREATED,
+                    EVENTS.PROJECT_CREATED,
                     actor=user,
-                    subject_id=folder.id,
-                    data={'name': folder.name, 'parent_id': folder.parent_id, 'owner_id': folder.user_id},
+                    subject_id=project.id,
+                    data={'name': project.name, 'parent_id': project.parent_id, 'owner_id': project.user_id},
                 )
-                return folder
+                return project
             except Exception as e:
                 log.exception(e)
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT('Error creating folder'),
+                    detail=ERROR_MESSAGES.DEFAULT('Error creating project'),
                 )
 
     try:
-        folder = await Folders.insert_new_folder(user.id, form_data, form_data.parent_id, db=db)
+        project = await Projects.insert_new_project(user.id, form_data, form_data.parent_id, db=db)
         await publish_event(
             request,
-            EVENTS.FOLDER_CREATED,
+            EVENTS.PROJECT_CREATED,
             actor=user,
-            subject_id=folder.id,
-            data={'name': folder.name, 'parent_id': folder.parent_id, 'owner_id': folder.user_id},
+            subject_id=project.id,
+            data={'name': project.name, 'parent_id': project.parent_id, 'owner_id': project.user_id},
         )
-        return folder
+        return project
     except Exception as e:
         log.exception(e)
-        log.error('Error creating folder')
+        log.error('Error creating project')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.DEFAULT('Error creating folder'),
+            detail=ERROR_MESSAGES.DEFAULT('Error creating project'),
         )
 
 
 ############################
-# Get Shared Folders
+# Get Shared Projects
 ############################
 
 
 @router.get('/shared')
-async def get_shared_folders(
+async def get_shared_projects(
     request: Request,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    """Get all folders shared with the current user (not owned by them)."""
-    await check_folders_permission(request, user, db=db)
+    """Get all projects shared with the current user (not owned by them)."""
+    await check_projects_permission(request, user, db=db)
     groups = await Groups.get_groups_by_member_id(user.id, db=db)
     group_ids = {g.id for g in groups}
 
-    folder_perms = await Folders.get_shared_folder_ids_for_user(user.id, group_ids, db=db)
+    project_perms = await Projects.get_shared_project_ids_for_user(user.id, group_ids, db=db)
 
-    # Filter out folders owned by the user
+    # Filter out projects owned by the user
     results = []
     owner_cache = {}
-    for folder_id, permission in folder_perms.items():
-        folder = await Folders.get_folder_by_id(folder_id, db=db)
-        if not folder or folder.user_id == user.id:
+    for project_id, permission in project_perms.items():
+        project = await Projects.get_project_by_id(project_id, db=db)
+        if not project or project.user_id == user.id:
             continue
 
         # Get owner name (cached)
-        if folder.user_id not in owner_cache:
-            owner = await Users.get_user_by_id(folder.user_id, db=db)
-            owner_cache[folder.user_id] = owner.name if owner else 'Unknown'
+        if project.user_id not in owner_cache:
+            owner = await Users.get_user_by_id(project.user_id, db=db)
+            owner_cache[project.user_id] = owner.name if owner else 'Unknown'
 
         results.append(
             {
-                **folder.model_dump(),
-                'owner_name': owner_cache[folder.user_id],
+                **project.model_dump(),
+                'owner_name': owner_cache[project.user_id],
                 'permission': permission,
             }
         )
 
-    # Also include child folders of shared folders (inheritance)
+    # Also include child projects of shared projects (inheritance)
     shared_root_ids = {r['id'] for r in results}
     for root_id in list(shared_root_ids):
-        root_folder = await Folders.get_folder_by_id(root_id, db=db)
-        if root_folder:
-            children = await Folders.get_children_folders_by_id_and_user_id(root_id, root_folder.user_id, db=db)
+        root_project = await Projects.get_project_by_id(root_id, db=db)
+        if root_project:
+            children = await Projects.get_children_projects_by_id_and_user_id(root_id, root_project.user_id, db=db)
             if children:
                 for child in children:
                     if child.id not in {r['id'] for r in results}:
@@ -218,7 +218,7 @@ async def get_shared_folders(
                             {
                                 **child.model_dump(),
                                 'owner_name': owner_cache.get(child.user_id, 'Unknown'),
-                                'permission': folder_perms.get(root_id, 'read'),
+                                'permission': project_perms.get(root_id, 'read'),
                             }
                         )
 
@@ -226,25 +226,25 @@ async def get_shared_folders(
 
 
 ############################
-# Get Folders By Id
+# Get Projects By Id
 ############################
 
 
 @router.get('/{id}', response_model=None)
-async def get_folder_by_id(
+async def get_project_by_id(
     request: Request, id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
 ):
-    await check_folders_permission(request, user, db=db)
-    folder = await Folders.get_folder_by_id_and_user_id(id, user.id, db=db)
-    if folder:
-        grants = await AccessGrants.get_grants_by_resource('folder', id, db=db)
-        return {**folder.model_dump(), 'access_grants': [g.model_dump() for g in grants]}
+    await check_projects_permission(request, user, db=db)
+    project = await Projects.get_project_by_id_and_user_id(id, user.id, db=db)
+    if project:
+        grants = await AccessGrants.get_grants_by_resource('project', id, db=db)
+        return {**project.model_dump(), 'access_grants': [g.model_dump() for g in grants]}
 
     # Check shared access
-    folder = await Folders.get_folder_by_id(id, db=db)
-    if folder and (user.role == 'admin' or await _has_folder_access(user.id, folder, 'read', db)):
-        grants = await AccessGrants.get_grants_by_resource('folder', id, db=db)
-        return {**folder.model_dump(), 'access_grants': [g.model_dump() for g in grants]}
+    project = await Projects.get_project_by_id(id, db=db)
+    if project and (user.role == 'admin' or await _has_project_access(user.id, project, 'read', db)):
+        grants = await AccessGrants.get_grants_by_resource('project', id, db=db)
+        return {**project.model_dump(), 'access_grants': [g.model_dump() for g in grants]}
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -253,7 +253,7 @@ async def get_folder_by_id(
 
 
 ############################
-# Update Folder Name By Id
+# Update Project Name By Id
 ############################
 
 
@@ -261,37 +261,37 @@ async def get_folder_by_id(
 async def update_folder_name_by_id(
     request: Request,
     id: str,
-    form_data: FolderUpdateForm,
+    form_data: ProjectUpdateForm,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    await check_folders_permission(request, user, db=db)
-    folder = await Folders.get_folder_by_id_and_user_id(id, user.id, db=db)
-    if not folder:
+    await check_projects_permission(request, user, db=db)
+    project = await Projects.get_project_by_id_and_user_id(id, user.id, db=db)
+    if not project:
         # Check shared write access
-        folder = await Folders.get_folder_by_id(id, db=db)
-        if not folder or (user.role != 'admin' and not await _has_folder_access(user.id, folder, 'write', db)):
+        project = await Projects.get_project_by_id(id, db=db)
+        if not project or (user.role != 'admin' and not await _has_project_access(user.id, project, 'write', db)):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=ERROR_MESSAGES.NOT_FOUND,
             )
 
-    if folder:
+    if project:
         if form_data.name is not None:
-            # Check if folder with same name exists
-            existing_folder = await Folders.get_folder_by_parent_id_and_user_id_and_name(
-                folder.parent_id, folder.user_id, form_data.name, db=db
+            # Check if project with same name exists
+            existing_folder = await Projects.get_project_by_parent_id_and_user_id_and_name(
+                project.parent_id, project.user_id, form_data.name, db=db
             )
             if existing_folder and existing_folder.id != id:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT('Folder already exists'),
+                    detail=ERROR_MESSAGES.DEFAULT('Project already exists'),
                 )
 
         # Validate read access to every file/collection being attached.
-        # Folder files are consumed by chat middleware as RAG context.
+        # Project files are consumed by chat middleware as RAG context.
         if form_data.data and isinstance(form_data.data.get('files'), list):
-            accessible_files = await get_accessible_folder_files(form_data.data['files'], user, db=db)
+            accessible_files = await get_accessible_project_files(form_data.data['files'], user, db=db)
             if len(accessible_files) != len(form_data.data['files']):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -299,30 +299,30 @@ async def update_folder_name_by_id(
                 )
 
         try:
-            folder = await Folders.update_folder_by_id_and_user_id(id, folder.user_id, form_data, db=db)
+            project = await Projects.update_project_by_id_and_user_id(id, project.user_id, form_data, db=db)
             await publish_event(
                 request,
-                EVENTS.FOLDER_UPDATED,
+                EVENTS.PROJECT_UPDATED,
                 actor=user,
                 subject_id=id,
-                data={'name': folder.name},
+                data={'name': project.name},
             )
-            return folder
+            return project
         except Exception as e:
             log.exception(e)
-            log.error(f'Error updating folder: {id}')
+            log.error(f'Error updating project: {id}')
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT('Error updating folder'),
+                detail=ERROR_MESSAGES.DEFAULT('Error updating project'),
             )
 
 
 ############################
-# Update Folder Parent Id By Id
+# Update Project Parent Id By Id
 ############################
 
 
-class FolderParentIdForm(BaseModel):
+class ProjectParentIdForm(BaseModel):
     parent_id: Optional[str] = None
 
 
@@ -330,39 +330,39 @@ class FolderParentIdForm(BaseModel):
 async def update_folder_parent_id_by_id(
     request: Request,
     id: str,
-    form_data: FolderParentIdForm,
+    form_data: ProjectParentIdForm,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    await check_folders_permission(request, user, db=db)
-    folder = await Folders.get_folder_by_id_and_user_id(id, user.id, db=db)
-    if folder:
-        existing_folder = await Folders.get_folder_by_parent_id_and_user_id_and_name(
-            form_data.parent_id, user.id, folder.name, db=db
+    await check_projects_permission(request, user, db=db)
+    project = await Projects.get_project_by_id_and_user_id(id, user.id, db=db)
+    if project:
+        existing_folder = await Projects.get_project_by_parent_id_and_user_id_and_name(
+            form_data.parent_id, user.id, project.name, db=db
         )
 
         if existing_folder:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT('Folder already exists'),
+                detail=ERROR_MESSAGES.DEFAULT('Project already exists'),
             )
 
         try:
-            folder = await Folders.update_folder_parent_id_by_id_and_user_id(id, user.id, form_data.parent_id, db=db)
+            project = await Projects.update_project_parent_id_by_id_and_user_id(id, user.id, form_data.parent_id, db=db)
             await publish_event(
                 request,
-                EVENTS.FOLDER_PARENT_UPDATED,
+                EVENTS.PROJECT_PARENT_UPDATED,
                 actor=user,
                 subject_id=id,
                 data={'parent_id': form_data.parent_id},
             )
-            return folder
+            return project
         except Exception as e:
             log.exception(e)
-            log.error(f'Error updating folder: {id}')
+            log.error(f'Error updating project: {id}')
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT('Error updating folder'),
+                detail=ERROR_MESSAGES.DEFAULT('Error updating project'),
             )
     else:
         raise HTTPException(
@@ -372,11 +372,11 @@ async def update_folder_parent_id_by_id(
 
 
 ############################
-# Update Folder Is Expanded By Id
+# Update Project Is Expanded By Id
 ############################
 
 
-class FolderIsExpandedForm(BaseModel):
+class ProjectIsExpandedForm(BaseModel):
     is_expanded: bool
 
 
@@ -384,24 +384,24 @@ class FolderIsExpandedForm(BaseModel):
 async def update_folder_is_expanded_by_id(
     request: Request,
     id: str,
-    form_data: FolderIsExpandedForm,
+    form_data: ProjectIsExpandedForm,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    await check_folders_permission(request, user, db=db)
-    folder = await Folders.get_folder_by_id_and_user_id(id, user.id, db=db)
-    if folder:
+    await check_projects_permission(request, user, db=db)
+    project = await Projects.get_project_by_id_and_user_id(id, user.id, db=db)
+    if project:
         try:
-            folder = await Folders.update_folder_is_expanded_by_id_and_user_id(
+            project = await Projects.update_project_is_expanded_by_id_and_user_id(
                 id, user.id, form_data.is_expanded, db=db
             )
-            return folder
+            return project
         except Exception as e:
             log.exception(e)
-            log.error(f'Error updating folder: {id}')
+            log.error(f'Error updating project: {id}')
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT('Error updating folder'),
+                detail=ERROR_MESSAGES.DEFAULT('Error updating project'),
             )
     else:
         raise HTTPException(
@@ -411,11 +411,11 @@ async def update_folder_is_expanded_by_id(
 
 
 ############################
-# Update Folder Access By Id
+# Update Project Access By Id
 ############################
 
 
-class FolderAccessGrantsForm(BaseModel):
+class ProjectAccessGrantsForm(BaseModel):
     access_grants: list[dict]
 
 
@@ -423,21 +423,21 @@ class FolderAccessGrantsForm(BaseModel):
 async def update_folder_access_by_id(
     request: Request,
     id: str,
-    form_data: FolderAccessGrantsForm,
+    form_data: ProjectAccessGrantsForm,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    await check_folders_permission(request, user, db=db)
-    folder = await Folders.get_folder_by_id(id, db=db)
-    if not folder:
+    await check_projects_permission(request, user, db=db)
+    project = await Projects.get_project_by_id(id, db=db)
+    if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
     # Only owner, admin, or write-granted user can update access
-    if user.role != 'admin' and user.id != folder.user_id:
-        if not await _has_folder_access(user.id, folder, 'write', db):
+    if user.role != 'admin' and user.id != project.user_id:
+        if not await _has_project_access(user.id, project, 'write', db):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -452,24 +452,24 @@ async def update_folder_access_by_id(
         db=db,
     )
 
-    await AccessGrants.set_access_grants('folder', id, form_data.access_grants, db=db)
+    await AccessGrants.set_access_grants('project', id, form_data.access_grants, db=db)
 
-    grants = await AccessGrants.get_grants_by_resource('folder', id, db=db)
+    grants = await AccessGrants.get_grants_by_resource('project', id, db=db)
     await publish_event(
         request,
-        EVENTS.FOLDER_ACCESS_UPDATED,
+        EVENTS.PROJECT_ACCESS_UPDATED,
         actor=user,
         subject_id=id,
         data={'grant_count': len(grants)},
     )
     return {
-        **folder.model_dump(),
+        **project.model_dump(),
         'access_grants': [g.model_dump() for g in grants],
     }
 
 
 ############################
-# Get Shared Folder Chats
+# Get Shared Project Chats
 ############################
 
 
@@ -480,19 +480,19 @@ async def get_shared_folder_chats(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    """Get chats within a shared folder. Returns readonly flag based on permission."""
-    await check_folders_permission(request, user, db=db)
-    folder = await Folders.get_folder_by_id(id, db=db)
-    if not folder:
+    """Get chats within a shared project. Returns readonly flag based on permission."""
+    await check_projects_permission(request, user, db=db)
+    project = await Projects.get_project_by_id(id, db=db)
+    if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    is_owner = user.id == folder.user_id
+    is_owner = user.id == project.user_id
     is_admin = user.role == 'admin'
-    has_write = is_owner or is_admin or await _has_folder_access(user.id, folder, 'write', db)
-    has_read = has_write or await _has_folder_access(user.id, folder, 'read', db)
+    has_write = is_owner or is_admin or await _has_project_access(user.id, project, 'write', db)
+    has_read = has_write or await _has_project_access(user.id, project, 'read', db)
 
     if not has_read:
         raise HTTPException(
@@ -500,7 +500,7 @@ async def get_shared_folder_chats(
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
-    chats = await Chats.get_all_chats_by_folder_id(id, db=db)
+    chats = await Chats.get_all_chats_by_project_id(id, db=db)
 
     # Resolve owner names for display (avatar URLs are constructed client-side)
     owner_cache: dict[str, str] = {}
@@ -513,12 +513,12 @@ async def get_shared_folder_chats(
 
     return {
         'chats': [{**chat, 'readonly': chat['user_id'] != user.id} for chat in chats],
-        'folder_permission': 'write' if has_write else 'read',
+        'project_permission': 'write' if has_write else 'read',
     }
 
 
 ############################
-# Delete Folder By Id
+# Delete Project By Id
 ############################
 
 
@@ -530,20 +530,20 @@ async def delete_folder_by_id(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    await check_folders_permission(request, user, db=db)
-    folder = await Folders.get_folder_by_id_and_user_id(id, user.id, db=db)
+    await check_projects_permission(request, user, db=db)
+    project = await Projects.get_project_by_id_and_user_id(id, user.id, db=db)
 
-    if not folder:
+    if not project:
         # Check if it's a shared subfolder with write access
-        folder = await Folders.get_folder_by_id(id, db=db)
-        if folder and folder.parent_id:
-            if user.role != 'admin' and not await _has_folder_access(user.id, folder, 'write', db):
+        project = await Projects.get_project_by_id(id, db=db)
+        if project and project.parent_id:
+            if user.role != 'admin' and not await _has_project_access(user.id, project, 'write', db):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
                 )
-        elif folder and not folder.parent_id:
-            # Root shared folders can only be deleted by owner/admin
+        elif project and not project.parent_id:
+            # Root shared projects can only be deleted by owner/admin
             if user.role != 'admin':
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -555,10 +555,10 @@ async def delete_folder_by_id(
                 detail=ERROR_MESSAGES.NOT_FOUND,
             )
 
-    folder_owner_id = folder.user_id
+    project_owner_id = project.user_id
 
-    folder_ids = await Folders.get_folder_ids_by_id_and_user_id_in_subtree(id, folder_owner_id, db=db)
-    if await Chats.count_chats_by_folder_ids_and_user_id(folder_ids, folder_owner_id, db=db):
+    project_ids = await Projects.get_project_ids_by_id_and_user_id_in_subtree(id, project_owner_id, db=db)
+    if await Chats.count_chats_by_project_ids_and_user_id(project_ids, project_owner_id, db=db):
         chat_delete_permission = await has_permission(
             user.id, 'chat.delete', await Config.get('user.permissions'), db=db
         )
@@ -568,42 +568,42 @@ async def delete_folder_by_id(
                 detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
             )
 
-    folders = []
-    folders.append(folder)
-    while folders:
-        folder = folders.pop()
-        if folder:
+    projects = []
+    projects.append(project)
+    while projects:
+        project = projects.pop()
+        if project:
             try:
-                folder_ids = await Folders.delete_folder_by_id_and_user_id(folder.id, folder_owner_id, db=db)
+                project_ids = await Projects.delete_project_by_id_and_user_id(project.id, project_owner_id, db=db)
 
-                for folder_id in folder_ids:
+                for project_id in project_ids:
                     if delete_contents:
-                        await Chats.delete_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, db=db)
+                        await Chats.delete_chats_by_user_id_and_project_id(project_owner_id, project_id, db=db)
                     else:
-                        await Chats.move_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, None, db=db)
+                        await Chats.move_chats_by_user_id_and_project_id(project_owner_id, project_id, None, db=db)
 
-                    # Clean up access grants for this folder
-                    await AccessGrants.revoke_all_access('folder', folder_id, db=db)
+                    # Clean up access grants for this project
+                    await AccessGrants.revoke_all_access('project', project_id, db=db)
 
                 await publish_event(
                     request,
-                    EVENTS.FOLDER_DELETED,
+                    EVENTS.PROJECT_DELETED,
                     actor=user,
                     subject_id=id,
-                    data={'folder_ids': folder_ids, 'delete_contents': delete_contents},
+                    data={'project_ids': project_ids, 'delete_contents': delete_contents},
                 )
                 return True
             except Exception as e:
                 log.exception(e)
-                log.error(f'Error deleting folder: {id}')
+                log.error(f'Error deleting project: {id}')
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT('Error deleting folder'),
+                    detail=ERROR_MESSAGES.DEFAULT('Error deleting project'),
                 )
             finally:
-                # Get all subfolders
-                subfolders = await Folders.get_folders_by_parent_id_and_user_id(folder.id, folder_owner_id, db=db)
-                folders.extend(subfolders)
+                # Get all subprojects
+                subprojects = await Projects.get_projects_by_parent_id_and_user_id(project.id, project_owner_id, db=db)
+                projects.extend(subprojects)
 
     else:
         raise HTTPException(

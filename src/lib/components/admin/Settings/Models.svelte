@@ -20,16 +20,13 @@
 	import { page } from '$app/stores';
 
 	import { getModels } from '$lib/apis';
-	import Search from '$lib/components/icons/Search.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import XMark from '$lib/components/icons/XMark.svelte';
-
-	import ModelEditor from '$lib/components/workspace/Models/ModelEditor.svelte';
-	import { toast } from 'svelte-sonner';
 	import Badge from '$lib/components/common/Badge.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
+	import ModelEditor from '$lib/components/workspace/Models/ModelEditor.svelte';
+	import { toast } from 'svelte-sonner';
 	import Cog6 from '$lib/components/icons/Cog6.svelte';
 	import ModelSettingsModal from './Models/ModelSettingsModal.svelte';
 	import Wrench from '$lib/components/icons/Wrench.svelte';
@@ -48,6 +45,7 @@
 	import TagSelector from '$lib/components/workspace/common/TagSelector.svelte';
 	import Pagination from '$lib/components/common/Pagination.svelte';
 	import AdminEmptyState from '$lib/components/admin/AdminEmptyState.svelte';
+	import AdminListSearchBar from '$lib/components/admin/AdminListSearchBar.svelte';
 
 	type ModelListItem = { id: string; name?: string };
 
@@ -455,30 +453,7 @@
 		<div
 			class="py-2 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100/30 dark:border-gray-850/30"
 		>
-			<div class="px-3.5 flex flex-1 items-center w-full space-x-2 py-0.5 pb-2">
-				<div class="flex flex-1 items-center">
-					<div class=" self-center ml-1 mr-3">
-						<Search className="size-3.5" />
-					</div>
-					<input
-						class=" w-full text-sm py-1 rounded-r-xl outline-hidden bg-transparent"
-						bind:value={searchValue}
-						placeholder={$i18n.t('Search Models')}
-					/>
-					{#if searchValue}
-						<div class="self-center pl-1.5 translate-y-[0.5px] rounded-l-xl bg-transparent">
-							<button
-								class="p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-								on:click={() => {
-									searchValue = '';
-								}}
-							>
-								<XMark className="size-3" strokeWidth="2" />
-							</button>
-						</div>
-					{/if}
-				</div>
-			</div>
+			<AdminListSearchBar bind:value={searchValue} placeholder="Search Models" />
 
 			<div class="px-3 flex w-full items-center bg-transparent overflow-x-auto scrollbar-none">
 				<div
@@ -760,7 +735,7 @@
 		/>
 	{/if}
 {:else}
-	<div class=" h-full w-full flex justify-center items-center">
+	<div class="h-full w-full flex justify-center items-center">
 		<Spinner className="size-5" />
 	</div>
 {/if}

@@ -15,6 +15,7 @@
 	export let id = '';
 	export let output: OutputItem[] = [];
 	export let content = '';
+	export let hiddenToolNames: Set<string> | undefined = undefined;
 	export let done = true;
 	export let model = null;
 	export let save = false;
@@ -33,7 +34,7 @@
 	const getDetailTitle = (detailToken: OutputDetailToken): unknown => detailToken.summary;
 	const getDetailAttributes = (detailToken: OutputDetailToken): unknown => detailToken.attributes;
 
-	$: displayItems = buildOutputDisplayItems(output, content) as OutputDisplayItem[];
+	$: displayItems = buildOutputDisplayItems(output, content, hiddenToolNames) as OutputDisplayItem[];
 </script>
 
 {#each displayItems as displayItem (displayItem.id)}

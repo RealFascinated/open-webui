@@ -3,6 +3,7 @@
 	import { toast } from 'svelte-sonner';
 
 	import { addNewMemory, updateMemoryById } from '$lib/apis/memories';
+	import { selectedProject } from '$lib/stores';
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -21,6 +22,10 @@
 	let path = '';
 
 	$: edit = !!memory?.id;
+	$: projectPathPrefix = $selectedProject?.id ? `projects/${$selectedProject.id}` : '';
+	$: pathPlaceholder = projectPathPrefix
+		? `${projectPathPrefix}/decisions`
+		: $i18n.t('core/preferences');
 	$: if (show) {
 		content = memory?.content ?? '';
 		type = memory?.type ?? 'user';
@@ -107,9 +112,16 @@
 								id="memory-path"
 								bind:value={path}
 								class="w-full text-sm bg-transparent outline-hidden placeholder:text-gray-300 dark:placeholder:text-gray-700"
-								placeholder={$i18n.t('Path')}
+								placeholder={pathPlaceholder}
 								autocomplete="off"
 							/>
+							{#if projectPathPrefix}
+								<div class="mt-1 text-[11px] text-gray-400">
+									{$i18n.t('Project memories use paths like {{path}}', {
+										path: `${projectPathPrefix}/...`
+									})}
+								</div>
+							{/if}
 						</div>
 					</div>
 

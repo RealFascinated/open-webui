@@ -164,10 +164,16 @@ export const updateImageGenerationConfig = async (token: string = '', config: ob
 	return res;
 };
 
-export const getImageGenerationModels = async (token: string = '') => {
+export const getImageGenerationModels = async (token: string = '', engine?: string) => {
 	let error = null;
 
-	const res = await fetch(`${IMAGES_API_BASE_URL}/models`, {
+	const searchParams = new URLSearchParams();
+	if (engine) {
+		searchParams.set('engine', engine);
+	}
+
+	const query = searchParams.toString();
+	const res = await fetch(`${IMAGES_API_BASE_URL}/models${query ? `?${query}` : ''}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',

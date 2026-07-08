@@ -10,8 +10,8 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
-	import Spinner from '$lib/components/common/Spinner.svelte';
 	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import Spinner from '$lib/components/common/Spinner.svelte';
 	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 
 	const dispatch = createEventDispatcher();
@@ -519,7 +519,7 @@
 		<AdminSaveBar {dirty} {saving} onSave={updateInterfaceHandler} onDiscard={discardHandler} />
 	</form>
 {:else}
-	<div class=" h-full w-full flex justify-center items-center">
+	<div class="h-full w-full flex justify-center items-center py-16">
 		<Spinner className="size-5" />
 	</div>
 {/if}

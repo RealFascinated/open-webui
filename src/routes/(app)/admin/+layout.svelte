@@ -74,26 +74,28 @@
 				<div class="flex w-full items-center gap-2 min-w-0">
 					<AdminTopNav />
 
-					<Tooltip content={`${$i18n.t('Search')} (⌘K)`}>
-						<button
-							type="button"
-							class="ml-auto shrink-0 flex items-center justify-between gap-3 w-44 sm:w-52 md:w-64 lg:w-72 rounded-lg border border-gray-100/30 dark:border-gray-850/30 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900/60 transition"
-							on:click={openAdminSearch}
-							aria-label={$i18n.t('Search admin')}
-						>
-							<span class="flex items-center gap-2 min-w-0">
-								<Search className="size-3.5 shrink-0" />
-								<span class="truncate text-gray-400 dark:text-gray-500">
-									{$i18n.t('Search admin...')}
-								</span>
-							</span>
-							<kbd
-								class="hidden sm:inline-flex shrink-0 items-center rounded border border-gray-100/30 dark:border-gray-850/30 px-1.5 py-0.5 text-[10px] text-gray-400"
+					{#if !$mobile}
+						<Tooltip content={`${$i18n.t('Search')} (⌘K)`}>
+							<button
+								type="button"
+								class="ml-auto shrink-0 flex items-center justify-between gap-3 w-44 sm:w-52 md:w-64 lg:w-72 rounded-lg border border-gray-100/30 dark:border-gray-850/30 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900/60 transition"
+								on:click={openAdminSearch}
+								aria-label={$i18n.t('Search admin')}
 							>
-								⌘K
-							</kbd>
-						</button>
-					</Tooltip>
+								<span class="flex items-center gap-2 min-w-0">
+									<Search className="size-3.5 shrink-0" />
+									<span class="truncate text-gray-400 dark:text-gray-500">
+										{$i18n.t('Search admin...')}
+									</span>
+								</span>
+								<kbd
+									class="hidden sm:inline-flex shrink-0 items-center rounded border border-gray-100/30 dark:border-gray-850/30 px-1.5 py-0.5 text-[10px] text-gray-400"
+								>
+									⌘K
+								</kbd>
+							</button>
+						</Tooltip>
+					{/if}
 				</div>
 			</div>
 		</nav>

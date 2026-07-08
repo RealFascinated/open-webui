@@ -18,7 +18,6 @@
 	import AddConnectionModal from '$lib/components/AddConnectionModal.svelte';
 	import OllamaConnection from './Connections/OllamaConnection.svelte';
 	import AdminSettingsCard from '../AdminSettingsCard.svelte';
-	import AdminSaveBar from '../AdminSaveBar.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -251,14 +250,8 @@
 <form class="flex flex-col text-sm">
 	<div>
 		{#if ENABLE_OPENAI_API !== null && ENABLE_OLLAMA_API !== null && connectionsConfig !== null}
-			<div class="mb-3.5">
-				<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
-
-				<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
-				<div class="my-2">
-					<div class="mt-2 space-y-2">
-						<AdminSettingsCard
+			<div class="space-y-3">
+				<AdminSettingsCard
 							title="OpenAI API"
 							description="External OpenAI-compatible model providers."
 							status={openaiStatus}
@@ -326,12 +319,9 @@
 								</div>
 							</div>
 						{/if}
-						</AdminSettingsCard>
-					</div>
-				</div>
+				</AdminSettingsCard>
 
-				<div class=" my-2">
-					<AdminSettingsCard
+				<AdminSettingsCard
 						title="Ollama API"
 						description="Local and remote Ollama model servers."
 						status={ollamaStatus}
@@ -404,24 +394,22 @@
 							</div>
 						</div>
 					{/if}
-					</AdminSettingsCard>
-				</div>
+				</AdminSettingsCard>
 
-				<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
-				<div class="my-2">
+				<AdminSettingsCard
+					title="Model List Cache"
+					description="Speed up model list loading by caching base models at startup."
+				>
 					<div class="flex justify-between items-center text-sm">
-						<div class=" text-xs font-medium">{$i18n.t('Cache Base Model List')}</div>
+						<div class="text-xs font-medium">{$i18n.t('Cache Base Model List')}</div>
 
 						<div class="flex items-center">
-							<div class="">
-								<Switch
-									bind:state={connectionsConfig.ENABLE_BASE_MODELS_CACHE}
-									on:change={async () => {
-										updateConnectionsHandler();
-									}}
-								/>
-							</div>
+							<Switch
+								bind:state={connectionsConfig.ENABLE_BASE_MODELS_CACHE}
+								on:change={async () => {
+									updateConnectionsHandler();
+								}}
+							/>
 						</div>
 					</div>
 
@@ -430,18 +418,12 @@
 							'Base Model List Cache speeds up access by fetching base models only at startup or on settings save—faster, but may not show recent base model changes.'
 						)}
 					</div>
-				</div>
+				</AdminSettingsCard>
 			</div>
 		{:else}
-			<div class="flex h-full justify-center">
-				<div class="my-auto">
-					<Spinner className="size-6" />
-				</div>
+			<div class="flex h-full justify-center py-16">
+				<Spinner className="size-6" />
 			</div>
 		{/if}
 	</div>
-
-	{#if ENABLE_OPENAI_API !== null && ENABLE_OLLAMA_API !== null && connectionsConfig !== null}
-		<AdminSaveBar autoSave />
-	{/if}
 </form>

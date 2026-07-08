@@ -21,6 +21,10 @@
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
+	import AdminEmptyState from '../AdminEmptyState.svelte';
+	import AdminDangerZone from '../AdminDangerZone.svelte';
+	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 
 	const i18n: Writable<i18nType> = getContext('i18n');
 
@@ -43,6 +47,7 @@
 	let valves = null;
 	let valves_spec = null;
 	let selectedPipelineIdx = null;
+	let showDeleteConfirm = false;
 
 	let pipelineDownloadUrl = '';
 
@@ -231,46 +236,50 @@
 	});
 </script>
 
+<ConfirmDialog
+	title={$i18n.t('Delete Pipeline')}
+	message={$i18n.t('Are you sure you want to delete this pipeline? This action cannot be undone.')}
+	bind:show={showDeleteConfirm}
+	onConfirm={deletePipelineHandler}
+/>
+
 <form class="flex flex-col space-y-3 text-sm">
-	<div>
+	<div class="space-y-3">
 		{#if PIPELINES_LIST !== null}
-			<div class="flex w-full justify-between mb-2">
-				<div class=" self-center text-sm font-medium">
-					{$i18n.t('Manage Pipelines')}
-				</div>
-			</div>
-
 			{#if PIPELINES_LIST.length > 0}
-				<div class="space-y-1">
-					<div class="flex gap-2">
-						<div class="flex-1">
-							<select
-								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
-								bind:value={selectedPipelinesUrlIdx}
-								placeholder={$i18n.t('Select a pipeline url')}
-								on:change={async () => {
-									await tick();
-									await setPipelines();
-								}}
+				<AdminSettingsCard
+					title="Pipeline Server"
+					description="Select the Open WebUI pipeline host to manage."
+					className="mb-0"
+				>
+					<div class="space-y-1">
+						<select
+							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							bind:value={selectedPipelinesUrlIdx}
+							placeholder={$i18n.t('Select a pipeline url')}
+							on:change={async () => {
+								await tick();
+								await setPipelines();
+							}}
+						>
+							<option value="" selected disabled class="bg-gray-100 dark:bg-gray-700"
+								>{$i18n.t('Select a pipeline url')}</option
 							>
-								<option value="" selected disabled class="bg-gray-100 dark:bg-gray-700"
-									>{$i18n.t('Select a pipeline url')}</option
+
+							{#each PIPELINES_LIST as pipelines, idx}
+								<option value={pipelines.idx.toString()} class="bg-gray-100 dark:bg-gray-700"
+									>{pipelines.url}</option
 								>
-
-								{#each PIPELINES_LIST as pipelines, idx}
-									<option value={pipelines.idx.toString()} class="bg-gray-100 dark:bg-gray-700"
-										>{pipelines.url}</option
-									>
-								{/each}
-							</select>
-						</div>
+							{/each}
+						</select>
 					</div>
-				</div>
+				</AdminSettingsCard>
 
-				<div class=" my-2">
-					<div class=" mb-2 text-sm font-medium">
-						{$i18n.t('Upload Pipeline')}
-					</div>
+				<AdminSettingsCard
+					title="Install Pipelines"
+					description="Upload a .py pipeline or install from a GitHub raw URL."
+					className="mb-0"
+				>
 					<div class="flex w-full">
 						<div class="flex-1 mr-2">
 							<input
@@ -350,13 +359,12 @@
 							{/if}
 						</button>
 					</div>
-				</div>
 
-				<div class=" my-2">
-					<div class=" mb-2 text-sm font-medium">
-						{$i18n.t('Install from Github URL')}
-					</div>
-					<div class="flex w-full">
+					<div class="mt-3">
+						<div class="mb-2 text-xs font-medium">
+							{$i18n.t('Install from Github URL')}
+						</div>
+						<div class="flex w-full">
 						<div class="flex-1 mr-2">
 							<input
 								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
@@ -419,6 +427,7 @@
 							{/if}
 						</button>
 					</div>
+					</div>
 
 					<div class="mt-2 text-xs text-gray-500">
 						<span class=" font-medium dark:text-gray-200">{$i18n.t('Warning:')}</span>
@@ -427,153 +436,156 @@
 							>{$i18n.t("don't fetch random pipelines from sources you don't trust.")}</span
 						>
 					</div>
-				</div>
+				</AdminSettingsCard>
 
-				<hr class="border-gray-100/30 dark:border-gray-850/30 my-3 w-full" />
-
-				{#if pipelines !== null}
-					{#if pipelines.length > 0}
-						<div class="flex w-full justify-between mb-2">
-							<div class=" self-center text-sm font-medium">
-								{$i18n.t('Pipelines Valves')}
-							</div>
-						</div>
-						<div class="space-y-1">
+				<AdminSettingsCard
+					title="Pipeline Valves"
+					description="Per-pipeline configuration exposed by the filter."
+				>
+					<div class="space-y-1">
+						{#if pipelines !== null}
 							{#if pipelines.length > 0}
-								<div class="flex gap-2">
-									<div class="flex-1">
-										<select
-											class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
-											bind:value={selectedPipelineIdx}
-											placeholder={$i18n.t('Select a pipeline')}
-											on:change={async () => {
-												await tick();
-												await getValves(selectedPipelineIdx);
-											}}
+								<select
+									class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+									bind:value={selectedPipelineIdx}
+									placeholder={$i18n.t('Select a pipeline')}
+									on:change={async () => {
+										await tick();
+										await getValves(selectedPipelineIdx);
+									}}
+								>
+									{#each pipelines as pipeline, idx}
+										<option value={idx} class="bg-gray-100 dark:bg-gray-700"
+											>{pipeline.name} ({pipeline.type ?? 'pipe'})</option
 										>
-											{#each pipelines as pipeline, idx}
-												<option value={idx} class="bg-gray-100 dark:bg-gray-700"
-													>{pipeline.name} ({pipeline.type ?? 'pipe'})</option
-												>
-											{/each}
-										</select>
-									</div>
+									{/each}
+								</select>
 
-									<button
-										aria-label={$i18n.t('Delete')}
-										class="px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
-										on:click={() => {
-											deletePipelineHandler();
-										}}
-										type="button"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											viewBox="0 0 16 16"
-											fill="currentColor"
-											class="w-4 h-4"
-										>
-											<path
-												fill-rule="evenodd"
-												d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z"
-												clip-rule="evenodd"
-											/>
-										</svg>
-									</button>
-								</div>
-							{/if}
-
-							<div class="space-y-1">
-								{#if pipelines[selectedPipelineIdx].valves}
-									{#if valves}
-										{#each Object.keys(valves_spec.properties) as property, idx}
-											<div class=" py-0.5 w-full justify-between">
-												<div class="flex w-full justify-between">
-													<div class=" self-center text-xs font-medium">
-														{valves_spec.properties[property].title}
-													</div>
-
-													<button
-														class="p-1 px-3 text-xs flex rounded-sm transition"
-														type="button"
-														on:click={() => {
-															valves[property] = (valves[property] ?? null) === null ? '' : null;
-														}}
-													>
-														{#if (valves[property] ?? null) === null}
-															<span class="ml-2 self-center"> {$i18n.t('None')} </span>
-														{:else}
-															<span class="ml-2 self-center"> {$i18n.t('Custom')} </span>
-														{/if}
-													</button>
-												</div>
-
-												{#if (valves[property] ?? null) !== null}
-													<!-- {valves[property]} -->
-													<div class="flex mt-0.5 mb-1.5 space-x-2">
-														<div class=" flex-1">
-															{#if valves_spec.properties[property]?.enum ?? null}
-																<select
-																	class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
-																	bind:value={valves[property]}
-																>
-																	{#each valves_spec.properties[property].enum as option}
-																		<option value={option} selected={option === valves[property]}>
-																			{option}
-																		</option>
-																	{/each}
-																</select>
-															{:else if (valves_spec.properties[property]?.type ?? null) === 'boolean'}
-																<div class="flex justify-between items-center">
-																	<div class="text-xs text-gray-500">
-																		{valves[property] ? $i18n.t('Enabled') : $i18n.t('Disabled')}
-																	</div>
-
-																	<div class=" pr-2">
-																		<Switch bind:state={valves[property]} />
-																	</div>
-																</div>
-															{:else}
-																<input
-																	class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
-																	type="text"
-																	placeholder={valves_spec.properties[property].title}
-																	bind:value={valves[property]}
-																	autocomplete="off"
-																	required
-																/>
-															{/if}
+								<div class="space-y-1">
+									{#if pipelines[selectedPipelineIdx].valves}
+										{#if valves}
+											{#each Object.keys(valves_spec.properties) as property, idx}
+												<div class=" py-0.5 w-full justify-between">
+													<div class="flex w-full justify-between">
+														<div class=" self-center text-xs font-medium">
+															{valves_spec.properties[property].title}
 														</div>
+
+														<button
+															class="p-1 px-3 text-xs flex rounded-sm transition"
+															type="button"
+															on:click={() => {
+																valves[property] =
+																	(valves[property] ?? null) === null ? '' : null;
+															}}
+														>
+															{#if (valves[property] ?? null) === null}
+																<span class="ml-2 self-center"> {$i18n.t('None')} </span>
+															{:else}
+																<span class="ml-2 self-center"> {$i18n.t('Custom')} </span>
+															{/if}
+														</button>
 													</div>
-												{/if}
-											</div>
-										{/each}
+
+													{#if (valves[property] ?? null) !== null}
+														<div class="flex mt-0.5 mb-1.5 space-x-2">
+															<div class=" flex-1">
+																{#if valves_spec.properties[property]?.enum ?? null}
+																	<select
+																		class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+																		bind:value={valves[property]}
+																	>
+																		{#each valves_spec.properties[property].enum as option}
+																			<option value={option} selected={option === valves[property]}>
+																				{option}
+																			</option>
+																		{/each}
+																	</select>
+																{:else if (valves_spec.properties[property]?.type ?? null) === 'boolean'}
+																	<div class="flex justify-between items-center">
+																		<div class="text-xs text-gray-500">
+																			{valves[property] ? $i18n.t('Enabled') : $i18n.t('Disabled')}
+																		</div>
+
+																		<div class=" pr-2">
+																			<Switch bind:state={valves[property]} />
+																		</div>
+																	</div>
+																{:else}
+																	<input
+																		class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+																		type="text"
+																		placeholder={valves_spec.properties[property].title}
+																		bind:value={valves[property]}
+																		autocomplete="off"
+																		required
+																	/>
+																{/if}
+															</div>
+														</div>
+													{/if}
+												</div>
+											{/each}
+										{:else}
+											<Spinner className="size-5" />
+										{/if}
 									{:else}
-										<Spinner className="size-5" />
+										<div>{$i18n.t('No valves')}</div>
 									{/if}
-								{:else}
-									<div>{$i18n.t('No valves')}</div>
-								{/if}
+								</div>
+							{:else}
+								<AdminEmptyState
+									icon="🔧"
+									title={$i18n.t('Pipelines Not Detected')}
+									description={$i18n.t('Upload or install a pipeline to configure valves.')}
+									className="my-8 mb-12"
+								/>
+							{/if}
+						{:else}
+							<div class="flex justify-center py-6">
+								<Spinner className="size-4" />
 							</div>
-						</div>
-					{:else if pipelines.length === 0}
-						<div>{$i18n.t('Pipelines Not Detected')}</div>
-					{/if}
-				{:else}
-					<div class="flex justify-center">
-						<div class="my-auto">
-							<Spinner className="size-4" />
-						</div>
+						{/if}
+					</div>
+				</AdminSettingsCard>
+
+				{#if pipelines !== null && pipelines.length > 0}
+					<div class="mt-3">
+						<AdminDangerZone
+							title="Danger Zone"
+							description="Remove installed pipelines from the server."
+						>
+							<div class="flex w-full justify-between">
+								<div class="self-center text-xs font-medium">
+									{$i18n.t('Delete selected pipeline')}
+									<span class="text-gray-500 dark:text-gray-400">
+										({pipelines[selectedPipelineIdx]?.name ?? ''})
+									</span>
+								</div>
+								<button
+									class="text-xs"
+									type="button"
+									on:click={() => {
+										showDeleteConfirm = true;
+									}}
+								>
+									{$i18n.t('Delete')}
+								</button>
+							</div>
+						</AdminDangerZone>
 					</div>
 				{/if}
 			{:else}
-				<div>{$i18n.t('Pipelines Not Detected')}</div>
+				<AdminEmptyState
+					icon="🔧"
+					title={$i18n.t('Pipelines Not Detected')}
+					description={$i18n.t('Configure a pipeline server connection in Connections first.')}
+					className="my-12"
+				/>
 			{/if}
 		{:else}
-			<div class="flex justify-center h-full">
-				<div class="my-auto">
-					<Spinner className="size-6" />
-				</div>
+			<div class="flex justify-center h-full py-16">
+				<Spinner className="size-6" />
 			</div>
 		{/if}
 	</div>

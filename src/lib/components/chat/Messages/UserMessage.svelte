@@ -45,7 +45,7 @@
 	export let pinFileToChat: (...args: unknown[]) => unknown = () => {};
 	export let pinnedFileIds = [];
 
-	const RAG_FILE_TYPES = ['doc', 'text', 'note', 'chat', 'collection', 'folder'];
+	const RAG_FILE_TYPES = ['doc', 'text', 'note', 'chat', 'collection', 'project'];
 
 	const isRagFile = (file) =>
 		RAG_FILE_TYPES.includes(file?.type) ||

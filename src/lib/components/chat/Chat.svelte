@@ -44,7 +44,7 @@
 		terminalServers,
 		terminalServersLoaded,
 		functions,
-		selectedFolder,
+		selectedProject,
 		pinnedChats,
 		showEmbeds,
 		selectedTerminalId,
@@ -54,7 +54,8 @@
 		desktopEvent,
 		pendingSubmit,
 		pendingArtifactFix,
-		type PendingArtifactFix
+		type PendingArtifactFix,
+		theme
 	} from '$lib/stores';
 
 	import {
@@ -68,10 +69,14 @@
 		removeAllDetails,
 		getCodeBlockContents,
 		parseAntArtifacts,
+		parseAntArtifactsForStream,
 		isYoutubeUrl,
 		displayFileHandler
 	} from '$lib/utils';
-	import { buildReactHtml } from '$lib/utils/react-artifact';
+	import { artifactToPanelContent } from '$lib/utils/artifact-panel';
+	import { upsertArtifactContent } from '$lib/utils/artifact-contents';
+	import { resolveArtifactCanvasTheme } from '$lib/utils/artifact-theme';
+	import { getAssistantVisibleText } from '$lib/utils/messageRichContent';
 	import { buildArtifactFixPrompt } from '$lib/utils/artifact-error-bridge';
 	import {
 		buildPublishedArtifactIdMap,
@@ -93,7 +98,7 @@
 		getPinnedChatList,
 		getTagsById,
 		updateChatById,
-		updateChatFolderIdById
+		updateChatProjectIdById
 	} from '$lib/apis/chats';
 	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
 	import { processWeb, processWebSearch, processYoutubeVideo } from '$lib/apis/retrieval';
@@ -112,7 +117,7 @@
 	import { createOpenAITextStream } from '$lib/apis/streaming';
 	import { getFunctions } from '$lib/apis/functions';
 	import { initiateOAuthRedirect } from '$lib/apis/configs';
-	import { updateFolderById } from '$lib/apis/folders';
+	import { updateProjectById } from '$lib/apis/projects';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -177,9 +182,7 @@
 	let selectedFilterIds = [];
 	let pendingOAuthTools = [];
 
-	let imageGenerationEnabled = false;
 	let webSearchEnabled = false;
-	let codeInterpreterEnabled = false;
 	let webSearchActive = false;
 	let showWebSearchConfirm = false;
 	let pendingWebSearchPrompt: string | null = null;
@@ -224,6 +227,26 @@
 		resetWebSearchConfirmation();
 	}
 
+	const modelsHaveCapability = (modelIds: string[], capability: string) => {
+		if (!modelIds.length) return false;
+
+		return modelIds.every((id) => {
+			const model = $models.find((m) => m.id === id);
+			return model?.info?.meta?.capabilities?.[capability] ?? true;
+		});
+	};
+
+	$: imageGenerationActive =
+		Boolean($config?.features?.enable_image_generation) &&
+		($user?.role === 'admin' || $user?.permissions?.features?.image_generation) &&
+		modelsHaveCapability(selectedModelIds, 'image_generation');
+
+	$: codeInterpreterActive =
+		!$selectedTerminalId &&
+		Boolean($config?.features?.enable_code_interpreter) &&
+		($user?.role === 'admin' || $user?.permissions?.features?.code_interpreter) &&
+		modelsHaveCapability(selectedModelIds, 'code_interpreter');
+
 	let showCommands = false;
 
 	let generating = false;
@@ -251,7 +274,7 @@
 	let chatFiles = [];
 	let files = [];
 
-	const RAG_FILE_TYPES = ['doc', 'text', 'note', 'chat', 'collection', 'folder'];
+	const RAG_FILE_TYPES = ['doc', 'text', 'note', 'chat', 'collection', 'project'];
 
 	const isRagFile = (item) =>
 		RAG_FILE_TYPES.includes(item?.type) ||
@@ -295,7 +318,6 @@
 		selectedSkillIds = [];
 		selectedFilterIds = [];
 		webSearchEnabled = false;
-		imageGenerationEnabled = false;
 
 		const storageChatInput = sessionStorage.getItem(
 			`chat-input${chatIdProp ? `-${chatIdProp}` : ''}`
@@ -331,8 +353,6 @@
 						selectedSkillIds = input.selectedSkillIds ?? [];
 						selectedFilterIds = input.selectedFilterIds;
 						webSearchEnabled = input.webSearchEnabled;
-						imageGenerationEnabled = input.imageGenerationEnabled;
-						codeInterpreterEnabled = input.codeInterpreterEnabled;
 					}
 				} catch {
 					// Ignore malformed persisted input state
@@ -416,8 +436,6 @@
 		selectedFilterIds = [];
 		pendingOAuthTools = [];
 		webSearchEnabled = false;
-		imageGenerationEnabled = false;
-		codeInterpreterEnabled = false;
 
 		if (selectedModelIds.filter((id) => id).length > 0) {
 			await setDefaults();
@@ -510,27 +528,11 @@
 				// Set Default Features
 				if (model?.info?.meta?.defaultFeatureIds) {
 					if (
-						model.info?.meta?.capabilities?.['image_generation'] &&
-						$config?.features?.enable_image_generation &&
-						($user?.role === 'admin' || $user?.permissions?.features?.image_generation)
-					) {
-						imageGenerationEnabled = model.info.meta.defaultFeatureIds.includes('image_generation');
-					}
-
-					if (
 						model.info?.meta?.capabilities?.['web_search'] &&
 						$config?.features?.enable_web_search &&
 						($user?.role === 'admin' || $user?.permissions?.features?.web_search)
 					) {
 						webSearchEnabled = model.info.meta.defaultFeatureIds.includes('web_search');
-					}
-
-					if (
-						model.info?.meta?.capabilities?.['code_interpreter'] &&
-						$config?.features?.enable_code_interpreter &&
-						($user?.role === 'admin' || $user?.permissions?.features?.code_interpreter)
-					) {
-						codeInterpreterEnabled = model.info.meta.defaultFeatureIds.includes('code_interpreter');
 					}
 				}
 
@@ -609,15 +611,43 @@
 
 		const history = message?.statusHistory ?? [];
 		if (
-			status.action === 'chat_retry' &&
 			history.length > 0 &&
-			history[history.length - 1]?.action === 'chat_retry'
+			history[history.length - 1]?.action === status.action &&
+			(status.action === 'chat_retry' || status.action === 'context_compaction')
 		) {
 			message.statusHistory = [...history.slice(0, -1), status];
 			return;
 		}
 
 		message.statusHistory = [...history, status];
+	};
+
+	const scrollRichResultsIntoView = async (messageId) => {
+		if (!autoScroll) return;
+
+		await tick();
+		setTimeout(() => {
+			const richResultsEl = document.getElementById(`${messageId}-rich-results`);
+			if (richResultsEl) {
+				richResultsEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+				return;
+			}
+
+			const embedEl = document.getElementById(`${messageId}-embeds-container`);
+			embedEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		}, 100);
+	};
+
+	const markOutputItemsCancelled = (message) => {
+		if (!message?.output?.length) {
+			return;
+		}
+
+		for (const item of message.output) {
+			if (item?.status === 'in_progress') {
+				item.status = 'cancelled';
+			}
+		}
 	};
 
 	const chatEventHandler = async (event, cb) => {
@@ -633,6 +663,41 @@
 
 				if (type === 'status') {
 					upsertMessageStatus(message, data);
+
+					// Retry exhaustion is emitted as a status event before the final
+					// completion event. Finalize the assistant message now so the user
+					// can send again without the message queue treating the chat as busy.
+					if (
+						data?.action === 'chat_retry' &&
+						data?.done &&
+						message?.role === 'assistant' &&
+						!message.done
+					) {
+						message.done = true;
+
+						if (message.id === history.currentId) {
+							taskIds = null;
+						}
+
+						const visibleContent = getAssistantText(message?.output, message?.content ?? '');
+						if (!visibleContent.trim() && !message.error) {
+							message.error = {
+								content:
+									data.description ||
+									$i18n.t('The model did not return a response after multiple attempts.')
+							};
+						}
+
+						chatCompletedHandler(
+							event.chat_id,
+							message.model,
+							message.id,
+							createMessagesList(history, message.id)
+						);
+
+						await tick();
+						await processNextInQueue(event.chat_id);
+					}
 				} else if (type === 'chat:active') {
 					if (!data?.active) {
 						taskIds = null;
@@ -647,10 +712,13 @@
 						taskIds = null;
 						// Set all response messages to done
 						for (const messageId of history.messages[message.parentId].childrenIds) {
-							history.messages[messageId].done = true;
+							const childMessage = history.messages[messageId];
+							markOutputItemsCancelled(childMessage);
+							childMessage.done = true;
 						}
 						await processNextInQueue($chatId);
 					} else {
+						markOutputItemsCancelled(message);
 						message.done = true;
 					}
 				} else if (type === 'chat:message:delta' || type === 'message') {
@@ -659,19 +727,12 @@
 					message.content = data.content;
 				} else if (type === 'chat:message:files' || type === 'files') {
 					message.files = data.files;
+					await scrollRichResultsIntoView(event.message_id);
 				} else if (type === 'chat:message:tasks') {
 					chatTasks = data.tasks;
 				} else if (type === 'chat:message:embeds' || type === 'embeds') {
 					message.embeds = data.embeds;
-
-					// Auto-scroll to the embed once it's rendered in the DOM
-					await tick();
-					setTimeout(() => {
-						const embedEl = document.getElementById(`${event.message_id}-embeds-container`);
-						if (embedEl) {
-							embedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-						}
-					}, 100);
+					await scrollRichResultsIntoView(event.message_id);
 				} else if (type === 'chat:message:error') {
 					message.error = data.error;
 				} else if (type === 'chat:message:follow_ups') {
@@ -682,14 +743,19 @@
 					}
 				} else if (type === 'chat:message:weather') {
 					message.weather = data;
+					await scrollRichResultsIntoView(event.message_id);
 				} else if (type === 'chat:message:options') {
 					message.options = data;
+					await scrollRichResultsIntoView(event.message_id);
 				} else if (type === 'chat:message:currency') {
 					message.currency = data;
+					await scrollRichResultsIntoView(event.message_id);
 				} else if (type === 'chat:message:map') {
 					message.map = data;
+					await scrollRichResultsIntoView(event.message_id);
 				} else if (type === 'chat:message:sports') {
 					message.sports = data;
+					await scrollRichResultsIntoView(event.message_id);
 				} else if (type === 'chat:message:followups') {
 					message.suggestedFollowups = data?.suggestions ?? data;
 				} else if (type === 'chat:outlet') {
@@ -894,11 +960,11 @@
 
 	const savedModelIds = async () => {
 		if (
-			$selectedFolder &&
+			$selectedProject &&
 			selectedModels.filter((modelId) => modelId !== '').length > 0 &&
-			!equal($selectedFolder?.data?.model_ids, selectedModels)
+			!equal($selectedProject?.data?.model_ids, selectedModels)
 		) {
-			const res = await updateFolderById(localStorage.token, $selectedFolder.id, {
+			const res = await updateProjectById(localStorage.token, $selectedProject.id, {
 				data: {
 					model_ids: selectedModels
 				}
@@ -1005,7 +1071,7 @@
 			if (controlPane && !$mobile) {
 				try {
 					if (value) {
-						controlPaneComponent?.openPane();
+						controlPaneComponent?.openPane($showArtifacts ? 'artifact' : 'controls');
 					} else {
 						controlPane.collapse();
 					}
@@ -1021,10 +1087,10 @@
 			}
 		});
 
-		const selectedFolderSubscribe = selectedFolder.subscribe(async (folder) => {
+		const selectedProjectSubscribe = selectedProject.subscribe(async (project) => {
 			await tick();
-			if (folder?.data?.model_ids) {
-				const resolvedModels = resolveModels(folder.data.model_ids);
+			if (project?.data?.model_ids) {
+				const resolvedModels = resolveModels(project.data.model_ids);
 				if (!equal(selectedModels, resolvedModels)) {
 					selectedModels = resolvedModels;
 
@@ -1052,8 +1118,6 @@
 				selectedSkillIds = [];
 				selectedFilterIds = [];
 				webSearchEnabled = false;
-				imageGenerationEnabled = false;
-				codeInterpreterEnabled = false;
 
 				try {
 					const input = JSON.parse(storageChatInput);
@@ -1065,8 +1129,6 @@
 						selectedSkillIds = input.selectedSkillIds ?? [];
 						selectedFilterIds = input.selectedFilterIds;
 						webSearchEnabled = input.webSearchEnabled;
-						imageGenerationEnabled = input.imageGenerationEnabled;
-						codeInterpreterEnabled = input.codeInterpreterEnabled;
 					}
 				} catch {
 					// Ignore malformed persisted input state
@@ -1087,7 +1149,7 @@
 				}
 				pageSubscribe();
 				showControlsSubscribe();
-				selectedFolderSubscribe();
+				selectedProjectSubscribe();
 				window.removeEventListener('message', onMessageHandler);
 				$socket?.off('events', chatEventHandler);
 				$socket?.off('connect', handleSocketConnect);
@@ -1292,7 +1354,7 @@
 		}
 	};
 
-	const onHistoryChange = (history) => {
+	const onHistoryChange = (history, _themeSetting?: string) => {
 		if (history) {
 			clearTimeout(contentsRAF);
 			contentsRAF = setTimeout(() => {
@@ -1304,7 +1366,7 @@
 		}
 	};
 
-	$: onHistoryChange(history);
+	$: onHistoryChange(history, $theme);
 
 	const dispatchCallOverlayAudio = (message, final = false) => {
 		if (!$showCallOverlay) {
@@ -1346,9 +1408,8 @@
 	const getContents = () => {
 		const messages = history ? createMessagesList(history, history.currentId) : [];
 		let contents = [];
-		// Track identifier → index for in-place updates (stable antArtifact revisions)
-		const identifierIndex = new Map<string, number>();
 		const publishedMap = get(publishedArtifactIdMap);
+		const canvasTheme = resolveArtifactCanvasTheme(get(theme));
 
 		const withPublishedId = (item) => ({
 			...item,
@@ -1356,46 +1417,24 @@
 		});
 
 		const upsert = (item) => {
-			const enriched = withPublishedId(item);
-			if (enriched.identifier && identifierIndex.has(enriched.identifier)) {
-				// Update in-place — same identifier means a revision, not a new slot
-				contents[identifierIndex.get(enriched.identifier)] = enriched;
-			} else {
-				if (enriched.identifier) identifierIndex.set(enriched.identifier, contents.length);
-				contents = [...contents, enriched];
-			}
+			contents = upsertArtifactContent(contents, withPublishedId(item));
 		};
 
 		messages.forEach((message) => {
 			if (message?.role !== 'user') {
-				const messageContent = getAssistantText(message?.output, message?.content ?? '');
+				const messageContent = getAssistantVisibleText({
+					output: message?.output,
+					content: message?.content ?? ''
+				});
 				if (!messageContent.trim()) {
 					return;
 				}
 
-			// ── <antArtifact> tags (stable identifiers, model-provided titles) ──
-			const antArtifacts = parseAntArtifacts(messageContent);
+			// ── <antArtifact> tags (complete + in-progress streaming blocks) ──
+			const antArtifacts = parseAntArtifactsForStream(messageContent);
 			if (antArtifacts.length > 0) {
 				antArtifacts.forEach((a) => {
-					if (!a.artifactType) return; // skip code/mermaid/unsupported types
-					if (a.artifactType === 'react') {
-						upsert({
-							type: 'iframe',
-							content: buildReactHtml(a.content),
-							sourceCode: a.content,
-							title: a.title,
-							identifier: a.identifier,
-							mimeType: 'application/vnd.ant.react'
-						});
-					} else {
-						upsert({
-							type: a.artifactType,
-							content: a.content,
-							title: a.title,
-							identifier: a.identifier,
-							mimeType: a.type
-						});
-					}
+					upsert(artifactToPanelContent(a, canvasTheme));
 				});
 				return; // don't also parse code fences from the same message
 			}
@@ -1445,6 +1484,11 @@
 		});
 
 		artifactContents.set(contents);
+
+		if (contents.length > 0) {
+			showArtifacts.set(true);
+			showControls.set(true);
+		}
 	};
 
 	//////////////////////////
@@ -1513,9 +1557,9 @@
 			}
 
 		} else {
-			if ($selectedFolder?.data?.model_ids) {
+			if ($selectedProject?.data?.model_ids) {
 				// Set from folder model IDs
-				selectedModels = $selectedFolder?.data?.model_ids;
+				selectedModels = $selectedProject?.data?.model_ids;
 			} else {
 				if (sessionStorage.selectedModels) {
 					// Set from session storage (temporary selection)
@@ -1571,14 +1615,6 @@
 
 		if ($page.url.searchParams.get('web-search') === 'true') {
 			webSearchEnabled = true;
-		}
-
-		if ($page.url.searchParams.get('image-generation') === 'true') {
-			imageGenerationEnabled = true;
-		}
-
-		if ($page.url.searchParams.get('code-interpreter') === 'true') {
-			codeInterpreterEnabled = true;
 		}
 
 		if ($page.url.searchParams.get('tools')) {
@@ -2269,10 +2305,9 @@
 			return;
 		}
 
-		// Check if the assistant is still generating the main response
+		// Check if any assistant response is still in flight
 		// (don't block on background tasks like title gen, follow-ups, tags)
-		const lastMessage = history.currentId ? history.messages[history.currentId] : null;
-		const isGenerating = lastMessage && lastMessage.role === 'assistant' && !lastMessage.done;
+		const isGenerating = hasResponseInProgress();
 
 		if (isGenerating) {
 			if ($settings?.enableMessageQueue ?? true) {
@@ -2411,7 +2446,7 @@
 				if (
 					hasImages &&
 					!(model.info?.meta?.capabilities?.vision ?? true) &&
-					!imageGenerationEnabled
+					!imageGenerationActive
 				) {
 					toast.error(
 						$i18n.t('Model {{modelName}} is not vision capable', {
@@ -2457,16 +2492,8 @@
 		if ($config?.features)
 			features = {
 				voice: $showCallOverlay,
-				image_generation:
-					$config?.features?.enable_image_generation &&
-					($user?.role === 'admin' || $user?.permissions?.features?.image_generation)
-						? imageGenerationEnabled
-						: false,
-				code_interpreter:
-					$config?.features?.enable_code_interpreter &&
-					($user?.role === 'admin' || $user?.permissions?.features?.code_interpreter)
-						? codeInterpreterEnabled
-						: false,
+				image_generation: imageGenerationActive,
+				code_interpreter: codeInterpreterActive,
 				web_search: webSearchActive
 			};
 
@@ -2545,7 +2572,11 @@
 					);
 
 					if (message.output && message.role === 'assistant') {
-						return { role: message.role, output: message.output };
+						return {
+							role: message.role,
+							output: message.output,
+							...(message.content ? { content: message.content } : {})
+						};
 					}
 
 					if (message.role === 'user' && imageFiles.length > 0) {
@@ -2639,7 +2670,7 @@
 
 				session_id: $socket?.id,
 				chat_id: _chatId || undefined,
-				folder_id: $selectedFolder?.id ?? undefined,
+				project_id: $selectedProject?.id ?? undefined,
 
 				id: responseMessageId,
 				...(messageIdsList ? { message_ids: messageIdsList } : {}),
@@ -2788,6 +2819,7 @@
 			// Mark every in-flight assistant response as done (not only history.currentId).
 			for (const message of Object.values(history.messages)) {
 				if (message?.role === 'assistant' && message?.done != true) {
+					markOutputItemsCancelled(message);
 					message.done = true;
 				}
 			}
@@ -3008,7 +3040,7 @@
 					tags: [],
 					timestamp: Date.now()
 				},
-				$selectedFolder?.id
+				$selectedProject?.id
 			);
 
 			_chatId = chat.id;
@@ -3021,7 +3053,7 @@
 			await chats.set(await getChatList(localStorage.token, $currentChatPage));
 			currentChatPage.set(1);
 
-			selectedFolder.set(null);
+			selectedProject.set(null);
 		} else {
 			_chatId = `local:${$socket?.id}`; // Use socket id for temporary chat
 			await chatId.set(_chatId);
@@ -3086,9 +3118,9 @@
 		await sessionStorage.removeItem(`chat-input${chatId ? `-${chatId}` : ''}`);
 	};
 
-	const moveChatHandler = async (chatId, folderId) => {
-		if (chatId && folderId) {
-			const res = await updateChatFolderIdById(localStorage.token, chatId, folderId).catch(
+	const moveChatHandler = async (chatId, projectId) => {
+		if (chatId && projectId) {
+			const res = await updateChatProjectIdById(localStorage.token, chatId, projectId).catch(
 				(error) => {
 					toast.error(`${error}`);
 					return null;
@@ -3232,10 +3264,10 @@
 >
 	{#if !loading}
 		<div in:fade={{ duration: 50 }} class="w-full h-full flex flex-col">
-			{#if $selectedFolder && $selectedFolder?.meta?.background_image_url}
+			{#if $selectedProject && $selectedProject?.meta?.background_image_url}
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat"
-					style="background-image: url({$selectedFolder?.meta?.background_image_url})  "></div>
+					style="background-image: url({$selectedProject?.meta?.background_image_url})  "></div>
 
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"></div>
@@ -3313,7 +3345,7 @@
 					/>
 
 					<div id="chat-pane" class="flex flex-col flex-auto z-10 w-full @container overflow-auto">
-						{#if ($settings?.landingPageMode === 'chat' && !$selectedFolder) || createMessagesList(history, history.currentId).length > 0}
+						{#if ($settings?.landingPageMode === 'chat' && !$selectedProject) || createMessagesList(history, history.currentId).length > 0}
 							<div
 								class=" pb-2.5 flex flex-col justify-between w-full flex-auto overflow-auto h-0 max-w-full z-10 scrollbar-hidden"
 								id="messages-container"
@@ -3374,8 +3406,6 @@
 										bind:selectedToolIds
 										bind:selectedSkillIds
 										bind:selectedFilterIds
-										bind:imageGenerationEnabled
-										bind:codeInterpreterEnabled
 										{pendingOAuthTools}
 										bind:webSearchEnabled
 										bind:atSelectedModel
@@ -3458,8 +3488,6 @@
 									bind:selectedToolIds
 									bind:selectedSkillIds
 									bind:selectedFilterIds
-									bind:imageGenerationEnabled
-									bind:codeInterpreterEnabled
 									bind:webSearchEnabled
 									bind:atSelectedModel
 									bind:showCommands
@@ -3508,7 +3536,6 @@
 					{stopResponse}
 					{showMessage}
 					{eventTarget}
-					{codeInterpreterEnabled}
 				/>
 			</PaneGroup>
 		</div>

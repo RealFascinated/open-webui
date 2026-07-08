@@ -345,10 +345,8 @@
 					<ExternalKnowledge />
 			</AdminSettingsCard>
 		{:else}
-			<div class="flex h-full justify-center">
-				<div class="my-auto">
-					<Spinner className="size-6" />
-				</div>
+			<div class="flex h-full justify-center py-16">
+				<Spinner className="size-6" />
 			</div>
 		{/if}
 	</div>

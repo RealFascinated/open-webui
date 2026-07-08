@@ -5,7 +5,7 @@
 
 	import { goto } from '$app/navigation';
 	import { chatId, mobile, showSidebar } from '$lib/stores';
-	import { getSharedFolderChats } from '$lib/apis/folders';
+	import { getSharedProjectChats } from '$lib/apis/projects';
 
 	import ChatItem from './ChatItem.svelte';
 	import Collapsible from '../../common/Collapsible.svelte';
@@ -14,8 +14,8 @@
 	import FolderOpen from '$lib/components/icons/FolderOpen.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
-	export let folder: unknown;
-	export let allSharedFolders: unknown[] = [];
+	export let project: unknown;
+	export let allSharedProjects: unknown[] = [];
 	export let className = '';
 
 	let expanded = false;
@@ -23,8 +23,8 @@
 	let loading = false;
 	let loaded = false;
 
-	$: children = allSharedFolders.filter((f) => f.parent_id === folder.id);
-	$: permission = folder.permission || 'read';
+	$: children = allSharedProjects.filter((f) => f.parent_id === project.id);
+	$: permission = project.permission || 'read';
 	$: isWritable = permission === 'write';
 
 	const toggleExpand = async () => {
@@ -37,7 +37,7 @@
 	const loadChats = async () => {
 		loading = true;
 		try {
-			const res = await getSharedFolderChats(localStorage.token, folder.id);
+			const res = await getSharedProjectChats(localStorage.token, project.id);
 			if (res) {
 				chats = res.chats || [];
 			}
@@ -71,12 +71,12 @@
 			<FolderOpen className="size-3.5 shrink-0" strokeWidth="2" />
 
 			<div class="flex-1 truncate">
-				{folder.name}
+				{project.name}
 			</div>
 
-			{#if folder.owner_name}
+			{#if project.owner_name}
 				<div class="shrink-0 text-[10px] text-gray-400 dark:text-gray-600 pr-1">
-					{folder.owner_name}
+					{project.owner_name}
 				</div>
 			{/if}
 
@@ -127,7 +127,7 @@
 				{/each}
 
 				{#each children as child (child.id)}
-					<svelte:self folder={child} {allSharedFolders} />
+					<svelte:self project={child} {allSharedProjects} />
 				{/each}
 
 				{#if chats.length === 0 && children.length === 0}

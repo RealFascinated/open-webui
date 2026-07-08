@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { onMount, onDestroy, getContext } from 'svelte';
+	import { onMount, onDestroy, getContext, tick } from 'svelte';
 	import type { Writable } from 'svelte/store';
 	import type { i18n as i18nType } from 'i18next';
 	import { goto } from '$app/navigation';
@@ -12,6 +12,7 @@
 		chatId,
 		config,
 		settings,
+		theme,
 		showArtifacts,
 		showControls,
 		artifactContents,
@@ -27,6 +28,16 @@
 		type ArtifactErrorKind
 	} from '$lib/utils/artifact-error-bridge';
 	import { artifactPublishMeta, publishedArtifactLookupKey } from '$lib/utils/artifact-render';
+	import {
+		injectArtifactCanvasTheme,
+		resolveArtifactCanvasTheme
+	} from '$lib/utils/artifact-theme';
+	import {
+		getArtifactVersionIndices,
+		navigateArtifactVersion,
+		preserveArtifactSelectionIndex,
+		resolveArtifactContentIndex
+	} from '$lib/utils/artifact-contents';
 	import {
 		publishArtifact,
 		deleteArtifact,
@@ -44,6 +55,7 @@
 	import Cube from '../icons/Cube.svelte';
 	import Markdown from '../chat/Messages/Markdown.svelte';
 	import ConfirmDialog from '../common/ConfirmDialog.svelte';
+	import Spinner from '../common/Spinner.svelte';
 
 	export let overlay = false;
 
@@ -64,53 +76,158 @@
 
 	$: currentContent = contents[selectedContentIdx] ?? null;
 	$: currentArtifactId = currentContent?.artifactId ?? null;
+	$: versionIndices = getArtifactVersionIndices(contents, currentContent?.identifier);
+	$: versionPosition =
+		versionIndices.indexOf(selectedContentIdx) === -1
+			? Math.max(versionIndices.length - 1, 0)
+			: versionIndices.indexOf(selectedContentIdx);
+	$: effectiveViewMode =
+		currentContent?.streaming && currentContent?.mimeType === 'application/vnd.ant.react'
+			? 'code'
+			: viewMode;
+
+	let previewSrcdoc = '';
+	let previewFrameKey = 0;
+	let previewIframeLoading = false;
+	let previewTimer: ReturnType<typeof setTimeout> | undefined;
+	let previewGeneration = 0;
+	let lastEffectiveViewMode: 'preview' | 'code' = 'preview';
+
+	$: artifactCanvasTheme = resolveArtifactCanvasTheme($theme);
+
+	$: showPreviewLoader =
+		currentContent?.type === 'iframe' &&
+		effectiveViewMode === 'preview' &&
+		(!previewSrcdoc || previewIframeLoading);
+
+	const buildPreviewSrcdoc = (content: ArtifactContent | null, canvasTheme = artifactCanvasTheme): string => {
+		if (!content) return '';
+		let html = content.content;
+		html = injectArtifactErrorBridge(html);
+		if (content.artifactId) {
+			html = injectStorageBridge(html, content.artifactId);
+		}
+		html = injectArtifactCanvasTheme(html, canvasTheme);
+		return injectCsp(html, $config?.ui?.iframe_csp ?? '');
+	};
+
+	const applyPreviewSrcdoc = (
+		content: ArtifactContent | null,
+		canvasTheme = artifactCanvasTheme
+	) => {
+		if (!content || content.type !== 'iframe') {
+			if (previewSrcdoc !== '') {
+				previewSrcdoc = '';
+				previewFrameKey += 1;
+			}
+			previewIframeLoading = false;
+			return;
+		}
+
+		const next = buildPreviewSrcdoc(content, canvasTheme);
+		if (next !== previewSrcdoc) {
+			previewSrcdoc = next;
+			previewFrameKey += 1;
+			if (next && !content.streaming) {
+				previewIframeLoading = true;
+			}
+		}
+	};
+
+	$: {
+		const content = currentContent;
+		const canvasTheme = artifactCanvasTheme;
+		clearTimeout(previewTimer);
+		const generation = ++previewGeneration;
+
+		if (!content || content.type !== 'iframe') {
+			applyPreviewSrcdoc(null);
+		} else if (content.streaming) {
+			previewTimer = setTimeout(() => {
+				if (generation !== previewGeneration) return;
+				applyPreviewSrcdoc(content, canvasTheme);
+			}, 120);
+		} else {
+			applyPreviewSrcdoc(content, canvasTheme);
+		}
+	}
+
+	// Remount iframe when switching back to preview (e.g. React artifact just finished streaming).
+	$: if (
+		effectiveViewMode === 'preview' &&
+		lastEffectiveViewMode !== 'preview' &&
+		currentContent?.type === 'iframe'
+	) {
+		tick().then(() => applyPreviewSrcdoc(currentContent));
+	}
+	$: lastEffectiveViewMode = effectiveViewMode;
 
 	function navigateContent(direction: 'prev' | 'next') {
-		selectedContentIdx =
-			direction === 'prev'
-				? Math.max(selectedContentIdx - 1, 0)
-				: Math.min(selectedContentIdx + 1, contents.length - 1);
+		selectedContentIdx = navigateArtifactVersion(contents, selectedContentIdx, direction);
 	}
 
 	// ── iframe load ──────────────────────────────────────────────────
 
+	const canAccessIframeWindow = (iframe: HTMLIFrameElement | undefined): boolean => {
+		if (!iframe?.contentWindow) return false;
+		try {
+			// Sandboxed srcdoc without allow-same-origin is an opaque origin.
+			void iframe.contentWindow.document;
+			return true;
+		} catch {
+			return false;
+		}
+	};
+
 	const iframeLoadHandler = () => {
+		previewIframeLoading = false;
 		artifactError = null;
-		const contentWindow = iframeElement?.contentWindow;
-		if (!contentWindow) return;
+		if (!canAccessIframeWindow(iframeElement)) return;
 
-		contentWindow.addEventListener(
-			'click',
-			function (e) {
-				const target = (e.target as Element).closest('a') as HTMLAnchorElement | null;
-				if (target && target.href) {
-					e.preventDefault();
-					const url = new URL(target.href, iframeElement.baseURI);
-					if (url.origin === window.location.origin) {
-						contentWindow.history.pushState(
-							null,
-							'',
-							url.pathname + url.search + url.hash
-						);
-					} else {
-						console.info('External navigation blocked:', url.href);
+		try {
+			const contentWindow = iframeElement.contentWindow;
+			if (!contentWindow) return;
+
+			contentWindow.addEventListener(
+				'click',
+				function (e) {
+					const target = (e.target as Element).closest('a') as HTMLAnchorElement | null;
+					if (target && target.href) {
+						e.preventDefault();
+						const url = new URL(target.href, iframeElement.baseURI);
+						if (url.origin === window.location.origin) {
+							contentWindow.history.pushState(
+								null,
+								'',
+								url.pathname + url.search + url.hash
+							);
+						} else {
+							console.info('External navigation blocked:', url.href);
+						}
 					}
-				}
-			},
-			true
-		);
+				},
+				true
+			);
 
-		contentWindow.addEventListener('mouseenter', function () {
 			contentWindow.addEventListener('dragstart', (event) => {
 				event.preventDefault();
 			});
-		});
+		} catch {
+			// Preview still works via srcdoc; bridges use postMessage.
+		}
 	};
 
 	// ── Storage bridge (parent side) ────────────────────────────────
 
 	async function handleStorageMessage(e: MessageEvent) {
-		if (!iframeElement || e.source !== iframeElement.contentWindow) return;
+		if (!iframeElement) return;
+		let frameWindow: Window | null = null;
+		try {
+			frameWindow = iframeElement.contentWindow;
+		} catch {
+			return;
+		}
+		if (!frameWindow || e.source !== frameWindow) return;
 		const data = e.data;
 		if (!data?._owsStorage || !data._owsArtifactId) return;
 
@@ -135,18 +252,22 @@
 				result = await listArtifactStorageItems(token, aid, args.prefix ?? '', scope);
 			}
 
-			iframeElement.contentWindow?.postMessage({ _owsRequestId: reqId, result }, '*');
+			frameWindow.postMessage({ _owsRequestId: reqId, result }, '*');
 		} catch (err: unknown) {
 			const errMsg = err instanceof Error ? err.message : 'Storage error';
-			iframeElement.contentWindow?.postMessage(
-				{ _owsRequestId: reqId, error: errMsg },
-				'*'
-			);
+			frameWindow?.postMessage({ _owsRequestId: reqId, error: errMsg }, '*');
 		}
 	}
 
 	function handleArtifactErrorMessage(e: MessageEvent) {
-		if (!iframeElement || e.source !== iframeElement.contentWindow) return;
+		if (!iframeElement) return;
+		let frameWindow: Window | null = null;
+		try {
+			frameWindow = iframeElement.contentWindow;
+		} catch {
+			return;
+		}
+		if (!frameWindow || e.source !== frameWindow) return;
 		const data = e.data;
 		if (!data?._owsArtifactError) return;
 
@@ -172,20 +293,7 @@
 		}, 1000);
 	};
 
-	// ── Computed srcdoc ──────────────────────────────────────────────
-
-	$: srcdoc = (() => {
-		if (!currentContent) return '';
-		let html = currentContent.content;
-		html = injectArtifactErrorBridge(html);
-		// Inject storage bridge first (before CSP meta tag which must be earliest)
-		if (currentArtifactId) {
-			html = injectStorageBridge(html, currentArtifactId);
-		}
-		return injectCsp(html, $config?.ui?.iframe_csp ?? '');
-	})();
-
-	// ── Actions ──────────────────────────────────────────────────────
+	// ── iframe load ──────────────────────────────────────────────────
 
 	const showFullScreen = () => {
 		const el = iframeElement as HTMLIFrameElement & {
@@ -291,9 +399,10 @@
 		window.addEventListener('message', handleArtifactErrorMessage);
 
 		const unsubscribeArtifactCode = artifactCode.subscribe((value) => {
-			if (contents && value) {
-				const codeIdx = contents.findIndex((content) => content.content.includes(value));
-				selectedContentIdx = codeIdx !== -1 ? codeIdx : 0;
+			if (!value || contents.length === 0) return;
+			const codeIdx = resolveArtifactContentIndex(contents, value);
+			if (codeIdx !== -1) {
+				selectedContentIdx = codeIdx;
 			}
 		});
 
@@ -304,20 +413,33 @@
 				showControls.set(false);
 				showArtifacts.set(false);
 				selectedContentIdx = 0;
-			} else if (newContents.length > contents.length) {
-				selectedContentIdx = newContents.length - 1;
+			} else {
+				selectedContentIdx = preserveArtifactSelectionIndex(
+					contents,
+					selectedContentIdx,
+					newContents
+				);
+
+				if (
+					newContents.length > contents.length &&
+					!contents[selectedContentIdx]?.identifier
+				) {
+					selectedContentIdx = newContents.length - 1;
+				}
 			}
 
 			contents = newContents;
 		});
 
 		return () => {
+			clearTimeout(previewTimer);
 			unsubscribeArtifactCode();
 			unsubscribeArtifactContents();
 		};
 	});
 
 	onDestroy(() => {
+		clearTimeout(previewTimer);
 		window.removeEventListener('message', handleStorageMessage);
 		window.removeEventListener('message', handleArtifactErrorMessage);
 	});
@@ -338,20 +460,20 @@
 						aria-label={$i18n.t('Previous')}
 						class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-30 disabled:cursor-not-allowed"
 						on:click={() => navigateContent('prev')}
-						disabled={contents.length <= 1}
+						disabled={versionIndices.length <= 1 || versionPosition <= 0}
 					>
 						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" class="size-3.5">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
 						</svg>
 					</button>
 					<span class="text-xs tabular-nums select-none px-0.5">
-						{selectedContentIdx + 1}/{contents.length}
+						{versionPosition + 1}/{versionIndices.length}
 					</span>
 					<button
 						aria-label={$i18n.t('Next')}
 						class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-30 disabled:cursor-not-allowed"
 						on:click={() => navigateContent('next')}
-						disabled={contents.length <= 1}
+						disabled={versionIndices.length <= 1 || versionPosition >= versionIndices.length - 1}
 					>
 						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" class="size-3.5">
 							<path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
@@ -366,10 +488,16 @@
 				</span>
 			{/if}
 
+			{#if currentContent?.streaming}
+				<span class="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+					{$i18n.t('Building…')}
+				</span>
+			{/if}
+
 			<!-- View / Code pill toggle -->
 			<div class="flex items-center rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5 text-xs gap-0.5">
 					<button
-						class="px-2.5 py-1 rounded-md transition font-medium {viewMode === 'preview'
+						class="px-2.5 py-1 rounded-md transition font-medium {effectiveViewMode === 'preview'
 							? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white'
 							: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}"
 						on:click={() => (viewMode = 'preview')}
@@ -377,7 +505,7 @@
 						{$i18n.t('Preview')}
 					</button>
 					<button
-						class="px-2.5 py-1 rounded-md transition font-medium {viewMode === 'code'
+						class="px-2.5 py-1 rounded-md transition font-medium {effectiveViewMode === 'code'
 							? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white'
 							: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}"
 						on:click={() => (viewMode = 'code')}
@@ -463,7 +591,7 @@
 						</button>
 					</Tooltip>
 
-					{#if currentContent?.type === 'iframe' && viewMode === 'preview'}
+					{#if currentContent?.type === 'iframe' && effectiveViewMode === 'preview'}
 						<Tooltip content={$i18n.t('Full screen')}>
 							<button
 								class="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
@@ -496,7 +624,7 @@
 			<div class="h-full flex flex-col">
 				{#if contents.length > 0}
 					<div class="max-w-full w-full h-full">
-					{#if viewMode === 'code'}
+					{#if effectiveViewMode === 'code'}
 						<!-- Raw source view: prefer sourceCode (e.g. JSX) over the generated wrapper HTML -->
 						<pre class="w-full h-full overflow-auto p-4 text-xs font-mono text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900 leading-relaxed whitespace-pre-wrap break-all">{currentContent?.sourceCode ?? currentContent?.content ?? ''}</pre>
 						{:else if currentContent?.type === 'markdown'}
@@ -506,26 +634,44 @@
 									<Markdown
 										id="artifact-md"
 										content={currentContent.content}
-										done={true}
+										done={currentContent.complete !== false}
 									/>
 								</div>
 							</div>
 						{:else if currentContent?.type === 'iframe'}
-							<iframe
-								bind:this={iframeElement}
-								title="Content"
-								{srcdoc}
-								class="w-full border-0 h-full rounded-none"
-								sandbox="allow-scripts allow-downloads{($settings?.iframeSandboxAllowForms ?? false)
-									? ' allow-forms'
-									: ''}{
-									// Never allow-same-origin when storage is active: that combination
-									// lets the iframe's JS remove its own sandbox attribute (MDN).
-									!currentArtifactId && ($settings?.iframeSandboxAllowSameOrigin ?? false)
-										? ' allow-same-origin'
-										: ''}"
-								on:load={iframeLoadHandler}
-							></iframe>
+							<div class="relative w-full h-full min-h-0">
+								{#if previewSrcdoc}
+									{#key `${selectedContentIdx}-${previewFrameKey}`}
+										<iframe
+											bind:this={iframeElement}
+											title="Content"
+											srcdoc={previewSrcdoc}
+											class="w-full border-0 h-full rounded-none"
+											sandbox="allow-scripts allow-downloads{($settings?.iframeSandboxAllowForms ?? false)
+												? ' allow-forms'
+												: ''}{
+												// Never allow-same-origin when storage is active: that combination
+												// lets the iframe's JS remove its own sandbox attribute (MDN).
+												!currentArtifactId && ($settings?.iframeSandboxAllowSameOrigin ?? false)
+													? ' allow-same-origin'
+													: ''}"
+											on:load={iframeLoadHandler}
+										></iframe>
+									{/key}
+								{/if}
+								{#if showPreviewLoader}
+									<div
+										class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white dark:bg-gray-850"
+										aria-live="polite"
+										aria-busy="true"
+									>
+										<Spinner className="size-8 text-gray-400 dark:text-gray-500" />
+										<p class="text-xs text-gray-400 dark:text-gray-500">
+											{$i18n.t('Loading preview…')}
+										</p>
+									</div>
+								{/if}
+							</div>
 						{:else if currentContent?.type === 'svg'}
 							<SvgPanZoom
 								className="w-full h-full max-h-full overflow-hidden"

@@ -5,6 +5,7 @@
 
 	import { config, user, models as _models, temporaryChatEnabled } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
+	import { getChatGreetingKey, type ChatGreetingKey } from '$lib/utils/chatGreeting';
 
 	import { blur, fade } from 'svelte/transition';
 
@@ -23,16 +24,18 @@
 
 	let mounted = false;
 	let selectedModelIdx = 0;
+	let greetingKey: ChatGreetingKey = 'Hello, {{name}}';
+
+	onMount(() => {
+		mounted = true;
+		greetingKey = getChatGreetingKey();
+	});
 
 	$: if (modelIds.length > 0) {
 		selectedModelIdx = models.length - 1;
 	}
 
 	$: models = modelIds.map((id) => $_models.find((m) => m.id === id));
-
-	onMount(() => {
-		mounted = true;
-	});
 </script>
 
 {#key mounted}
@@ -88,7 +91,7 @@
 
 			<div>
 				<div class=" capitalize line-clamp-1" in:fade={{ duration: 200 }}>
-					{$i18n.t('Hello, {{name}}', { name: $user?.name })}
+					{$i18n.t(greetingKey, { name: $user?.name })}
 				</div>
 
 				<div in:fade={{ duration: 200, delay: 200 }}>

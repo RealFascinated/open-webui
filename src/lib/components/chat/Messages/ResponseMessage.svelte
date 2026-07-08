@@ -42,7 +42,6 @@
 	import Name from './Name.svelte';
 	import ProfileImage from './ProfileImage.svelte';
 	import Skeleton from './Skeleton.svelte';
-	import Image from '$lib/components/common/Image.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import RateComment from './RateComment.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -56,21 +55,21 @@
 	import CodeExecutions from './CodeExecutions.svelte';
 	import ContentRenderer from './ContentRenderer.svelte';
 	import { KokoroWorker } from '$lib/workers/KokoroWorker';
-	import FileItem from '$lib/components/common/FileItem.svelte';
 	import FollowUps from './ResponseMessage/FollowUps.svelte';
 	import FollowupChips from './ResponseMessage/FollowupChips.svelte';
-	import WeatherCard from './ResponseMessage/WeatherCard.svelte';
-	import OptionsCard from './ResponseMessage/OptionsCard.svelte';
-	import CurrencyCard from './ResponseMessage/CurrencyCard.svelte';
-	import MapCard from './ResponseMessage/MapCard.svelte';
-	import SportsCard from './ResponseMessage/SportsCard.svelte';
+	import MessageRichResults from './ResponseMessage/MessageRichResults.svelte';
+	import {
+		getAssistantVisibleText,
+		getHiddenRichToolNames,
+		shouldShowRichContent,
+		shouldShowResponseSkeleton
+	} from '$lib/utils/messageRichContent';
 	import { fade } from 'svelte/transition';
 	import { flyAndScale } from '$lib/utils/transitions';
 	import RegenerateMenu from './ResponseMessage/RegenerateMenu.svelte';
 	import StatusHistory from './ResponseMessage/StatusHistory.svelte';
-	import FullHeightIframe from '$lib/components/common/FullHeightIframe.svelte';
 	import OutputEditView from './OutputEditView.svelte';
-	import { getOutputText, getAssistantText, replaceOutputMessageText, type OutputItem } from './structuredOutput';
+	import { getOutputText, replaceOutputMessageText, type OutputItem } from './structuredOutput';
 
 	interface MessageType {
 		id: string;
@@ -188,8 +187,12 @@
 		(model?.info?.meta?.capabilities?.status_updates ?? true) &&
 		statusEntries.length > 0 &&
 		!(statusEntries.at(-1)?.hidden ?? false);
-	$: visibleResponseContent = getAssistantText(message.output, message.content ?? '');
+	$: visibleResponseContent = getAssistantVisibleText(message);
 	$: hasResponseContent = Boolean((message.content ?? '').trim() || message.output?.length);
+	$: showRichContent = shouldShowRichContent(message);
+	$: hiddenRichToolNames = getHiddenRichToolNames(message, showRichContent);
+	$: showResponseSkeleton =
+		shouldShowResponseSkeleton(message) && !message.error && !hasVisibleStatus;
 
 	let edit = false;
 	let editedContent = '';
@@ -697,49 +700,6 @@
 							<StatusHistory statusHistory={message?.statusHistory} messageDone={message?.done} />
 						{/if}
 
-						{#if message?.files && message.files?.filter( (f) => ['image', 'file'].includes(f.type) ).length > 0}
-							<div
-								class="my-1 w-full flex overflow-x-auto gap-2 flex-wrap"
-								dir={$settings?.chatDirection ?? 'auto'}
-							>
-								{#each message.files.filter((f) => ['image', 'file'].includes(f.type)) as file}
-									<div>
-										{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
-											<Image src={file.url} alt={message.content} />
-										{:else}
-											<FileItem
-												item={file}
-												url={file.url}
-												name={file.name}
-												type={file.type}
-												size={file?.size}
-												small={true}
-											/>
-										{/if}
-									</div>
-								{/each}
-							</div>
-						{/if}
-
-					{#if message?.embeds && message.embeds.length > 0}
-							<div
-								class="my-1 w-full flex overflow-x-auto gap-2 flex-wrap"
-								id={`${message.id}-embeds-container`}
-							>
-								{#each message.embeds as embed, idx}
-									<div class="my-2 w-full" id={`${message.id}-embeds-${idx}`}>
-										<FullHeightIframe
-											src={embed}
-											allowScripts={true}
-											allowForms={true}
-											allowSameOrigin={$settings?.iframeSandboxAllowSameOrigin ?? false}
-											allowPopups={true}
-										/>
-									</div>
-								{/each}
-							</div>
-						{/if}
-
 						{#if edit === true}
 							<div class="w-full bg-gray-50 dark:bg-gray-800 rounded-3xl px-3 py-3 my-2">
 								{#if editedOutput}
@@ -824,7 +784,7 @@
 							class="w-full flex flex-col relative {edit ? 'hidden' : ''}"
 							id="response-content-container"
 						>
-							{#if !hasResponseContent && !message.done && !message.error && !hasVisibleStatus}
+							{#if showResponseSkeleton}
 								<Skeleton />
 							{:else if hasResponseContent && message.error !== true}
 								<!-- always show message contents even if there's an error -->
@@ -833,6 +793,7 @@
 									id={`${chatId}-${message.id}`}
 									content={message.content}
 									output={message.output}
+									hiddenToolNames={hiddenRichToolNames}
 									sources={message.sources}
 									floatingButtons={message?.done &&
 										!readOnly &&
@@ -886,6 +847,14 @@
 								/>
 							{/if}
 
+							{#if showRichContent}
+								<MessageRichResults
+									{message}
+									assistantText={visibleResponseContent}
+									{isLastMessage}
+								/>
+							{/if}
+
 							{#if message?.error}
 								<Error content={message?.error?.content ?? message.content} />
 							{/if}
@@ -902,26 +871,6 @@
 
 						{#if message.code_executions}
 							<CodeExecutions codeExecutions={message.code_executions} />
-						{/if}
-
-						{#if message?.weather}
-							<WeatherCard weather={message.weather} />
-						{/if}
-
-						{#if message?.currency}
-							<CurrencyCard currency={message.currency} />
-						{/if}
-
-						{#if message?.map}
-							<MapCard map={message.map} />
-						{/if}
-
-						{#if message?.sports}
-							<SportsCard sports={message.sports} />
-						{/if}
-
-						{#if message?.options}
-							<OptionsCard options={message.options} disabled={!isLastMessage} />
 						{/if}
 						</div>
 					</div>

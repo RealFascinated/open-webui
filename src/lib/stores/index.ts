@@ -62,9 +62,9 @@ export const chats = writable(null);
 export const pinnedChats = writable([]);
 export const pinnedNotes = writable([]);
 export const tags = writable([]);
-export const folders = writable([]);
+export const projects = writable([]);
 
-export const selectedFolder = writable(null);
+export const selectedProject = writable(null);
 
 export const models: Writable<Model[]> = writable([]);
 
@@ -108,15 +108,17 @@ export const showFileNavPath: Writable<string | null> = writable(null);
 export const showFileNavDir: Writable<string | null> = writable(null);
 export const selectedTerminalId: Writable<string | null> = writable(null);
 
-export const artifactCode = writable(null);
+import type { ArtifactSelection } from '$lib/utils/artifact-contents';
+
+export const artifactCode = writable<ArtifactSelection | null>(null);
 
 export type ArtifactContent = {
 	type: 'iframe' | 'svg' | 'markdown';
 	content: string;
 	/** Human-readable title (from <antArtifact title="…"> or <title> tag). */
 	title?: string;
-	/** Stable identifier from <antArtifact identifier="…">. When present,
-	 *  revisions with the same identifier update this slot in-place. */
+	/** Stable identifier from <antArtifact identifier="…">. Revisions with the same
+	 *  identifier are kept as separate versions in the artifact panel. */
 	identifier?: string;
 	/** Set once the artifact has been published to the DB. */
 	artifactId?: string;
@@ -126,6 +128,10 @@ export type ArtifactContent = {
 	/** Raw source as authored by the model. For React artifacts this holds the
 	 *  original JSX; `content` holds the generated wrapper HTML for the iframe. */
 	sourceCode?: string;
+	/** False while the closing </antArtifact> tag has not arrived. */
+	complete?: boolean;
+	/** True while content is still being generated. */
+	streaming?: boolean;
 };
 export const artifactContents: Writable<ArtifactContent[] | null> = writable(null);
 
@@ -370,7 +376,8 @@ type Config = {
 		enable_autocomplete_generation: boolean;
 		enable_version_update_check: boolean;
 		enable_pyodide_file_persistence?: boolean;
-		folder_max_file_count?: number;
+		enable_projects?: boolean;
+		project_max_file_count?: number;
 	};
 	oauth: {
 		providers: {

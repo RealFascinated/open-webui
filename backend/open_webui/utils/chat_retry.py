@@ -126,6 +126,9 @@ async def emit_chat_retry_status(
                 'action': 'chat_retry',
                 'description': template.format(attempt=attempt, max_attempts=max_attempts),
                 'done': False,
+                'attempt': attempt,
+                'max_attempts': max_attempts,
+                'reason': reason,
             },
         }
     )
@@ -147,6 +150,8 @@ async def emit_chat_retry_exhausted(
                 'action': 'chat_retry',
                 'description': template.format(max_attempts=max_attempts),
                 'done': True,
+                'max_attempts': max_attempts,
+                'reason': reason,
             },
         }
     )

@@ -6,9 +6,17 @@
 	import { getVersionUpdates } from '$lib/apis';
 	import { getOllamaConfig, verifyOllamaConnection } from '$lib/apis/ollama';
 	import { getOpenAIConfig, verifyOpenAIConnection } from '$lib/apis/openai';
-	import { getEmbeddingConfig, getRAGConfig, getVectorDBStatus } from '$lib/apis/retrieval';
+	import { getEmbeddingConfig, getRAGConfig, getVectorDBStatus, getWebSearchStatus } from '$lib/apis/retrieval';
+	import { getAdminConfig, getLdapConfig, getLdapServer } from '$lib/apis/auths';
 	import { WEBUI_VERSION } from '$lib/constants';
 	import { compareVersion, formatNumber } from '$lib/utils';
+	import {
+		evaluateAuthHealth,
+		evaluateVectorDBHealth,
+		evaluateWebSearchHealth,
+		formatEmbeddingSecondaryDetail,
+		formatRerankerSecondaryDetail
+	} from '$lib/utils/adminHealth';
 
 	import AdminPageHeader from './AdminPageHeader.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -46,6 +54,8 @@
 		{ id: 'embedding', label: 'Embedding', state: 'loading', detail: 'Checking...' },
 		{ id: 'vector_db', label: 'Vector DB', state: 'loading', detail: 'Checking...' },
 		{ id: 'reranker', label: 'Reranker', state: 'loading', detail: 'Checking...' },
+		{ id: 'web_search', label: 'Web Search', state: 'loading', detail: 'Checking...' },
+		{ id: 'authentication', label: 'Authentication', state: 'loading', detail: 'Checking...' },
 		{ id: 'models', label: 'Models', state: 'loading', detail: 'Checking...' }
 	];
 
@@ -58,13 +68,26 @@
 	};
 
 	const checkConnectionsHealth = async (token: string) => {
-		const [ollamaConfig, openaiConfig, embeddingConfig, ragConfig, vectorDbStatus] =
-			await Promise.all([
+		const [
+			ollamaConfig,
+			openaiConfig,
+			embeddingConfig,
+			ragConfig,
+			vectorDbStatus,
+			webSearchStatus,
+			adminConfig,
+			ldapConfig,
+			ldapServer
+		] = await Promise.all([
 			getOllamaConfig(token).catch(() => null),
 			getOpenAIConfig(token).catch(() => null),
 			getEmbeddingConfig(token).catch(() => null),
 			getRAGConfig(token).catch(() => null),
-			getVectorDBStatus(token).catch(() => null)
+			getVectorDBStatus(token).catch(() => null),
+			getWebSearchStatus(token).catch(() => null),
+			getAdminConfig(token).catch(() => null),
+			getLdapConfig(token).catch(() => null),
+			getLdapServer(token).catch(() => null)
 		]);
 
 		const next = [...healthChecks];
@@ -150,57 +173,27 @@
 			setCheck('embedding', {
 				state: 'ok',
 				detail: embeddingModel,
+				secondaryDetail: formatEmbeddingSecondaryDetail({
+					engine: embeddingConfig?.RAG_EMBEDDING_ENGINE,
+					batchSize: embeddingConfig?.RAG_EMBEDDING_BATCH_SIZE
+				}),
 				href: '/admin/settings/documents?section=embedding'
 			});
 		}
 
 		const vectorDbHref = '/admin/settings/documents?section=embedding';
-		if (ragConfig?.BYPASS_EMBEDDING_AND_RETRIEVAL) {
-			setCheck('vector_db', {
-				state: 'disabled',
-				detail: 'Bypass mode enabled',
-				secondaryDetail: 'Vectors are not stored while bypass is active',
-				href: vectorDbHref
-			});
-		} else if (!vectorDbStatus) {
-			setCheck('vector_db', {
-				state: 'warning',
-				detail: 'Status unavailable',
-				href: vectorDbHref
-			});
-		} else if (vectorDbStatus.healthy) {
-			const label = vectorDbStatus.VECTOR_DB_LABEL ?? vectorDbStatus.VECTOR_DB ?? 'Vector DB';
-			const location = vectorDbStatus.detail ?? 'Connected';
-			const metaParts = [vectorDbStatus.summary].filter(Boolean);
-
-			if (vectorDbStatus.data_path && !vectorDbStatus.storage_size) {
-				metaParts.push(vectorDbStatus.data_path);
-			} else if (vectorDbStatus.host && !location.includes(vectorDbStatus.host)) {
-				metaParts.push(vectorDbStatus.host);
-			}
-
-			setCheck('vector_db', {
-				state: 'ok',
-				detail: `${label} · ${location}`,
-				secondaryDetail: metaParts.join(' · ') || undefined,
-				href: vectorDbHref
-			});
-		} else {
-			const label = vectorDbStatus.VECTOR_DB_LABEL ?? vectorDbStatus.VECTOR_DB ?? 'Vector DB';
-			setCheck('vector_db', {
-				state: 'error',
-				detail: `${label} · Unreachable`,
-				secondaryDetail: vectorDbStatus.error ? String(vectorDbStatus.error).slice(0, 120) : undefined,
-				href: vectorDbHref
-			});
-		}
+		const vectorDbHealth = evaluateVectorDBHealth(
+			vectorDbStatus,
+			!!ragConfig?.BYPASS_EMBEDDING_AND_RETRIEVAL
+		);
+		setCheck('vector_db', {
+			state: vectorDbHealth.state,
+			detail: vectorDbHealth.detail,
+			secondaryDetail: vectorDbHealth.secondaryDetail,
+			href: vectorDbHref
+		});
 
 		const count = $models?.length ?? 0;
-		setCheck('models', {
-			state: count > 0 ? 'ok' : 'warning',
-			detail: count > 0 ? `${count} available` : 'No models loaded',
-			href: '/admin/settings/models'
-		});
 
 		if (ragConfig?.BYPASS_EMBEDDING_AND_RETRIEVAL) {
 			setCheck('reranker', {
@@ -226,10 +219,42 @@
 				setCheck('reranker', {
 					state: 'ok',
 					detail: rerankModel,
+					secondaryDetail: formatRerankerSecondaryDetail({
+						hybridEnabled: true,
+						rerankEngine: ragConfig?.RAG_RERANKING_ENGINE
+					}),
 					href: '/admin/settings/documents?section=retrieval'
 				});
 			}
 		}
+
+		const webSearchHealth = evaluateWebSearchHealth(webSearchStatus);
+		setCheck('web_search', {
+			state: webSearchHealth.state,
+			detail: webSearchHealth.detail,
+			secondaryDetail: webSearchHealth.secondaryDetail,
+			href: '/admin/settings/web'
+		});
+
+		const authHealth = evaluateAuthHealth({
+			features: $config?.features,
+			oauthProviders: $config?.oauth?.providers,
+			enableLdap: ldapConfig?.ENABLE_LDAP ?? false,
+			ldapServer,
+			enableSignup: adminConfig?.ENABLE_SIGNUP
+		});
+		setCheck('authentication', {
+			state: authHealth.state,
+			detail: authHealth.detail,
+			secondaryDetail: authHealth.secondaryDetail,
+			href: '/admin/settings/authentication'
+		});
+
+		setCheck('models', {
+			state: count > 0 ? 'ok' : 'warning',
+			detail: count > 0 ? `${count} available` : 'No models loaded',
+			href: '/admin/settings/models'
+		});
 
 		healthChecks = next;
 	};
@@ -384,7 +409,7 @@
 
 		<div class="mb-6">
 			<div class="mb-2 text-sm font-medium">{$i18n.t('System Health')}</div>
-			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-4 gap-3">
 				{#each healthChecks as check (check.id)}
 					{#if check.href}
 						<a
@@ -397,7 +422,9 @@
 							</div>
 							<div class="mt-1 pl-4 space-y-0.5">
 								<div
-									class="text-xs text-gray-500 dark:text-gray-500 {check.id === 'vector_db'
+									class="text-xs text-gray-500 dark:text-gray-500 {check.id === 'vector_db' ||
+									check.id === 'web_search' ||
+									check.id === 'authentication'
 										? 'line-clamp-2'
 										: 'truncate'}"
 								>
@@ -420,7 +447,9 @@
 							</div>
 							<div class="mt-1 pl-4 space-y-0.5">
 								<div
-									class="text-xs text-gray-500 dark:text-gray-500 {check.id === 'vector_db'
+									class="text-xs text-gray-500 dark:text-gray-500 {check.id === 'vector_db' ||
+									check.id === 'web_search' ||
+									check.id === 'authentication'
 										? 'line-clamp-2'
 										: 'truncate'}"
 								>
