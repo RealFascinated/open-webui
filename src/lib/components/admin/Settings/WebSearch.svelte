@@ -8,10 +8,18 @@
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
+	import PermissionsSection from '../Users/Groups/PermissionsSection.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let saveHandler: (...args: unknown[]) => unknown;
+
+	let dirty = false;
+	let saving = false;
+	let initialSnapshot = '';
+	let openProvider = false;
 
 	let webSearchEngines = [
 		'ollama_cloud',
@@ -48,7 +56,65 @@
 
 	let webConfig = null;
 
+	const snapshot = () => JSON.stringify(webConfig);
+
+	$: if (initialSnapshot && webConfig) {
+		dirty = snapshot() !== initialSnapshot;
+	}
+
+	const prepareWebConfigForDisplay = (config) => {
+		if (Array.isArray(config?.WEB_SEARCH_DOMAIN_FILTER_LIST)) {
+			config.WEB_SEARCH_DOMAIN_FILTER_LIST = config.WEB_SEARCH_DOMAIN_FILTER_LIST.join(',');
+		} else if (!config.WEB_SEARCH_DOMAIN_FILTER_LIST) {
+			config.WEB_SEARCH_DOMAIN_FILTER_LIST = '';
+		}
+
+		if (Array.isArray(config?.YOUTUBE_LOADER_LANGUAGE)) {
+			config.YOUTUBE_LOADER_LANGUAGE = config.YOUTUBE_LOADER_LANGUAGE.join(',');
+		} else if (!config.YOUTUBE_LOADER_LANGUAGE) {
+			config.YOUTUBE_LOADER_LANGUAGE = '';
+		}
+
+		if (config.FIRECRAWL_TIMEOUT && typeof config.FIRECRAWL_TIMEOUT === 'string') {
+			const parsed = parseInt(config.FIRECRAWL_TIMEOUT);
+			if (!isNaN(parsed)) {
+				config.FIRECRAWL_TIMEOUT = parsed;
+			}
+		}
+		if (config.PLAYWRIGHT_TIMEOUT && typeof config.PLAYWRIGHT_TIMEOUT === 'string') {
+			const parsed = parseInt(config.PLAYWRIGHT_TIMEOUT);
+			if (!isNaN(parsed)) {
+				config.PLAYWRIGHT_TIMEOUT = parsed;
+			}
+		}
+
+		config.LINKUP_SEARCH_PARAMS =
+			typeof config.LINKUP_SEARCH_PARAMS === 'object'
+				? JSON.stringify(config.LINKUP_SEARCH_PARAMS ?? {}, null, 2)
+				: (config.LINKUP_SEARCH_PARAMS ?? '');
+
+		return config;
+	};
+
+	const loadData = async () => {
+		const res = await getRAGConfig(localStorage.token);
+
+		if (res) {
+			webConfig = prepareWebConfigForDisplay({ ...res.web });
+			initialSnapshot = snapshot();
+			dirty = false;
+		}
+	};
+
+	const discardHandler = async () => {
+		await loadData();
+	};
+
 	const submitHandler = async () => {
+		if (!webConfig) return false;
+
+		saving = true;
+
 		// Convert domain filter string to array before sending
 		if (
 			typeof webConfig.WEB_SEARCH_DOMAIN_FILTER_LIST === 'string' &&
@@ -62,10 +128,7 @@
 		}
 
 		// Convert Youtube loader language string to array before sending
-		if (
-			typeof webConfig.YOUTUBE_LOADER_LANGUAGE === 'string' &&
-			webConfig.YOUTUBE_LOADER_LANGUAGE
-		) {
+		if (typeof webConfig.YOUTUBE_LOADER_LANGUAGE === 'string' && webConfig.YOUTUBE_LOADER_LANGUAGE) {
 			webConfig.YOUTUBE_LOADER_LANGUAGE = webConfig.YOUTUBE_LOADER_LANGUAGE.split(',')
 				.map((lang) => lang.trim())
 				.filter((lang) => lang.length > 0);
@@ -82,14 +145,24 @@
 		}
 
 		// Convert Linkup params JSON string to object before sending
-		const linkupParams =
-			typeof webConfig.LINKUP_SEARCH_PARAMS === 'string' &&
-			webConfig.LINKUP_SEARCH_PARAMS.trim() !== ''
-				? JSON.parse(webConfig.LINKUP_SEARCH_PARAMS)
-				: (webConfig.LINKUP_SEARCH_PARAMS ?? {});
+		let linkupParams = {};
+		try {
+			linkupParams =
+				typeof webConfig.LINKUP_SEARCH_PARAMS === 'string' &&
+				webConfig.LINKUP_SEARCH_PARAMS.trim() !== ''
+					? JSON.parse(webConfig.LINKUP_SEARCH_PARAMS)
+					: (webConfig.LINKUP_SEARCH_PARAMS ?? {});
+		} catch {
+			toast.error($i18n.t('Invalid Linkup search params JSON'));
+			saving = false;
+			return false;
+		}
 
 		const res = await updateRAGConfig(localStorage.token, {
 			web: { ...webConfig, LINKUP_SEARCH_PARAMS: linkupParams }
+		}).catch((error) => {
+			toast.error(`${error}`);
+			return null;
 		});
 
 		// Convert arrays back to strings for display
@@ -99,65 +172,28 @@
 		if (Array.isArray(webConfig.YOUTUBE_LOADER_LANGUAGE)) {
 			webConfig.YOUTUBE_LOADER_LANGUAGE = webConfig.YOUTUBE_LOADER_LANGUAGE.join(',');
 		}
-	};
-
-	onMount(async () => {
-		const res = await getRAGConfig(localStorage.token);
 
 		if (res) {
-			webConfig = res.web;
-
-			// Convert array back to comma-separated string for display
-			if (Array.isArray(webConfig?.WEB_SEARCH_DOMAIN_FILTER_LIST)) {
-				webConfig.WEB_SEARCH_DOMAIN_FILTER_LIST = webConfig.WEB_SEARCH_DOMAIN_FILTER_LIST.join(',');
-			} else if (!webConfig.WEB_SEARCH_DOMAIN_FILTER_LIST) {
-				webConfig.WEB_SEARCH_DOMAIN_FILTER_LIST = '';
-			}
-
-			if (Array.isArray(webConfig?.YOUTUBE_LOADER_LANGUAGE)) {
-				webConfig.YOUTUBE_LOADER_LANGUAGE = webConfig.YOUTUBE_LOADER_LANGUAGE.join(',');
-			} else if (!webConfig.YOUTUBE_LOADER_LANGUAGE) {
-				webConfig.YOUTUBE_LOADER_LANGUAGE = '';
-			}
-
-			// Convert timeout strings to numbers for number input fields
-			if (webConfig.FIRECRAWL_TIMEOUT && typeof webConfig.FIRECRAWL_TIMEOUT === 'string') {
-				const parsed = parseInt(webConfig.FIRECRAWL_TIMEOUT);
-				if (!isNaN(parsed)) {
-					webConfig.FIRECRAWL_TIMEOUT = parsed;
-				}
-			}
-			if (webConfig.PLAYWRIGHT_TIMEOUT && typeof webConfig.PLAYWRIGHT_TIMEOUT === 'string') {
-				const parsed = parseInt(webConfig.PLAYWRIGHT_TIMEOUT);
-				if (!isNaN(parsed)) {
-					webConfig.PLAYWRIGHT_TIMEOUT = parsed;
-				}
-			}
-
-			// Convert Linkup params object to JSON string for textarea display
-			webConfig.LINKUP_SEARCH_PARAMS =
-				typeof webConfig.LINKUP_SEARCH_PARAMS === 'object'
-					? JSON.stringify(webConfig.LINKUP_SEARCH_PARAMS ?? {}, null, 2)
-					: (webConfig.LINKUP_SEARCH_PARAMS ?? '');
+			saveHandler();
+			initialSnapshot = snapshot();
+			dirty = false;
 		}
-	});
+
+		saving = false;
+		return !!res;
+	};
+
+	onMount(loadData);
 </script>
 
-<form
-	class="flex flex-col h-full justify-between space-y-3 text-sm"
-	on:submit|preventDefault={async () => {
-		await submitHandler();
-		saveHandler();
-	}}
->
-	<div class=" space-y-3 overflow-y-scroll scrollbar-hidden h-full">
+<form class="flex flex-col space-y-3 text-sm">
+	<div class=" space-y-3">
 		{#if webConfig}
-			<div class="">
-				<div class="mb-3">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Web Search"
+				description="Enable web search and choose your search provider."
+				className="mb-3"
+			>
 					<div class="  mb-2.5 flex w-full justify-between">
 						<div class=" self-center text-xs font-medium">
 							{$i18n.t('Web Search')}
@@ -217,6 +253,11 @@
 						</div>
 					</div>
 
+					<PermissionsSection
+						title="Provider Configuration"
+						description="API keys, endpoints, and engine-specific options."
+						bind:open={openProvider}
+					>
 					{#if webConfig.WEB_SEARCH_ENGINE !== ''}
 						{#if webConfig.WEB_SEARCH_ENGINE === 'ollama_cloud'}
 							<div class="mb-2.5 flex w-full flex-col">
@@ -1083,6 +1124,7 @@
 							/>
 						</div>
 					{/if}
+					</PermissionsSection>
 
 					<div class="  mb-2.5 flex w-full justify-between">
 						<div class=" self-center text-xs font-medium">
@@ -1134,13 +1176,13 @@
 							</Tooltip>
 						</div>
 					</div>
-				</div>
+			</AdminSettingsCard>
 
-				<div class="mb-3">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Prompt URL Extraction')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Prompt URL Extraction"
+				description="Fetch linked URLs from chat messages for RAG context."
+				className="mb-3"
+			>
 					<div class="  mb-2.5 flex w-full justify-between">
 						<div class=" self-center text-xs font-medium">
 							<Tooltip
@@ -1188,13 +1230,13 @@
 							</div>
 						</div>
 					{/if}
-				</div>
+			</AdminSettingsCard>
 
-				<div class="mb-3">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Loader')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Loader"
+				description="Configure how fetched web pages are loaded and processed."
+				className="mb-3"
+			>
 					<div class="  mb-2.5 flex w-full justify-between">
 						<div class=" self-center text-xs font-medium">
 							{$i18n.t('Web Loader Engine')}
@@ -1458,16 +1500,9 @@
 							/>
 						</div>
 					</div>
-				</div>
-			</div>
+			</AdminSettingsCard>
+
+			<AdminSaveBar {dirty} {saving} onSave={submitHandler} onDiscard={discardHandler} />
 		{/if}
-	</div>
-	<div class="flex justify-end pt-3 text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-			type="submit"
-		>
-			{$i18n.t('Save')}
-		</button>
 	</div>
 </form>

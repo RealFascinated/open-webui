@@ -135,6 +135,15 @@
 		}
 	};
 
+	const openTerminal = () => {
+		if (terminalFlyoutPanel?.canOpenAsSideFlyout(terminalTriggerElement)) {
+			toggleTerminalFlyout();
+		} else {
+			activeSubmenu = null;
+			tab = 'terminal';
+		}
+	};
+
 	let showAttachWebpageModal = false;
 
 	let fileUploadEnabled = true;
@@ -598,9 +607,11 @@
 							<button
 								class="flex gap-2 w-full items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl"
 								type="button"
-								on:mouseenter={openTerminalFlyout}
+								on:mouseenter={() =>
+									terminalFlyoutPanel?.canOpenAsSideFlyout(terminalTriggerElement) &&
+									openTerminalFlyout()}
 								on:mouseleave={closeTerminalFlyout}
-								on:click={toggleTerminalFlyout}
+								on:click={openTerminal}
 							>
 								<Cloud className="size-4" strokeWidth="2" />
 
@@ -825,6 +836,49 @@
 							</div>
 						</button>
 					{/if}
+				</div>
+			{:else if tab === 'tools'}
+				<div in:fly={{ x: 20, duration: 150 }}>
+					<IntegrationsMenuPanel
+						bind:tab
+						bind:activeSubmenu
+						active={show}
+						selectedModels={selectedModels}
+						bind:selectedToolIds
+						bind:selectedSkillIds
+						{toggleFilters}
+						bind:selectedFilterIds
+						{showImageGenerationButton}
+						bind:imageGenerationEnabled
+						{showCodeInterpreterButton}
+						bind:codeInterpreterEnabled
+						{onShowValves}
+					/>
+				</div>
+			{:else if tab === 'terminal'}
+				<div in:fly={{ x: 20, duration: 150 }}>
+					<button
+						class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
+						on:click={() => {
+							tab = '';
+						}}
+					>
+						<ChevronLeft />
+
+						<div class="flex items-center w-full justify-between">
+							<div>
+								{$i18n.t('Terminal')}
+							</div>
+						</div>
+					</button>
+
+					<TerminalMenuPanel
+						on:selected={() => {
+							show = false;
+							activeSubmenu = null;
+							tab = '';
+						}}
+					/>
 				</div>
 			{:else if tab === 'skills'}
 				<div in:fly={{ x: 20, duration: 150 }}>

@@ -42,7 +42,7 @@
 	export let model = null;
 	export let edit = false;
 
-	export let preset = true;
+	export let preset = false;
 
 	let loading = false;
 	let success = false;
@@ -124,7 +124,6 @@
 						(edit && baseModel.id === info.base_model_id)) &&
 					(!baseModel?.preset || (edit && baseModel.id === info.base_model_id)) &&
 					baseModel?.owned_by !== 'arena' &&
-					!(baseModel?.direct ?? false) &&
 					($user?.role === 'admin' ||
 						!(baseModel?.info?.meta?.hidden ?? false) ||
 						baseModel.id === info.base_model_id)

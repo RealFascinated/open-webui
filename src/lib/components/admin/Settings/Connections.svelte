@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { createEventDispatcher, onMount, getContext, tick } from 'svelte';
+	import { onMount, getContext, tick } from 'svelte';
 
-	const dispatch = createEventDispatcher();
-
-	import { getOllamaConfig, updateOllamaConfig } from '$lib/apis/ollama';
-	import { getOpenAIConfig, updateOpenAIConfig, getOpenAIModels } from '$lib/apis/openai';
+	import { getOllamaConfig, updateOllamaConfig, verifyOllamaConnection } from '$lib/apis/ollama';
+	import { getOpenAIConfig, updateOpenAIConfig, getOpenAIModels, verifyOpenAIConnection } from '$lib/apis/openai';
 	import { getModels as _getModels, getBackendConfig } from '$lib/apis';
 	import { getConnectionsConfig, setConnectionsConfig } from '$lib/apis/configs';
 
@@ -19,16 +17,18 @@
 	import OpenAIConnection from './Connections/OpenAIConnection.svelte';
 	import AddConnectionModal from '$lib/components/AddConnectionModal.svelte';
 	import OllamaConnection from './Connections/OllamaConnection.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
 
 	const i18n = getContext('i18n');
 
+	type ConnectionStatus = 'configured' | 'not_configured' | 'warning' | null;
+
+	let openaiStatus: ConnectionStatus = null;
+	let ollamaStatus: ConnectionStatus = null;
+
 	const getModels = async () => {
-		const models = await _getModels(
-			localStorage.token,
-			$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null),
-			false,
-			true
-		);
+		const models = await _getModels(localStorage.token, false, true);
 		return models;
 	};
 
@@ -48,6 +48,43 @@
 	let pipelineUrls = {};
 	let showAddOpenAIConnectionModal = false;
 	let showAddOllamaConnectionModal = false;
+
+	const refreshConnectionStatus = async () => {
+		const token = localStorage.token;
+
+		if (!ENABLE_OPENAI_API) {
+			openaiStatus = 'not_configured';
+		} else if (!OPENAI_API_BASE_URLS?.[0]) {
+			openaiStatus = 'warning';
+		} else {
+			try {
+				await verifyOpenAIConnection(token, {
+					url: OPENAI_API_BASE_URLS[0],
+					key: OPENAI_API_KEYS?.[0] ?? '',
+					config: OPENAI_API_CONFIGS?.[0] ?? {}
+				});
+				openaiStatus = 'configured';
+			} catch {
+				openaiStatus = 'warning';
+			}
+		}
+
+		if (!ENABLE_OLLAMA_API) {
+			ollamaStatus = 'not_configured';
+		} else if (!OLLAMA_BASE_URLS?.[0]) {
+			ollamaStatus = 'warning';
+		} else {
+			try {
+				await verifyOllamaConnection(token, {
+					url: OLLAMA_BASE_URLS[0],
+					key: OLLAMA_API_CONFIGS?.[0]?.key ?? ''
+				});
+				ollamaStatus = 'configured';
+			} catch {
+				ollamaStatus = 'warning';
+			}
+		}
+	};
 
 	const updateOpenAIHandler = async () => {
 		if (ENABLE_OPENAI_API !== null) {
@@ -82,6 +119,7 @@
 			if (res) {
 				toast.success($i18n.t('OpenAI API settings updated'));
 				await models.set(await getModels());
+				await refreshConnectionStatus();
 			}
 		}
 	};
@@ -102,6 +140,7 @@
 			if (res) {
 				toast.success($i18n.t('Ollama API settings updated'));
 				await models.set(await getModels());
+				await refreshConnectionStatus();
 			}
 		}
 	};
@@ -191,17 +230,11 @@
 					}
 				}
 			}
+
+			await refreshConnectionStatus();
 		}
 	});
 
-	const submitHandler = async () => {
-		updateOpenAIHandler();
-		updateOllamaHandler();
-
-		dispatch('save');
-
-		await config.set(await getBackendConfig());
-	};
 </script>
 
 <AddConnectionModal
@@ -215,8 +248,8 @@
 	onSubmit={addOllamaConnectionHandler}
 />
 
-<form class="flex flex-col h-full justify-between text-sm" on:submit|preventDefault={submitHandler}>
-	<div class=" overflow-y-scroll scrollbar-hidden h-full">
+<form class="flex flex-col text-sm">
+	<div>
 		{#if ENABLE_OPENAI_API !== null && ENABLE_OLLAMA_API !== null && connectionsConfig !== null}
 			<div class="mb-3.5">
 				<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
@@ -225,8 +258,14 @@
 
 				<div class="my-2">
 					<div class="mt-2 space-y-2">
+						<AdminSettingsCard
+							title="OpenAI API"
+							description="External OpenAI-compatible model providers."
+							status={openaiStatus}
+							className="mb-2"
+						>
 						<div class="flex justify-between items-center text-sm">
-							<div class="  font-medium">{$i18n.t('OpenAI API')}</div>
+							<div class="font-medium">{$i18n.t('Enable OpenAI API')}</div>
 
 							<div class="flex items-center">
 								<div class="">
@@ -241,7 +280,7 @@
 						</div>
 
 						{#if ENABLE_OPENAI_API}
-							<div class="">
+							<div class="pt-1">
 								<div class="flex justify-between items-center">
 									<div class="font-medium text-xs">{$i18n.t('Manage OpenAI API Connections')}</div>
 
@@ -287,12 +326,18 @@
 								</div>
 							</div>
 						{/if}
+						</AdminSettingsCard>
 					</div>
 				</div>
 
 				<div class=" my-2">
+					<AdminSettingsCard
+						title="Ollama API"
+						description="Local and remote Ollama model servers."
+						status={ollamaStatus}
+					>
 					<div class="flex justify-between items-center text-sm mb-2">
-						<div class="  font-medium">{$i18n.t('Ollama API')}</div>
+						<div class="font-medium">{$i18n.t('Enable Ollama API')}</div>
 
 						<div class="mt-1">
 							<Switch
@@ -359,29 +404,7 @@
 							</div>
 						</div>
 					{/if}
-				</div>
-
-				<div class="my-2">
-					<div class="flex justify-between items-center text-sm">
-						<div class="  font-medium">{$i18n.t('Direct Connections')}</div>
-
-						<div class="flex items-center">
-							<div class="">
-								<Switch
-									bind:state={connectionsConfig.ENABLE_DIRECT_CONNECTIONS}
-									on:change={async () => {
-										updateConnectionsHandler();
-									}}
-								/>
-							</div>
-						</div>
-					</div>
-
-					<div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
-						{$i18n.t(
-							'Direct Connections allow users to connect to their own OpenAI compatible API endpoints.'
-						)}
-					</div>
+					</AdminSettingsCard>
 				</div>
 
 				<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
@@ -418,12 +441,7 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-			type="submit"
-		>
-			{$i18n.t('Save')}
-		</button>
-	</div>
+	{#if ENABLE_OPENAI_API !== null && ENABLE_OLLAMA_API !== null && connectionsConfig !== null}
+		<AdminSaveBar autoSave />
+	{/if}
 </form>

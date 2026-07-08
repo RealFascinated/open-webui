@@ -16,6 +16,8 @@
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import Banners from './Interface/Banners.svelte';
 	import Events from './Events.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -28,8 +30,27 @@
 	};
 
 	let adminConfig = null;
-
 	let banners: Banner[] = [];
+	let dirty = false;
+	let saving = false;
+	let initialSnapshot = '';
+
+	const snapshot = () => JSON.stringify({ adminConfig, banners });
+
+	$: if (initialSnapshot && adminConfig !== null) {
+		dirty = snapshot() !== initialSnapshot;
+	}
+
+	const loadData = async () => {
+		adminConfig = await getAdminConfig(localStorage.token);
+		banners = [...$_banners];
+		initialSnapshot = snapshot();
+		dirty = false;
+	};
+
+	const discardHandler = async () => {
+		await loadData();
+	};
 
 	const checkForVersionUpdates = async () => {
 		updateAvailable = null;
@@ -51,6 +72,7 @@
 	};
 
 	const updateHandler = async () => {
+		saving = true;
 		const res = await updateAdminConfig(localStorage.token, adminConfig);
 
 		await updateBanners();
@@ -59,25 +81,19 @@
 
 		if (res) {
 			saveHandler();
+			initialSnapshot = snapshot();
+			dirty = false;
 		} else {
 			toast.error($i18n.t('Failed to update settings'));
 		}
+		saving = false;
 	};
 
-	onMount(async () => {
-		adminConfig = await getAdminConfig(localStorage.token);
-
-		banners = [...$_banners];
-	});
+	onMount(loadData);
 </script>
 
-<form
-	class="flex flex-col h-full justify-between space-y-3 text-sm"
-	on:submit|preventDefault={async () => {
-		updateHandler();
-	}}
->
-	<div class="space-y-3 overflow-y-scroll scrollbar-hidden h-full">
+<form class="flex flex-col space-y-3 text-sm">
+	<div class="space-y-3">
 		{#if adminConfig !== null}
 			<div class="">
 				<div class="mb-3.5">
@@ -239,11 +255,11 @@
 					</div>
 				</div>
 
-				<div class="mb-3">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Features')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+				<AdminSettingsCard
+					title="Features"
+					description="Toggle product features and instance-wide behavior."
+					className="mb-3"
+				>
 					<div class="mb-2.5 flex w-full items-center justify-between pr-2">
 						<div class=" self-center text-xs font-medium">
 							{$i18n.t('Enable Community Sharing')}
@@ -386,7 +402,7 @@
 							)}
 						</div>
 					</div>
-				</div>
+				</AdminSettingsCard>
 
 				<Events />
 
@@ -441,12 +457,7 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-			type="submit"
-		>
-			{$i18n.t('Save')}
-		</button>
-	</div>
+	{#if adminConfig !== null}
+		<AdminSaveBar {dirty} {saving} onSave={updateHandler} onDiscard={discardHandler} />
+	{/if}
 </form>

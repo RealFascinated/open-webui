@@ -6,6 +6,7 @@
 	import equal from 'fast-deep-equal';
 	export let statusHistory = [];
 	export let expand = false;
+	export let messageDone = false;
 
 	let showHistory = true;
 
@@ -30,20 +31,28 @@
 {#if history && history.length > 0}
 	{#if status?.hidden !== true}
 		<div class="text-sm flex flex-col w-full">
-			<button
-				class="w-full"
-				aria-label={$i18n.t('Toggle status history')}
-				aria-expanded={showHistory}
-				on:click={() => {
-					showHistory = !showHistory;
-				}}
-			>
-				<div class="flex items-start gap-2">
-					<StatusItem {status} />
+			{#if messageDone || status?.done}
+				<div class="w-full">
+					<div class="flex items-start gap-2">
+						<StatusItem {status} done={true} />
+					</div>
 				</div>
-			</button>
+			{:else}
+				<button
+					class="w-full"
+					aria-label={$i18n.t('Toggle status history')}
+					aria-expanded={showHistory}
+					on:click={() => {
+						showHistory = !showHistory;
+					}}
+				>
+					<div class="flex items-start gap-2">
+						<StatusItem {status} />
+					</div>
+				</button>
+			{/if}
 
-			{#if showHistory}
+			{#if showHistory && !(messageDone || status?.done)}
 				<div class="flex flex-row">
 					{#if history.length > 1}
 						<div class="w-full">

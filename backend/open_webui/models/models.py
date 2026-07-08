@@ -397,6 +397,88 @@ class ModelsTable:
 
             return ModelListResponse(items=models, total=total)
 
+    async def search_base_models(
+        self,
+        user_id: str,
+        filter: dict = {},
+        skip: int = 0,
+        limit: int = 30,
+        db: AsyncSession | None = None,
+    ) -> ModelListResponse:
+        async with get_async_db_context(db) as db:
+            stmt = select(Model, User).outerjoin(User, User.id == Model.user_id)
+            stmt = stmt.filter(Model.base_model_id.is_(None))
+
+            if filter:
+                query_key = filter.get('query')
+                if query_key:
+                    stmt = stmt.filter(
+                        or_(
+                            Model.name.ilike(f'%{query_key}%'),
+                            Model.id.ilike(f'%{query_key}%'),
+                            User.name.ilike(f'%{query_key}%'),
+                            User.email.ilike(f'%{query_key}%'),
+                            User.username.ilike(f'%{query_key}%'),
+                        )
+                    )
+
+                tag = filter.get('tag')
+                if tag:
+                    if db.bind.dialect.name == 'sqlite':
+                        if tag.isascii():
+                            meta_text = func.lower(cast(Model.meta, String))
+                            pattern = f'%{json.dumps(tag.lower())}%'
+                        else:
+                            meta_text = cast(Model.meta, String)
+                            pattern = f'%{json.dumps(tag)}%'
+                    else:
+                        meta_text = func.lower(cast(Model.meta, String))
+                        pattern = f'%{json.dumps(tag.lower(), ensure_ascii=False)}%'
+                    stmt = stmt.filter(meta_text.like(pattern))
+
+                order_by = filter.get('order_by')
+                direction = filter.get('direction')
+
+                if order_by == 'name':
+                    stmt = stmt.order_by(Model.name.asc() if direction == 'asc' else Model.name.desc())
+                elif order_by == 'created_at':
+                    stmt = stmt.order_by(Model.created_at.asc() if direction == 'asc' else Model.created_at.desc())
+                elif order_by == 'updated_at':
+                    stmt = stmt.order_by(Model.updated_at.asc() if direction == 'asc' else Model.updated_at.desc())
+            else:
+                stmt = stmt.order_by(Model.created_at.desc())
+
+            count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
+            total = count_result.scalar()
+
+            if skip:
+                stmt = stmt.offset(skip)
+            if limit:
+                stmt = stmt.limit(limit)
+
+            result = await db.execute(stmt)
+            items = result.all()
+
+            model_ids = [model.id for model, _ in items]
+            grants_map = await AccessGrants.get_grants_by_resources('model', model_ids, db=db)
+
+            models = []
+            for model, user in items:
+                models.append(
+                    ModelUserResponse(
+                        **(
+                            await self._to_model_model(
+                                model,
+                                access_grants=grants_map.get(model.id, []),
+                                db=db,
+                            )
+                        ).model_dump(),
+                        user=(UserResponse(**UserModel.model_validate(user).model_dump()) if user else None),
+                    )
+                )
+
+            return ModelListResponse(items=models, total=total)
+
     async def get_model_meta_by_id(self, id: str, db: AsyncSession | None = None) -> tuple[dict, int | None]:
         """Return (meta, updated_at) for a model, skipping access grant resolution."""
         try:

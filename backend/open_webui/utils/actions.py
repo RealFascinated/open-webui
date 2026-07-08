@@ -29,12 +29,7 @@ async def chat_action(request: Request, action_id: str, form_data: dict, user: A
     if not request.app.state.MODELS:
         await get_all_models(request, user=user)
 
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     data = form_data
     model_id = data['model']

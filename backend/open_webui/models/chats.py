@@ -14,6 +14,7 @@ from open_webui.models.chat_messages import ChatMessage, ChatMessages
 from open_webui.models.folders import Folders
 from open_webui.models.tags import Tag, TagModel, Tags
 from open_webui.utils.misc import get_output_text, sanitize_data_for_db, sanitize_text_for_db
+from open_webui.utils.chat_retry import upsert_status_entry
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import (
     JSON,
@@ -811,8 +812,7 @@ class ChatTable:
 
         if message_id in history.get('messages', {}):
             status_history = history['messages'][message_id].get('statusHistory', [])
-            status_history.append(status)
-            history['messages'][message_id]['statusHistory'] = status_history
+            history['messages'][message_id]['statusHistory'] = upsert_status_entry(status_history, status)
 
         chat['history'] = history
         return await self.update_chat_by_id(id, chat)

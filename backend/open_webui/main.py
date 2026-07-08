@@ -81,7 +81,6 @@ from open_webui.env import (
     DEPLOYMENT_ID,
     ENABLE_AUDIT_GET_REQUESTS,
     ENABLE_COMPRESSION_MIDDLEWARE,
-    ENABLE_CUSTOM_MODEL_FALLBACK,
     ENABLE_EASTER_EGGS,
     EXTERNAL_PWA_MANIFEST_URL,
     # OAuth Back-Channel Logout
@@ -1017,30 +1016,23 @@ async def chat_completion(
         await get_all_models(request, user=user)
 
     model_id = form_data.get('model', None)
-    model_item = form_data.pop('model_item', {})
     tasks = form_data.pop('background_tasks', None)
 
     metadata = {}
     try:
         model_info = None
-        if not model_item.get('direct', False):
-            if model_id not in request.app.state.MODELS:
-                raise Exception('Model not found')
+        if model_id not in request.app.state.MODELS:
+            raise Exception('Model not found')
 
-            model = request.app.state.MODELS[model_id]
-            model_info = await Models.get_model_by_id(model_id)
+        model = request.app.state.MODELS[model_id]
+        model_info = await Models.get_model_by_id(model_id)
 
-            # Check if user has access to the model
-            if not BYPASS_MODEL_ACCESS_CONTROL and (user.role != 'admin' or not BYPASS_ADMIN_ACCESS_CONTROL):
-                try:
-                    await check_model_access(user, model)
-                except Exception as e:
-                    raise e
-        else:
-            model = model_item
-
-            request.state.direct = True
-            request.state.model = model
+        # Check if user has access to the model
+        if not BYPASS_MODEL_ACCESS_CONTROL and (user.role != 'admin' or not BYPASS_ADMIN_ACCESS_CONTROL):
+            try:
+                await check_model_access(user, model)
+            except Exception as e:
+                raise e
 
         # Model params: global defaults as base, per-model overrides win
         default_model_params = await Config.get('models.default_params', {}) or {}
@@ -1048,35 +1040,18 @@ async def chat_completion(
             **default_model_params,
             **(model_info.params.model_dump() if model_info and model_info.params else {}),
         }
-        request_params = {key: value for key, value in (form_data.get('params') or {}).items() if value is not None}
-        if model_info_params or request_params:
+        request_params = form_data.get('params') or {}
+        request_think = request_params.get('think', '__missing__')
+        if model_info_params or request_think != '__missing__':
             form_data['params'] = {
                 **model_info_params,
-                **request_params,
+                **({'think': request_think} if request_think != '__missing__' else {}),
             }
-
-        # Check base model existence for custom models
-        if model_info and model_info.base_model_id:
-            base_model_id = model_info.base_model_id
-            if base_model_id not in request.app.state.MODELS:
-                if ENABLE_CUSTOM_MODEL_FALLBACK:
-                    default_models = ((await Config.get('ui.default_models')) or '').split(',')
-
-                    fallback_model_id = default_models[0].strip() if default_models[0] else None
-
-                    if fallback_model_id and fallback_model_id in request.app.state.MODELS:
-                        # Update model and form_data so routing uses the fallback model's type
-                        model = request.app.state.MODELS[fallback_model_id]
-                        form_data['model'] = fallback_model_id
-                    else:
-                        raise Exception('Model not found')
-                else:
-                    raise Exception('Model not found')
 
         # Chat Params
         stream_delta_chunk_size = form_data.get('params', {}).get('stream_delta_chunk_size')
         reasoning_tags = form_data.get('params', {}).get('reasoning_tags')
-        compact_token_threshold = form_data.get('params', {}).get('compact_token_threshold')
+        compact_context_percent = form_data.get('params', {}).get('compact_context_percent')
 
         # Model Params
         if model_info_params.get('stream_response') is not None:
@@ -1088,8 +1063,8 @@ async def chat_completion(
         if model_info_params.get('reasoning_tags') is not None:
             reasoning_tags = model_info_params.get('reasoning_tags')
 
-        if model_info_params.get('compact_token_threshold') is not None:
-            compact_token_threshold = model_info_params.get('compact_token_threshold')
+        if model_info_params.get('compact_context_percent') is not None:
+            compact_context_percent = model_info_params.get('compact_context_percent')
 
         # parent_id signals intent:
         #   null   → new chat (root message, no parent)
@@ -1145,11 +1120,10 @@ async def chat_completion(
             'features': form_data.get('features', {}),
             'variables': form_data.get('variables', {}),
             'model': model,
-            'direct': model_item.get('direct', False),
             'params': {
                 'stream_delta_chunk_size': stream_delta_chunk_size,
                 'reasoning_tags': reasoning_tags,
-                'compact_token_threshold': compact_token_threshold,
+                'compact_context_percent': compact_context_percent,
                 'function_calling': (
                     form_data.get('params', {}).get('function_calling')
                     or model_info_params.get('function_calling')
@@ -1736,12 +1710,6 @@ async def chat_completed(request: Request, form_data: dict, user=Depends(get_ver
     """Deprecated: outlet filters now run inline during chat completion.
     Kept for backward compatibility with external integrations."""
     try:
-        model_item = form_data.pop('model_item', {})
-
-        if model_item.get('direct', False):
-            request.state.direct = True
-            request.state.model = model_item
-
         return await chat_completed_handler(request, form_data, user)
     except Exception as e:
         raise HTTPException(
@@ -1753,12 +1721,6 @@ async def chat_completed(request: Request, form_data: dict, user=Depends(get_ver
 @app.post('/api/chat/actions/{action_id}')
 async def chat_action(request: Request, action_id: str, form_data: dict, user=Depends(get_verified_user)):
     try:
-        model_item = form_data.pop('model_item', {})
-
-        if model_item.get('direct', False):
-            request.state.direct = True
-            request.state.model = model_item
-
         return await chat_action_handler(request, action_id, form_data, user)
     except Exception as e:
         raise HTTPException(
@@ -1860,7 +1822,6 @@ async def get_app_config(request: Request):
         'ui.enable_login_form',
         'auth.enable_api_keys',
         'ui.enable_password_change_form',
-        'direct.enable',
         'folders.enable',
         'folders.max_file_count',
         'channels.enable',
@@ -1929,7 +1890,6 @@ async def get_app_config(request: Request):
                     'enable_pyodide_file_persistence': ENABLE_PYODIDE_FILE_PERSISTENCE,
                     'enable_public_active_users_count': ENABLE_PUBLIC_ACTIVE_USERS_COUNT,
                     'enable_easter_eggs': ENABLE_EASTER_EGGS,
-                    'enable_direct_connections': config.get('direct.enable'),
                     'enable_folders': config.get('folders.enable'),
                     'folder_max_file_count': config.get('folders.max_file_count'),
                     'enable_channels': config.get('channels.enable'),

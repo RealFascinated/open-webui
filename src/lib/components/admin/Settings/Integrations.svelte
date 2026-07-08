@@ -24,6 +24,8 @@
 	import AddToolServerModal from '$lib/components/AddToolServerModal.svelte';
 	import AddTerminalServerModal from '$lib/components/AddTerminalServerModal.svelte';
 	import ExternalKnowledge from './ExternalKnowledge.svelte';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 
 	import {
 		getToolServerConnections,
@@ -50,6 +52,21 @@
 	let showAddTerminalModal = false;
 	let editTerminalIdx: number | null = null;
 
+	let dirty = false;
+	let saving = false;
+	let initialSnapshot = '';
+
+	const snapshot = () => JSON.stringify({ servers, terminalConnections });
+
+	$: if (initialSnapshot && servers !== null) {
+		dirty = snapshot() !== initialSnapshot;
+	}
+
+	const refreshSnapshot = () => {
+		initialSnapshot = snapshot();
+		dirty = false;
+	};
+
 	const addConnectionHandler = async (server: ToolServerConnection) => {
 		servers = [...(servers ?? []), server];
 		await updateHandler();
@@ -65,6 +82,7 @@
 
 		if (res) {
 			toast.success($i18n.t('Connections saved successfully'));
+			refreshSnapshot();
 		}
 	};
 
@@ -92,6 +110,7 @@
 				key: localStorage.token
 			}));
 			terminalServers.set([...existingDirectTerminals, ...systemEntries] as unknown);
+			refreshSnapshot();
 		}
 	};
 
@@ -115,11 +134,10 @@
 		saveTerminalServers();
 	};
 
-	onMount(async () => {
+	const loadData = async () => {
 		const res = await getToolServerConnections(localStorage.token);
 		servers = res.TOOL_SERVER_CONNECTIONS as ToolServerConnection[];
 
-		// Load terminal server connections
 		try {
 			const terminalRes = await getTerminalServerConnections(localStorage.token);
 			if (terminalRes?.TERMINAL_SERVER_CONNECTIONS) {
@@ -128,7 +146,22 @@
 		} catch {
 			// Not configured yet
 		}
-	});
+
+		refreshSnapshot();
+	};
+
+	const saveAllHandler = async () => {
+		saving = true;
+		await updateHandler();
+		await saveTerminalServers();
+		saving = false;
+	};
+
+	const discardHandler = async () => {
+		await loadData();
+	};
+
+	onMount(loadData);
 </script>
 
 <AddToolServerModal bind:show={showConnectionModal} onSubmit={addConnectionHandler} />
@@ -153,20 +186,14 @@
 	}}
 />
 
-<form
-	class="flex flex-col h-full justify-between text-sm"
-	on:submit|preventDefault={() => {
-		updateHandler();
-	}}
->
-	<div class=" overflow-y-scroll scrollbar-hidden h-full">
+<form class="flex flex-col text-sm">
+	<div>
 		{#if servers !== null}
-			<div class="">
-				<div class="mb-3">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Tools')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Tool Servers"
+				description="OpenAPI-compatible external tool and function servers."
+				className="mb-3"
+			>
 					<div class="mb-2.5 flex flex-col w-full justify-between">
 						<div class="flex justify-between items-center mb-0.5">
 							<div class="font-medium">{$i18n.t('External Tool Servers')}</div>
@@ -211,11 +238,14 @@
 							</div>
 						</div>
 					</div>
+			</AdminSettingsCard>
 
-					<div class="mt-4 mb-2.5 flex flex-col w-full">
-						<div class="flex justify-between items-center mb-1">
-							<div class="font-medium">{$i18n.t('Open Terminal')}</div>
-
+			<AdminSettingsCard
+				title="Open Terminal"
+				description="Remote terminal instances for file browsing and shell tools."
+				className="mb-3"
+			>
+					<div class="flex justify-end mb-1">
 							<Tooltip content={$i18n.t('Add Connection')}>
 								<button
 									class="px-1"
@@ -306,15 +336,14 @@
 								>
 							</div>
 						</div>
-					</div>
+			</AdminSettingsCard>
 
-					<div class="mt-8 mb-2.5 text-base font-medium">{$i18n.t('Knowledge')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Knowledge"
+				description="External knowledge base API integrations."
+			>
 					<ExternalKnowledge />
-				</div>
-			</div>
+			</AdminSettingsCard>
 		{:else}
 			<div class="flex h-full justify-center">
 				<div class="my-auto">
@@ -324,12 +353,7 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-			type="submit"
-		>
-			{$i18n.t('Save')}
-		</button>
-	</div>
+	{#if servers !== null}
+		<AdminSaveBar {dirty} {saving} onSave={saveAllHandler} onDiscard={discardHandler} />
+	{/if}
 </form>

@@ -52,13 +52,7 @@ async def generate_embeddings(
                 **request.state.metadata,
             }
 
-    # If "direct" flag present, use only that model
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     model_id = form_data.get('model')
     if model_id not in models:
@@ -66,9 +60,8 @@ async def generate_embeddings(
     model = models[model_id]
 
     # Access filtering
-    if not getattr(request.state, 'direct', False):
-        if not bypass_filter and user.role == 'user':
-            await check_model_access(user, model)
+    if not bypass_filter and user.role == 'user':
+        await check_model_access(user, model)
 
     # Ollama backend — use /api/embed which supports batch input natively
     if model.get('owned_by') == 'ollama':

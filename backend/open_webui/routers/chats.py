@@ -50,14 +50,14 @@ SEARCH_FILTER_PREFIXES = ('tag:', 'folder:', 'pinned:', 'archived:', 'shared:')
 
 CHAT_CONFIG_KEYS = {
     'ENABLE_CONTEXT_COMPACTION': 'chat.context_compaction.enable',
-    'CONTEXT_COMPACTION_TOKEN_THRESHOLD': 'chat.context_compaction.token_threshold',
+    'CONTEXT_COMPACTION_CONTEXT_PERCENT': 'chat.context_compaction.context_percent',
     'CONTEXT_COMPACTION_PROMPT_TEMPLATE': 'chat.context_compaction.prompt_template',
 }
 
 
 class ChatConfigForm(BaseModel):
     ENABLE_CONTEXT_COMPACTION: bool
-    CONTEXT_COMPACTION_TOKEN_THRESHOLD: int
+    CONTEXT_COMPACTION_CONTEXT_PERCENT: int
     CONTEXT_COMPACTION_PROMPT_TEMPLATE: str
 
 
@@ -104,7 +104,12 @@ def chat_search_snippet(chat: dict, search_text: str, max_length: int = 200) -> 
 
 async def get_chat_config_values() -> dict:
     values = await Config.get_many(*CHAT_CONFIG_KEYS.values())
-    return {field: values[storage_key] for field, storage_key in CHAT_CONFIG_KEYS.items() if storage_key in values}
+    result = {field: values[storage_key] for field, storage_key in CHAT_CONFIG_KEYS.items() if storage_key in values}
+    if 'CONTEXT_COMPACTION_CONTEXT_PERCENT' not in result:
+        from open_webui.utils.context_compaction import DEFAULT_CONTEXT_COMPACTION_CONTEXT_PERCENT
+
+        result['CONTEXT_COMPACTION_CONTEXT_PERCENT'] = DEFAULT_CONTEXT_COMPACTION_CONTEXT_PERCENT
+    return result
 
 
 def chat_config_updates(data: dict) -> dict:
@@ -711,12 +716,12 @@ async def get_chat_config(user=Depends(get_admin_user)):
 
 @router.post('/config', response_model=ChatConfigForm)
 async def set_chat_config(form_data: ChatConfigForm, user=Depends(get_admin_user)):
-    threshold = max(1, int(form_data.CONTEXT_COMPACTION_TOKEN_THRESHOLD))
+    context_percent = max(1, min(100, int(form_data.CONTEXT_COMPACTION_CONTEXT_PERCENT)))
     await Config.upsert(
         chat_config_updates(
             {
                 **form_data.model_dump(),
-                'CONTEXT_COMPACTION_TOKEN_THRESHOLD': threshold,
+                'CONTEXT_COMPACTION_CONTEXT_PERCENT': context_percent,
             }
         )
     )

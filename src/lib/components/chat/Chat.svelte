@@ -79,6 +79,7 @@
 	} from '$lib/utils/artifact-render';
 	import { getArtifacts } from '$lib/apis/artifacts';
 	import { AudioQueue } from '$lib/utils/audio';
+	import { getAvailableModelIds, resolveSelectedModels } from '$lib/utils/models';
 	import { resolveThinkForRequest } from '$lib/utils/thinking';
 	import { getOutputText, getAssistantText } from './Messages/structuredOutput';
 
@@ -158,6 +159,11 @@
 	let eventCallback = null;
 
 	let selectedModels = [''];
+	const resolveModels = (candidateModelIds: string[]) => {
+		const availableModelIds = getAvailableModelIds($models);
+		const defaultModelIds = $config?.default_models ? $config.default_models.split(',') : [];
+		return resolveSelectedModels(candidateModelIds, availableModelIds, defaultModelIds);
+	};
 	let atSelectedModel: Model | undefined;
 	let selectedModelIds = [];
 	$: if (atSelectedModel !== undefined) {
@@ -244,7 +250,6 @@
 	// Explicitly pinned files — always included in RAG (like Claude project files)
 	let chatFiles = [];
 	let files = [];
-	let params = {};
 
 	const RAG_FILE_TYPES = ['doc', 'text', 'note', 'chat', 'collection', 'folder'];
 
@@ -266,7 +271,7 @@
 	}
 
 	let saveControlsTimer;
-	$: if (!loading && !$temporaryChatEnabled && $chatId && params && chatFiles) {
+	$: if (!loading && !$temporaryChatEnabled && $chatId && chatFiles) {
 		clearTimeout(saveControlsTimer);
 		saveControlsTimer = setTimeout(saveControls, 400);
 	}
@@ -599,6 +604,22 @@
 		}
 	};
 
+	const upsertMessageStatus = (message, status) => {
+		if (!status) return;
+
+		const history = message?.statusHistory ?? [];
+		if (
+			status.action === 'chat_retry' &&
+			history.length > 0 &&
+			history[history.length - 1]?.action === 'chat_retry'
+		) {
+			message.statusHistory = [...history.slice(0, -1), status];
+			return;
+		}
+
+		message.statusHistory = [...history, status];
+	};
+
 	const chatEventHandler = async (event, cb) => {
 		console.log(event);
 
@@ -611,11 +632,7 @@
 				const data = event?.data?.data ?? null;
 
 				if (type === 'status') {
-					if (message?.statusHistory) {
-						message.statusHistory.push(data);
-					} else {
-						message.statusHistory = [data];
-					}
+					upsertMessageStatus(message, data);
 				} else if (type === 'chat:active') {
 					if (!data?.active) {
 						taskIds = null;
@@ -1006,10 +1023,13 @@
 
 		const selectedFolderSubscribe = selectedFolder.subscribe(async (folder) => {
 			await tick();
-			if (folder?.data?.model_ids && !equal(selectedModels, folder.data.model_ids)) {
-				selectedModels = folder.data.model_ids;
+			if (folder?.data?.model_ids) {
+				const resolvedModels = resolveModels(folder.data.model_ids);
+				if (!equal(selectedModels, resolvedModels)) {
+					selectedModels = resolvedModels;
 
-				console.log('Set selectedModels from folder data:', selectedModels);
+					console.log('Set selectedModels from folder data:', selectedModels);
+				}
 			}
 		});
 
@@ -1458,11 +1478,7 @@
 			await temporaryChatEnabled.set(false);
 		}
 
-		const availableModels = $models
-			.filter((m) => !(m?.info?.meta?.hidden ?? false))
-			.map((m) => m.id);
-
-		const defaultModels = $config?.default_models ? $config?.default_models.split(',') : [];
+		let skipModelResolution = false;
 
 		if ($page.url.searchParams.get('models') || $page.url.searchParams.get('model')) {
 			const urlModels = (
@@ -1473,6 +1489,7 @@
 
 			if (urlModels.length === 1) {
 				if (!$models.find((m) => m.id === urlModels[0])) {
+					skipModelResolution = true;
 					// Model not found; open model selector and prefill
 					const modelSelectorButton = document.getElementById('model-selector-0-button');
 					if (modelSelectorButton) {
@@ -1495,10 +1512,6 @@
 				selectedModels = urlModels;
 			}
 
-			// Unavailable models filtering
-			selectedModels = selectedModels.filter((modelId) =>
-				$models.map((m) => m.id).includes(modelId)
-			);
 		} else {
 			if ($selectedFolder?.data?.model_ids) {
 				// Set from folder model IDs
@@ -1512,34 +1525,16 @@
 					if ($settings?.models) {
 						// Set from user settings
 						selectedModels = $settings?.models;
-					} else if (defaultModels && defaultModels.length > 0) {
+					} else if ($config?.default_models) {
 						// Set from default models
-						selectedModels = defaultModels;
+						selectedModels = $config.default_models.split(',');
 					}
 				}
 			}
-
-			// Unavailable & hidden models filtering
-			selectedModels = selectedModels.filter((modelId) => availableModels.includes(modelId));
 		}
 
-		// Ensure at least one model is selected
-		if (selectedModels.length === 0 || (selectedModels.length === 1 && selectedModels[0] === '')) {
-			if (availableModels.length > 0) {
-				if (defaultModels && defaultModels.length > 0) {
-					selectedModels = defaultModels.filter((modelId) => availableModels.includes(modelId));
-				}
-
-				if (
-					selectedModels.length === 0 ||
-					(selectedModels.length === 1 && selectedModels[0] === '')
-				) {
-					// Only fall back to first available model if default models didn't resolve
-					selectedModels = [availableModels?.at(0) ?? ''];
-				}
-			} else {
-				selectedModels = [''];
-			}
+		if (!skipModelResolution) {
+			selectedModels = resolveModels(selectedModels);
 		}
 
 		await showControls.set(false);
@@ -1563,7 +1558,6 @@
 		};
 
 		chatFiles = [];
-		params = {};
 		taskIds = null;
 		chatTasks = [];
 
@@ -1666,10 +1660,6 @@
 			}
 		}
 
-		selectedModels = selectedModels.map((modelId) =>
-			$models.map((m) => m.id).includes(modelId) ? modelId : ''
-		);
-
 		const chatInput = document.getElementById('chat-input');
 		setTimeout(() => chatInput?.focus(), 0);
 	};
@@ -1701,9 +1691,11 @@
 						? chatContent.models
 						: [chatContent.models ?? ''];
 
-				if (!($user?.role === 'admin' || ($user?.permissions?.chat?.multiple_models ?? true))) {
+				if ($user?.role !== 'admin') {
 					selectedModels = selectedModels.length > 0 ? [selectedModels[0]] : [''];
 				}
+
+				selectedModels = resolveModels(selectedModels);
 
 				oldSelectedModelIds = structuredClone(selectedModels);
 
@@ -1720,7 +1712,6 @@
 
 				chatTitle.set(chatContent.title);
 
-				params = structuredClone(chatContent?.params ?? {});
 				// Only keep explicitly pinned files — message attachments are scoped to their turn
 				chatFiles = (chatContent?.files ?? [])
 					.filter((f) => f.pinned === true)
@@ -1902,7 +1893,6 @@
 					models: selectedModels,
 					messages: messages,
 					history: history,
-					params: params,
 					files: chatFiles
 				});
 
@@ -2055,11 +2045,7 @@
 			data;
 
 		if (status?.action === 'chat_retry') {
-			if (message?.statusHistory) {
-				message.statusHistory.push(status);
-			} else {
-				message.statusHistory = [status];
-			}
+			upsertMessageStatus(message, status);
 		}
 
 		// Store raw OR-aligned output items from backend
@@ -2127,6 +2113,17 @@
 			}
 
 			const visibleContent = getAssistantText(message?.output, message?.content ?? '');
+
+			if (!visibleContent.trim() && !message.error) {
+				const lastStatus = message.statusHistory?.at(-1);
+				if (lastStatus?.action === 'chat_retry' && lastStatus.done) {
+					message.error = {
+						content:
+							lastStatus.description ||
+							$i18n.t('The model did not return a response after multiple attempts.')
+					};
+				}
+			}
 
 			if ($settings.responseAutoCopy) {
 				copyToClipboard(visibleContent);
@@ -2221,9 +2218,7 @@
 	const submitHandler = async (userPrompt, { _raw = false } = {}) => {
 		console.log('submitHandler', userPrompt, $chatId);
 
-		const _selectedModels = selectedModels.map((modelId) =>
-			$models.map((m) => m.id).includes(modelId) ? modelId : ''
-		);
+		const _selectedModels = resolveModels(selectedModels);
 
 		if (!equal(selectedModels, _selectedModels)) {
 			selectedModels = _selectedModels;
@@ -2482,16 +2477,6 @@
 		return features;
 	};
 
-	const getStopTokens = () => {
-		const stop = params?.stop ?? $settings?.params?.stop;
-		if (!stop) return undefined;
-
-		const tokens = Array.isArray(stop) ? stop : stop.split(',').map((s) => s.trim());
-
-		return tokens
-			.filter(Boolean)
-			.map((token) => decodeURIComponent(JSON.parse(`"${token.replace(/"/g, '\\"')}"`)));
-	};
 
 	const sendMessageSocket = async (
 		model,
@@ -2539,18 +2524,8 @@
 			});
 		}
 
-		const stream =
-			model?.info?.params?.stream_response ??
-			$settings?.params?.stream_response ??
-			params?.stream_response ??
-			true;
-		// Always include system prompt — backend extracts it and prepends to DB messages.
-		// Only temp chats need conversation messages (persisted chats load from DB).
-		let messages: unknown[] = [
-			params?.system || $settings.system
-				? { role: 'system', content: `${params?.system ?? $settings?.system ?? ''}` }
-				: undefined
-		].filter(Boolean);
+		const stream = model?.info?.params?.stream_response ?? true;
+		let messages: unknown[] = [];
 
 		if ($temporaryChatEnabled) {
 			messages = [
@@ -2629,8 +2604,6 @@
 		// Only send terminal_id if the model has terminal capability enabled
 		const terminalEnabled = model.info?.meta?.capabilities?.terminal ?? true;
 
-		const { think: _chatThink, ...chatParams } = params ?? {};
-
 		const res = await generateOpenAIChatCompletion(
 			localStorage.token,
 			{
@@ -2638,10 +2611,7 @@
 				model: model.id,
 				...(messages.length > 0 ? { messages } : {}),
 				params: {
-					...$settings?.params,
-					...chatParams,
-					think: resolveThinkForRequest($settings?.params),
-					stop: getStopTokens()
+					think: resolveThinkForRequest($settings)
 				},
 
 				files: (files?.length ?? 0) > 0 ? files : undefined,
@@ -2744,16 +2714,6 @@
 						window.history.replaceState(history.state, '', `/c/${res.chat_id}`);
 						currentChatPage.set(1);
 						await chats.set(await getChatList(localStorage.token, $currentChatPage));
-
-						// Persist chat-level params (system prompt, advanced
-						// params) that the backend doesn't receive in the
-						// chat completion request.  Files are now persisted
-						// by the backend at chat creation time.
-						if (Object.keys(params).length > 0) {
-							await updateChatById(localStorage.token, res.chat_id, {
-								params: params
-							});
-						}
 					}
 				}
 			}
@@ -3043,8 +3003,6 @@
 					id: _chatId,
 					title: $i18n.t('New Chat'),
 					models: selectedModels,
-					system: $settings.system ?? undefined,
-					params: params,
 					history: history,
 					messages: createMessagesList(history, history.currentId),
 					tags: [],
@@ -3080,7 +3038,6 @@
 					models: selectedModels,
 					history: history,
 					messages: createMessagesList(history, history.currentId),
-					params: params,
 					files: chatFiles
 				});
 			}
@@ -3090,10 +3047,9 @@
 	const saveControls = async () => {
 		if (!$chatId || $temporaryChatEnabled) return;
 		const loaded = chat?.chat ?? {};
-		if (equal(params, loaded.params ?? {}) && equal(chatFiles, loaded.files ?? [])) return;
+		if (equal(chatFiles, loaded.files ?? [])) return;
 
 		const res = await updateChatById(localStorage.token, $chatId, {
-			params,
 			files: chatFiles
 		}).catch((err) => {
 			console.error('[controls autosave]', err);
@@ -3305,8 +3261,6 @@
 							chat: {
 								title: $chatTitle,
 								models: selectedModels,
-								system: $settings.system ?? undefined,
-								params: params,
 								history: history,
 								timestamp: Date.now()
 							}
@@ -3336,7 +3290,6 @@
 										id: uuidv4(),
 										title: title.length > 50 ? `${title.slice(0, 50)}...` : title,
 										models: selectedModels,
-										params: params,
 										history: history,
 										messages: messages,
 										timestamp: Date.now()
@@ -3540,7 +3493,6 @@
 					bind:this={controlPaneComponent}
 					bind:history
 					bind:chatFiles
-					bind:params
 					bind:files
 					bind:pane={controlPane}
 					chatId={$chatId}

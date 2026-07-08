@@ -16,8 +16,10 @@
 		getContextUsedTokens,
 		getContextWindowSize,
 		getGenerationTokens,
+		getLlamacppSlotContextFromModel,
 		getPromptTokens,
 		getReasoningTokens,
+		isLlamacppContext,
 		resolveContextWindowSize,
 		type UsageModel,
 		type UsageRecord
@@ -42,8 +44,11 @@
 	$: generationTokens = getGenerationTokens(usage);
 	$: reasoningTokens = getReasoningTokens(usage);
 	$: cachedUsage = getCachedUsage(usage);
+	$: isLlamaContext = isLlamacppContext(usage, model);
 	$: syncContextWindow = getContextWindowSize(usage, model);
-	$: contextWindow = syncContextWindow ?? probedContextWindow;
+	$: contextWindow = isLlamaContext
+		? (probedContextWindow ?? getLlamacppSlotContextFromModel(model) ?? syncContextWindow)
+		: (syncContextWindow ?? probedContextWindow);
 	$: contextPercent = getContextUsagePercent(contextTokens, contextWindow);
 	$: progressPercent = contextPercent ?? 0;
 	$: strokeDashoffset = circumference - (progressPercent / 100) * circumference;
@@ -84,7 +89,12 @@
 	}[usageLevel];
 
 	const probeContextWindow = async () => {
-		if (syncContextWindow || !model?.urlIdx) {
+		if (!model?.urlIdx) {
+			probedContextWindow = null;
+			return;
+		}
+
+		if (!isLlamaContext && syncContextWindow) {
 			probedContextWindow = null;
 			return;
 		}

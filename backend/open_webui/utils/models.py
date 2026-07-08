@@ -168,62 +168,6 @@ async def get_all_models(request, refresh: bool = False, user: UserModel = None)
                 else:
                     models.remove(model)
 
-        elif custom_model.is_active:
-            if custom_model.id in existing_ids:
-                continue
-
-            owned_by = 'openai'
-            connection_type = None
-            pipe = None
-
-            base_model = base_model_lookup.get(custom_model.base_model_id)
-            if base_model is None:
-                base_model = base_model_lookup.get(custom_model.base_model_id.split(':')[0])
-            if base_model:
-                owned_by = base_model.get('owned_by', 'unknown')
-                if 'pipe' in base_model:
-                    pipe = base_model['pipe']
-                connection_type = base_model.get('connection_type', None)
-
-            model = {
-                'id': f'{custom_model.id}',
-                'name': custom_model.name,
-                'object': 'model',
-                'created': custom_model.created_at,
-                'owned_by': owned_by,
-                'connection_type': connection_type,
-                'preset': True,
-                **({'pipe': pipe} if pipe is not None else {}),
-                **({'provider': base_model.get('provider')} if base_model and base_model.get('provider') else {}),
-                **({'loaded': base_model.get('loaded')} if base_model and base_model.get('loaded') is not None else {}),
-                **({'urlIdx': base_model.get('urlIdx')} if base_model and base_model.get('urlIdx') is not None else {}),
-                **({'openai': base_model.get('openai')} if base_model and base_model.get('openai') else {}),
-            }
-
-            info = custom_model.model_dump()
-            if 'params' in info:
-                # Remove params to avoid exposing sensitive info
-                del info['params']
-
-            model['info'] = info
-
-            action_ids = []
-            filter_ids = []
-
-            if custom_model.meta:
-                meta = custom_model.meta.model_dump()
-
-                if 'actionIds' in meta:
-                    action_ids.extend(meta['actionIds'])
-
-                if 'filterIds' in meta:
-                    filter_ids.extend(meta['filterIds'])
-
-            model['action_ids'] = action_ids
-            model['filter_ids'] = filter_ids
-
-            models.append(model)
-
     # Process action_ids to get the actions
     def get_action_items_from_module(function, module):
         actions = []

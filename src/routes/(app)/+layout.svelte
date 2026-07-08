@@ -116,10 +116,7 @@
 
 	const setModels = async () => {
 		models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections ? ($settings?.directConnections ?? null) : null
-			)
+			await getModels(localStorage.token)
 		);
 	};
 

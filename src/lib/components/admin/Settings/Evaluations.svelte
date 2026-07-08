@@ -13,27 +13,57 @@
 	import Plus from '$lib/components/icons/Plus.svelte';
 	import Model from './Evaluations/Model.svelte';
 	import ArenaModelModal from './Evaluations/ArenaModelModal.svelte';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 
 	const i18n = getContext('i18n');
 
 	let evaluationConfig = null;
 	let showAddModel = false;
+	let dirty = false;
+	let saving = false;
+	let initialSnapshot = '';
+
+	const snapshot = () => JSON.stringify(evaluationConfig);
+
+	$: if (initialSnapshot && evaluationConfig) {
+		dirty = snapshot() !== initialSnapshot;
+	};
+
+	const loadData = async () => {
+		if ($user?.role === 'admin') {
+			evaluationConfig = await getConfig(localStorage.token).catch((err) => {
+				toast.error(err);
+				return null;
+			});
+			if (evaluationConfig) {
+				initialSnapshot = snapshot();
+				dirty = false;
+			}
+		}
+	};
+
+	const discardHandler = async () => {
+		await loadData();
+	};
 
 	const submitHandler = async () => {
-		evaluationConfig = await updateConfig(localStorage.token, evaluationConfig).catch((err) => {
+		saving = true;
+		const res = await updateConfig(localStorage.token, evaluationConfig).catch((err) => {
 			toast.error(err);
 			return null;
 		});
 
-		if (evaluationConfig) {
+		if (res) {
+			evaluationConfig = res;
 			toast.success($i18n.t('Settings saved successfully!'));
-			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
-			);
+			models.set(await getModels(localStorage.token));
+			initialSnapshot = snapshot();
+			dirty = false;
+			dispatch('save');
 		}
+		saving = false;
+		return !!res;
 	};
 
 	const addModelHandler = async (model) => {
@@ -42,10 +72,7 @@
 
 		await submitHandler();
 		models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
+			await getModels(localStorage.token)
 		);
 	};
 
@@ -55,10 +82,7 @@
 
 		await submitHandler();
 		models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
+			await getModels(localStorage.token)
 		);
 	};
 
@@ -69,21 +93,11 @@
 
 		await submitHandler();
 		models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
+			await getModels(localStorage.token)
 		);
 	};
 
-	onMount(async () => {
-		if ($user?.role === 'admin') {
-			evaluationConfig = await getConfig(localStorage.token).catch((err) => {
-				toast.error(err);
-				return null;
-			});
-		}
-	});
+	onMount(loadData);
 </script>
 
 <ArenaModelModal
@@ -93,21 +107,32 @@
 	}}
 />
 
-<form
-	class="flex flex-col h-full justify-between text-sm"
-	on:submit|preventDefault={() => {
-		submitHandler();
-		dispatch('save');
-	}}
->
-	<div class="overflow-y-scroll scrollbar-hidden h-full">
+<form class="flex flex-col text-sm">
+	<div>
 		{#if evaluationConfig !== null}
-			<div class="">
-				<div class="mb-3">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
+			<a
+				href="/admin/evaluations/leaderboard"
+				class="mb-4 flex items-center justify-between gap-3 rounded-xl border border-gray-100/30 dark:border-gray-850/30 bg-gray-50/80 dark:bg-gray-900/50 px-3.5 py-2.5 text-sm transition hover:bg-gray-100 dark:hover:bg-gray-850/60"
+			>
+				<span class="text-gray-600 dark:text-gray-300">
+					{$i18n.t('View leaderboard and feedback in Evaluations')}
+				</span>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.5"
+					class="size-4 shrink-0 text-gray-400"
+				>
+					<path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+				</svg>
+			</a>
 
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Evaluation Arena"
+				description="Configure models used in blind comparison evaluations."
+			>
 					<div class="mb-2.5 flex w-full justify-between">
 						<div class=" text-xs font-medium">{$i18n.t('Arena Models')}</div>
 
@@ -115,11 +140,10 @@
 							<Switch bind:state={evaluationConfig.ENABLE_EVALUATION_ARENA_MODELS} />
 						</Tooltip>
 					</div>
-				</div>
 
 				{#if evaluationConfig.ENABLE_EVALUATION_ARENA_MODELS}
-					<div class="mb-3">
-						<div class=" mt-0.5 mb-2.5 text-base font-medium flex justify-between items-center">
+					<div class="mb-1">
+						<div class="mb-2.5 text-sm font-medium flex justify-between items-center">
 							<div>
 								{$i18n.t('Manage')}
 							</div>
@@ -138,8 +162,6 @@
 								</Tooltip>
 							</div>
 						</div>
-
-						<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
 
 						<div class="flex flex-col gap-2">
 							{#if (evaluationConfig?.EVALUATION_ARENA_MODELS ?? []).length > 0}
@@ -164,7 +186,7 @@
 						</div>
 					</div>
 				{/if}
-			</div>
+			</AdminSettingsCard>
 		{:else}
 			<div class="flex h-full justify-center">
 				<div class="my-auto">
@@ -174,12 +196,7 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-			type="submit"
-		>
-			{$i18n.t('Save')}
-		</button>
-	</div>
+	{#if evaluationConfig !== null}
+		<AdminSaveBar {dirty} {saving} onSave={submitHandler} onDiscard={discardHandler} />
+	{/if}
 </form>

@@ -8,43 +8,64 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let saveHandler: (...args: unknown[]) => unknown;
 
 	let config = null;
+	let dirty = false;
+	let saving = false;
+	let initialSnapshot = '';
 
 	let engines = ['pyodide', 'jupyter'];
 
-	const submitHandler = async () => {
-		const res = await setCodeExecutionConfig(localStorage.token, config);
+	const snapshot = () => JSON.stringify(config);
+
+	$: if (initialSnapshot && config) {
+		dirty = snapshot() !== initialSnapshot;
 	};
 
-	onMount(async () => {
+	const loadData = async () => {
 		const res = await getCodeExecutionConfig(localStorage.token);
-
 		if (res) {
 			config = res;
+			initialSnapshot = snapshot();
+			dirty = false;
 		}
-	});
+	};
+
+	const discardHandler = async () => {
+		await loadData();
+	};
+
+	const submitHandler = async () => {
+		if (!config) return;
+		saving = true;
+		const res = await setCodeExecutionConfig(localStorage.token, config).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+		if (res) {
+			saveHandler();
+			initialSnapshot = snapshot();
+			dirty = false;
+		}
+		saving = false;
+	};
+
+	onMount(loadData);
 </script>
 
-<form
-	class="flex flex-col h-full justify-between space-y-3 text-sm"
-	on:submit|preventDefault={async () => {
-		await submitHandler();
-		saveHandler();
-	}}
->
-	<div class=" space-y-3 overflow-y-scroll scrollbar-hidden h-full">
+<form class="flex flex-col space-y-3 text-sm">
+	<div class=" space-y-3">
 		{#if config}
-			<div>
-				<div class="mb-3.5">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Code Execution')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Code Execution"
+				description="Sandbox engine, interpreter settings, and code block behavior."
+			>
 					<div class="mb-2.5">
 						<div class=" flex w-full justify-between">
 							<div class=" self-center text-xs font-medium">
@@ -167,13 +188,12 @@
 							</div>
 						{/if}
 					{/if}
-				</div>
+			</AdminSettingsCard>
 
-				<div class="mb-3.5">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Code Interpreter')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Code Interpreter"
+				description="In-chat Python interpreter and prompt template."
+			>
 					<div class="mb-2.5">
 						<div class=" flex w-full justify-between">
 							<div class=" self-center text-xs font-medium">
@@ -320,16 +340,10 @@
 							</div>
 						</div>
 					{/if}
-				</div>
-			</div>
+			</AdminSettingsCard>
 		{/if}
 	</div>
-	<div class="flex justify-end pt-3 text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-			type="submit"
-		>
-			{$i18n.t('Save')}
-		</button>
-	</div>
+	{#if config}
+		<AdminSaveBar {dirty} {saving} onSave={submitHandler} onDiscard={discardHandler} />
+	{/if}
 </form>

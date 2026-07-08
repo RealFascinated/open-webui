@@ -23,6 +23,7 @@
 	import CloudArrowUp from '$lib/components/icons/CloudArrowUp.svelte';
 	import Pagination from '$lib/components/common/Pagination.svelte';
 	import FeedbackMenu from './FeedbackMenu.svelte';
+	import AdminEmptyState from '$lib/components/admin/AdminEmptyState.svelte';
 	import FeedbackModal from './FeedbackModal.svelte';
 	import EllipsisHorizontal from '$lib/components/icons/EllipsisHorizontal.svelte';
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
@@ -317,15 +318,11 @@
 
 		<div class="scrollbar-hidden relative whitespace-nowrap overflow-x-auto max-w-full px-2">
 			{#if (items ?? []).length === 0}
-				<div class="w-full h-full flex flex-col justify-center items-center my-16 mb-24">
-					<div class="max-w-md text-center">
-						<div class="text-3xl mb-3">😕</div>
-						<div class="text-lg font-medium mb-1">{$i18n.t('No feedback found')}</div>
-						<div class="text-gray-500 text-center text-xs">
-							{$i18n.t('Try adjusting your search or filter to find what you are looking for.')}
-						</div>
-					</div>
-				</div>
+				<AdminEmptyState
+					icon="😕"
+					title={$i18n.t('No feedback found')}
+					description={$i18n.t('Try adjusting your search or filter to find what you are looking for.')}
+				/>
 			{:else}
 				<table
 					class="w-full text-sm text-left text-gray-500 dark:text-gray-400 table-auto max-w-full px-2"

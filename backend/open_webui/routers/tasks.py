@@ -146,13 +146,7 @@ async def generate_title(request: Request, form_data: dict, user=Depends(get_ver
             content={'detail': 'Title generation is disabled'},
         )
 
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            **request.app.state.MODELS,
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     model_id = form_data['model']
     if not model_id:
@@ -219,13 +213,7 @@ async def generate_follow_ups(request: Request, form_data: dict, user=Depends(ge
             content={'detail': 'Follow-up generation is disabled'},
         )
 
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            **request.app.state.MODELS,
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     model_id = form_data['model']
     if model_id not in models:
@@ -278,13 +266,7 @@ async def generate_chat_tags(request: Request, form_data: dict, user=Depends(get
             content={'detail': 'Tags generation is disabled'},
         )
 
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            **request.app.state.MODELS,
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     model_id = form_data['model']
     if model_id not in models:
@@ -331,13 +313,7 @@ async def generate_chat_tags(request: Request, form_data: dict, user=Depends(get
 
 @router.post('/image_prompt/completions')
 async def generate_image_prompt(request: Request, form_data: dict, user=Depends(get_verified_user)):
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            **request.app.state.MODELS,
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     model_id = form_data['model']
     if model_id not in models:
@@ -402,13 +378,7 @@ async def generate_queries(request: Request, form_data: dict, user=Depends(get_v
         log.info(f'Reusing cached queries: {request.state.cached_queries}')
         return request.state.cached_queries
 
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            **request.app.state.MODELS,
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     model_id = form_data['model']
     if model_id not in models:
@@ -472,13 +442,7 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
                 detail=ERROR_MESSAGES.INPUT_TOO_LONG(autocomplete_input_max_length),
             )
 
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            **request.app.state.MODELS,
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     model_id = form_data['model']
     if model_id not in models:
@@ -525,13 +489,7 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
 
 @router.post('/emoji/completions')
 async def generate_emoji(request: Request, form_data: dict, user=Depends(get_verified_user)):
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            **request.app.state.MODELS,
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     model_id = form_data['model']
     if model_id not in models:
@@ -580,13 +538,7 @@ async def generate_emoji(request: Request, form_data: dict, user=Depends(get_ver
 
 @router.post('/moa/completions')
 async def generate_moa_response(request: Request, form_data: dict, user=Depends(get_verified_user)):
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            **request.app.state.MODELS,
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     model_id = form_data['model']
 

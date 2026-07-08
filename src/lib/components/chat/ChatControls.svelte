@@ -44,7 +44,6 @@
 	export let chatId = null;
 
 	export let chatFiles = [];
-	export let params = {};
 
 	export let eventTarget: EventTarget;
 	export let submitPrompt: (...args: unknown[]) => unknown;
@@ -71,7 +70,7 @@
 
 	$: hasMessages = history?.messages && Object.keys(history.messages).length > 0;
 
-	$: showControlsTab = $user?.role === 'admin' || ($user?.permissions?.chat?.controls ?? true);
+	$: showControlsTab = chatFiles.length > 0;
 	$: hasDirectToolServerAccess =
 		$user?.role === 'admin' || ($user?.permissions?.features?.direct_tool_servers ?? true);
 	$: selectedSystemTerminalAvailable = ($terminalServers ?? []).some(
@@ -388,7 +387,7 @@
 							{:else if activeTab === 'files' && codeInterpreterEnabled}
 								<PyodideFileNav />
 							{:else}
-								<Controls embed={true} {models} bind:chatFiles bind:params />
+								<Controls embed={true} {models} bind:chatFiles />
 							{/if}
 						</div>
 					</div>
@@ -538,7 +537,7 @@
 								{:else if activeTab === 'files' && codeInterpreterEnabled}
 									<PyodideFileNav overlay={dragged} />
 								{:else}
-									<Controls embed={true} {models} bind:chatFiles bind:params />
+									<Controls embed={true} {models} bind:chatFiles />
 								{/if}
 							</div>
 						</div>

@@ -1,12 +1,11 @@
 <script lang="ts">
-	import { getContext, onMount } from 'svelte';
+	import { getContext, onMount, tick } from 'svelte';
 
 	import Selector from '$lib/components/chat/ModelSelector/Selector.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Check from '$lib/components/icons/Check.svelte';
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 	import { models, settings, mobile } from '$lib/stores';
-	import { updateUserSettings } from '$lib/apis/users';
 	import {
 		ensureDefaultThinkingPreference,
 		getResolvedThink,
@@ -22,29 +21,105 @@
 	export let selectedModels = [''];
 	export let disabled = false;
 
+	const PANEL_WIDTH = 320;
+	const SIDE_OFFSET = 8;
+	const VIEWPORT_MARGIN = 16;
+
 	let effortPanelOpen = false;
 	let effortCloseTimer: ReturnType<typeof setTimeout> | null = null;
 	let effortTriggerElement: HTMLElement | null = null;
-	let effortOpensLeft = false;
+	let effortFlyoutEl: HTMLElement | null = null;
+	let effortPanelEl: HTMLElement | null = null;
 
-	const EFFORT_PANEL_WIDTH = 320;
-	const EFFORT_PANEL_OFFSET = 12;
+	function portal(node: HTMLElement) {
+		document.body.appendChild(node);
+		return {
+			destroy() {
+				node.remove();
+			}
+		};
+	}
 
-	const updateEffortPanelPlacement = () => {
-		if (!effortTriggerElement) return;
+	const canOpenEffortAsSideFlyout = () => {
+		if (!effortTriggerElement) return false;
 
 		const rect = effortTriggerElement.getBoundingClientRect();
 		const spaceRight = window.innerWidth - rect.right;
-		effortOpensLeft = spaceRight < EFFORT_PANEL_WIDTH + EFFORT_PANEL_OFFSET;
+		const spaceLeft = rect.left;
+
+		return (
+			spaceRight >= PANEL_WIDTH + SIDE_OFFSET + VIEWPORT_MARGIN ||
+			spaceLeft >= PANEL_WIDTH + SIDE_OFFSET + VIEWPORT_MARGIN
+		);
 	};
 
-	const openEffortPanel = () => {
+	const updateEffortPanelPlacement = () => {
+		if (!effortTriggerElement || !effortFlyoutEl) return;
+
+		const rect = effortTriggerElement.getBoundingClientRect();
+		const contentWidth = effortPanelEl?.offsetWidth || PANEL_WIDTH;
+		const contentHeight = effortFlyoutEl.offsetHeight || 0;
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+
+		effortFlyoutEl.style.position = 'fixed';
+		effortFlyoutEl.style.zIndex = '10001';
+		effortFlyoutEl.style.paddingLeft = '0';
+		effortFlyoutEl.style.paddingRight = '0';
+		effortFlyoutEl.style.bottom = 'auto';
+
+		if (canOpenEffortAsSideFlyout()) {
+			const rightSpace = vw - rect.right;
+			if (rightSpace >= contentWidth + SIDE_OFFSET) {
+				effortFlyoutEl.style.left = `${rect.right}px`;
+				effortFlyoutEl.style.right = 'auto';
+				effortFlyoutEl.style.paddingLeft = `${SIDE_OFFSET}px`;
+			} else {
+				effortFlyoutEl.style.right = `${vw - rect.left}px`;
+				effortFlyoutEl.style.left = 'auto';
+				effortFlyoutEl.style.paddingRight = `${SIDE_OFFSET}px`;
+			}
+		} else {
+			const left = Math.max(
+				VIEWPORT_MARGIN,
+				Math.min(rect.left, vw - contentWidth - VIEWPORT_MARGIN)
+			);
+			effortFlyoutEl.style.left = `${left}px`;
+			effortFlyoutEl.style.right = 'auto';
+		}
+
+		let top = rect.top;
+		if (!canOpenEffortAsSideFlyout()) {
+			const belowTop = rect.bottom + SIDE_OFFSET;
+			const aboveTop = rect.top - contentHeight - SIDE_OFFSET;
+			if (contentHeight > 0 && belowTop + contentHeight + VIEWPORT_MARGIN > vh && aboveTop >= VIEWPORT_MARGIN) {
+				top = aboveTop;
+			} else if (contentHeight > 0) {
+				top = belowTop;
+			}
+		}
+
+		if (contentHeight > 0) {
+			if (top + contentHeight + VIEWPORT_MARGIN > vh) {
+				top = vh - contentHeight - VIEWPORT_MARGIN;
+			}
+			if (top < VIEWPORT_MARGIN) {
+				top = VIEWPORT_MARGIN;
+			}
+		}
+
+		effortFlyoutEl.style.top = `${top}px`;
+	};
+
+	const openEffortPanel = async () => {
 		if (effortCloseTimer) {
 			clearTimeout(effortCloseTimer);
 			effortCloseTimer = null;
 		}
-		updateEffortPanelPlacement();
 		effortPanelOpen = true;
+		await tick();
+		updateEffortPanelPlacement();
+		setTimeout(updateEffortPanelPlacement, 50);
 	};
 
 	const closeEffortPanel = () => {
@@ -61,13 +136,12 @@
 			effortCloseTimer = null;
 			effortPanelOpen = false;
 		} else {
-			updateEffortPanelPlacement();
 			openEffortPanel();
 		}
 	};
 
 	$: modelId = selectedModels[0] ?? '';
-	$: resolvedThink = getResolvedThink($settings?.params);
+	$: resolvedThink = getResolvedThink($settings);
 	$: thinkingEnabled = isThinkingEnabled(resolvedThink);
 	$: currentEffort = getThinkingEffort(resolvedThink);
 	$: effortSuffix = thinkingEnabled && !$mobile ? effortLabel(currentEffort) : '';
@@ -88,19 +162,6 @@
 		return $i18n.t('Medium');
 	};
 
-	const pinModelHandler = async (id: string) => {
-		let pinnedModels = $settings?.pinnedModels ?? [];
-
-		if (pinnedModels.includes(id)) {
-			pinnedModels = pinnedModels.filter((pinnedId) => pinnedId !== id);
-		} else {
-			pinnedModels = [...new Set([...pinnedModels, id])];
-		}
-
-		settings.set({ ...$settings, pinnedModels });
-		await updateUserSettings(localStorage.token, { ui: $settings });
-	};
-
 	const setThinkingEnabled = async (enabled: boolean) => {
 		await saveUserThinkingPreference(enabled ? currentEffort : false);
 	};
@@ -111,9 +172,8 @@
 </script>
 
 <svelte:window
-	on:resize={() => {
-		if (effortPanelOpen) updateEffortPanelPlacement();
-	}}
+	on:resize={() => effortPanelOpen && updateEffortPanelPlacement()}
+	on:scroll|capture={() => effortPanelOpen && updateEffortPanelPlacement()}
 />
 
 <div class="relative self-center min-w-0 {$mobile ? 'shrink' : 'w-fit shrink-0'}">
@@ -130,7 +190,6 @@
 		truncateTrigger={$mobile}
 		suffix={effortSuffix}
 		placement="top"
-		{pinModelHandler}
 		items={$models.map((model) => ({
 			value: model.id,
 			label: model.name,
@@ -142,7 +201,7 @@
 				<button
 					class="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
 					type="button"
-					on:mouseenter={openEffortPanel}
+					on:mouseenter={() => canOpenEffortAsSideFlyout() && openEffortPanel()}
 					on:mouseleave={closeEffortPanel}
 					on:click={toggleEffortPanel}
 				>
@@ -152,17 +211,16 @@
 				</button>
 
 				{#if effortPanelOpen}
-					<!-- Invisible padding bridges the gap so hover doesn't drop while moving to the panel -->
 					<div
-						class="absolute bottom-0 z-[60] flex {effortOpensLeft
-							? 'right-full pr-3'
-							: 'left-full pl-3'}"
+						use:portal
+						bind:this={effortFlyoutEl}
 						role="presentation"
 						on:mouseenter={openEffortPanel}
 						on:mouseleave={closeEffortPanel}
 					>
 						<div
-							class="w-80 min-w-[20rem] max-w-[calc(100vw-1rem)] rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-850 shadow-lg overflow-hidden"
+							bind:this={effortPanelEl}
+							class="w-80 max-w-[calc(100vw-2rem)] min-w-0 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-850 shadow-lg overflow-hidden"
 						>
 							<div class="px-3.5 pt-3 pb-2 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
 								{$i18n.t(

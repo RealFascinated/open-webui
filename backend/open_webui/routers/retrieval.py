@@ -79,6 +79,7 @@ from open_webui.retrieval.utils import (
 )
 from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
+from open_webui.retrieval.vector.health import get_vector_db_status
 from open_webui.retrieval.vector.utils import filter_metadata
 from open_webui.retrieval.web.azure import search_azure
 from open_webui.retrieval.web.bing import search_bing
@@ -470,6 +471,11 @@ async def get_embedding_config(request: Request, user=Depends(get_admin_user)):
             'version': config.RAG_AZURE_OPENAI_API_VERSION,
         },
     }
+
+
+@router.get('/vector/db')
+async def get_vector_db_status_endpoint(user=Depends(get_admin_user)):
+    return await run_in_threadpool(get_vector_db_status)
 
 
 class OpenAIConfigForm(BaseModel):

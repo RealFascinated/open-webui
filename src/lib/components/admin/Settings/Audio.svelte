@@ -21,10 +21,16 @@
 	import type { Writable } from 'svelte/store';
 	import type { i18n as i18nType } from 'i18next';
 	import Textarea from '$lib/components/common/Textarea.svelte';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 
 	const i18n = getContext<Writable<i18nType>>('i18n');
 
 	export let saveHandler: () => void;
+
+	let dirty = false;
+	let saving = false;
+	let initialSnapshot = '';
 
 	// Audio
 	let TTS_OPENAI_API_BASE_URL = '';
@@ -60,6 +66,49 @@
 
 	let STT_WHISPER_MODEL_LOADING = false;
 
+	const getAudioState = () => ({
+		TTS_OPENAI_API_BASE_URL,
+		TTS_OPENAI_API_KEY,
+		TTS_API_KEY,
+		TTS_ENGINE,
+		TTS_MODEL,
+		TTS_VOICE,
+		TTS_OPENAI_PARAMS,
+		TTS_SPLIT_ON,
+		TTS_AZURE_SPEECH_REGION,
+		TTS_AZURE_SPEECH_BASE_URL,
+		TTS_AZURE_SPEECH_OUTPUT_FORMAT,
+		TTS_MISTRAL_API_KEY,
+		TTS_MISTRAL_API_BASE_URL,
+		STT_OPENAI_API_BASE_URL,
+		STT_OPENAI_API_KEY,
+		STT_OPENAI_API_REQUEST_FORMAT,
+		STT_ENGINE,
+		STT_MODEL,
+		STT_SUPPORTED_CONTENT_TYPES,
+		STT_WHISPER_MODEL,
+		STT_AZURE_API_KEY,
+		STT_AZURE_REGION,
+		STT_AZURE_LOCALES,
+		STT_AZURE_BASE_URL,
+		STT_AZURE_MAX_SPEAKERS,
+		STT_DEEPGRAM_API_KEY,
+		STT_MISTRAL_API_KEY,
+		STT_MISTRAL_API_BASE_URL,
+		STT_MISTRAL_USE_CHAT_COMPLETIONS
+	});
+
+	const snapshot = () => JSON.stringify(getAudioState());
+
+	$: if (initialSnapshot) {
+		dirty = snapshot() !== initialSnapshot;
+	}
+
+	const refreshSnapshot = () => {
+		initialSnapshot = snapshot();
+		dirty = false;
+	};
+
 	type Voice = {
 		id: string;
 		name?: string;
@@ -78,10 +127,7 @@
 		if (TTS_ENGINE === '') {
 			models = [];
 		} else {
-			const res = await _getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			).catch((e) => {
+			const res = await _getModels(localStorage.token).catch((e) => {
 				toast.error(`${e}`);
 			});
 
@@ -129,9 +175,10 @@
 			TTS_OPENAI_PARAMS = JSON.stringify(openaiParams, null, 2);
 		} catch (e) {
 			toast.error($i18n.t('Invalid JSON format for Parameters'));
-			return;
+			return false;
 		}
 
+		saving = true;
 		const res = await updateAudioConfig(localStorage.token, {
 			tts: {
 				OPENAI_API_BASE_URL: TTS_OPENAI_API_BASE_URL,
@@ -171,7 +218,10 @@
 		if (res) {
 			saveHandler();
 			config.set(await getBackendConfig());
+			refreshSnapshot();
 		}
+		saving = false;
+		return !!res;
 	};
 
 	const sttModelUpdateHandler = async () => {
@@ -184,7 +234,6 @@
 		const res = await getAudioConfig(localStorage.token);
 
 		if (res) {
-			console.log(res);
 			TTS_OPENAI_API_BASE_URL = res.tts.OPENAI_API_BASE_URL;
 			TTS_OPENAI_API_KEY = res.tts.OPENAI_API_KEY;
 			TTS_OPENAI_PARAMS = JSON.stringify(res?.tts?.OPENAI_PARAMS ?? '', null, 2);
@@ -223,23 +272,54 @@
 
 		await getVoices();
 		await getModels();
+		refreshSnapshot();
 	});
+
+	const discardHandler = async () => {
+		const res = await getAudioConfig(localStorage.token);
+		if (res) {
+			TTS_OPENAI_API_BASE_URL = res.tts.OPENAI_API_BASE_URL;
+			TTS_OPENAI_API_KEY = res.tts.OPENAI_API_KEY;
+			TTS_OPENAI_PARAMS = JSON.stringify(res?.tts?.OPENAI_PARAMS ?? '', null, 2);
+			TTS_API_KEY = res.tts.API_KEY;
+			TTS_ENGINE = res.tts.ENGINE;
+			TTS_MODEL = res.tts.MODEL;
+			TTS_VOICE = res.tts.VOICE;
+			TTS_SPLIT_ON = res.tts.SPLIT_ON || TTS_RESPONSE_SPLIT.PUNCTUATION;
+			TTS_AZURE_SPEECH_REGION = res.tts.AZURE_SPEECH_REGION;
+			TTS_AZURE_SPEECH_BASE_URL = res.tts.AZURE_SPEECH_BASE_URL;
+			TTS_AZURE_SPEECH_OUTPUT_FORMAT = res.tts.AZURE_SPEECH_OUTPUT_FORMAT;
+			TTS_MISTRAL_API_KEY = res.tts.MISTRAL_API_KEY;
+			TTS_MISTRAL_API_BASE_URL = res.tts.MISTRAL_API_BASE_URL;
+			STT_OPENAI_API_BASE_URL = res.stt.OPENAI_API_BASE_URL;
+			STT_OPENAI_API_KEY = res.stt.OPENAI_API_KEY;
+			STT_OPENAI_API_REQUEST_FORMAT = res.stt.OPENAI_API_REQUEST_FORMAT || 'multipart';
+			STT_ENGINE = res.stt.ENGINE;
+			STT_MODEL = res.stt.MODEL;
+			STT_SUPPORTED_CONTENT_TYPES = (res?.stt?.SUPPORTED_CONTENT_TYPES ?? []).join(',');
+			STT_WHISPER_MODEL = res.stt.WHISPER_MODEL;
+			STT_AZURE_API_KEY = res.stt.AZURE_API_KEY;
+			STT_AZURE_REGION = res.stt.AZURE_REGION;
+			STT_AZURE_LOCALES = res.stt.AZURE_LOCALES;
+			STT_AZURE_BASE_URL = res.stt.AZURE_BASE_URL;
+			STT_AZURE_MAX_SPEAKERS = res.stt.AZURE_MAX_SPEAKERS;
+			STT_DEEPGRAM_API_KEY = res.stt.DEEPGRAM_API_KEY;
+			STT_MISTRAL_API_KEY = res.stt.MISTRAL_API_KEY;
+			STT_MISTRAL_API_BASE_URL = res.stt.MISTRAL_API_BASE_URL;
+			STT_MISTRAL_USE_CHAT_COMPLETIONS = res.stt.MISTRAL_USE_CHAT_COMPLETIONS;
+		}
+		refreshSnapshot();
+	};
 </script>
 
-<form
-	class="flex flex-col h-full justify-between space-y-3 text-sm"
-	on:submit|preventDefault={async () => {
-		await updateConfigHandler();
-		dispatch('save');
-	}}
->
-	<div class=" space-y-3 overflow-y-scroll scrollbar-hidden h-full">
-		<div class="flex flex-col gap-3">
+<form class="flex flex-col space-y-3 text-sm">
+	<div class=" space-y-3">
+		<AdminSettingsCard
+			title="Speech-to-Text"
+			description="Transcription engine and provider configuration."
+			className="mb-3"
+		>
 			<div>
-				<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Speech-to-Text')}</div>
-
-				<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
 				{#if STT_ENGINE !== 'web'}
 					<div class="mb-2">
 						<div class=" mb-1.5 text-xs font-medium">{$i18n.t('Supported MIME Types')}</div>
@@ -537,12 +617,12 @@
 					</div>
 				{/if}
 			</div>
+			</AdminSettingsCard>
 
-			<div>
-				<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Text-to-Speech')}</div>
-
-				<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Text-to-Speech"
+				description="Voice synthesis engine and provider configuration."
+			>
 				<div class="mb-2 py-0.5 flex w-full justify-between">
 					<div class=" self-center text-xs font-medium">{$i18n.t('Text-to-Speech Engine')}</div>
 					<div class="flex items-center relative">
@@ -890,15 +970,7 @@
 						"Control how message text is split for TTS requests. 'Punctuation' splits into sentences, 'paragraphs' splits into paragraphs, and 'none' keeps the message as a single string."
 					)}
 				</div>
-			</div>
-		</div>
+			</AdminSettingsCard>
 	</div>
-	<div class="flex justify-end text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-			type="submit"
-		>
-			{$i18n.t('Save')}
-		</button>
-	</div>
+	<AdminSaveBar {dirty} {saving} onSave={updateConfigHandler} onDiscard={discardHandler} />
 </form>

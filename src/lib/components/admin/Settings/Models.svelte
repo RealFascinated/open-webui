@@ -18,7 +18,6 @@
 	} from '$lib/apis/models';
 	import { copyToClipboard } from '$lib/utils';
 	import { page } from '$app/stores';
-	import { updateUserSettings } from '$lib/apis/users';
 
 	import { getModels } from '$lib/apis';
 	import Search from '$lib/components/icons/Search.svelte';
@@ -43,12 +42,12 @@
 	import CheckCircle from '$lib/components/icons/CheckCircle.svelte';
 	import Minus from '$lib/components/icons/Minus.svelte';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-	import { goto } from '$app/navigation';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import AdminViewSelector from './Models/AdminViewSelector.svelte';
 	import TagSelector from '$lib/components/workspace/common/TagSelector.svelte';
 	import Pagination from '$lib/components/common/Pagination.svelte';
+	import AdminEmptyState from '$lib/components/admin/AdminEmptyState.svelte';
 
 	type ModelListItem = { id: string; name?: string };
 
@@ -187,7 +186,7 @@
 		}
 
 		workspaceModels = await getBaseModels(localStorage.token, selectedTag);
-		baseModels = await getModels(localStorage.token, null, true);
+		baseModels = await getModels(localStorage.token, true);
 		const workspaceModelIds = new Set<string>(workspaceModels.map((wm: ModelListItem) => wm.id));
 
 		models = baseModels
@@ -212,10 +211,7 @@
 			});
 
 		_models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
+			await getModels(localStorage.token)
 		);
 	};
 
@@ -269,10 +265,7 @@
 
 		// await init();
 		_models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
+			await getModels(localStorage.token)
 		);
 	};
 
@@ -308,34 +301,11 @@
 		}
 	};
 
-	const cloneHandler = async (model) => {
-		sessionStorage.model = JSON.stringify({
-			...model,
-			base_model_id: model.id,
-			id: `${model.id}-clone`,
-			name: `${model.name} (Clone)`
-		});
-		goto('/workspace/models/create');
-	};
-
 	const exportModelHandler = async (model) => {
 		let blob = new Blob([JSON.stringify([model])], {
 			type: 'application/json'
 		});
 		saveAs(blob, `${model.id}-${Date.now()}.json`);
-	};
-
-	const pinModelHandler = async (modelId) => {
-		let pinnedModels = $settings?.pinnedModels ?? [];
-
-		if (pinnedModels.includes(modelId)) {
-			pinnedModels = pinnedModels.filter((id) => id !== modelId);
-		} else {
-			pinnedModels = [...new Set([...pinnedModels, modelId])];
-		}
-
-		settings.set({ ...$settings, pinnedModels: pinnedModels });
-		await updateUserSettings(localStorage.token, { ui: $settings });
 	};
 
 	onMount(async () => {
@@ -728,14 +698,8 @@
 										hideHandler={() => {
 											hideModelHandler(model);
 										}}
-										pinModelHandler={() => {
-											pinModelHandler(model.id);
-										}}
 										copyLinkHandler={() => {
 											copyLinkHandler(model);
-										}}
-										cloneHandler={() => {
-											cloneHandler(model);
 										}}
 										onClose={() => {}}
 									>
@@ -766,15 +730,11 @@
 						</div>
 					{/each}
 				{:else}
-					<div class=" w-full h-full flex flex-col justify-center items-center my-16 mb-24">
-						<div class="max-w-md text-center">
-							<div class=" text-3xl mb-3">😕</div>
-							<div class=" text-lg font-medium mb-1">{$i18n.t('No models found')}</div>
-							<div class=" text-gray-500 text-center text-xs">
-								{$i18n.t('Try adjusting your search or filter to find what you are looking for.')}
-							</div>
-						</div>
-					</div>
+					<AdminEmptyState
+						icon="😕"
+						title={$i18n.t('No models found')}
+						description={$i18n.t('Try adjusting your search or filter to find what you are looking for.')}
+					/>
 				{/if}
 			</div>
 

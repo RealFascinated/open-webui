@@ -56,7 +56,6 @@
 	import { executeToolServer, getBackendConfig, getModels, getVersion } from '$lib/apis';
 	import { getSessionUser, updateUserTimezone, userSignOut } from '$lib/apis/auths';
 	import { getAllTags, getChatList } from '$lib/apis/chats';
-	import { chatCompletion } from '$lib/apis/openai';
 	import {
 		addOpenAIConnection,
 		removeOpenAIConnection,
@@ -522,7 +521,7 @@
 			return;
 		}
 
-		// Session-targeted RPC calls (code execution, tool calls, direct completion)
+		// Session-targeted RPC calls (code execution, tool calls)
 		// must ALWAYS be processed regardless of active chat or tab visibility,
 		// because the backend's sio.call blocks waiting for our callback response.
 		if (data?.session_id === $socket.id) {
@@ -533,93 +532,6 @@
 			} else if (type === 'execute:tool') {
 				console.log('execute:tool', data);
 				executeTool(data, cb, event.chat_id);
-				return;
-			} else if (type === 'request:chat:completion') {
-				console.log(data, $socket.id);
-				const { session_id, channel, form_data, model } = data;
-
-				try {
-					const directConnections = $settings?.directConnections ?? {};
-
-					if (directConnections) {
-						const urlIdx = model?.urlIdx;
-
-						const OPENAI_API_URL = directConnections.OPENAI_API_BASE_URLS[urlIdx];
-						const OPENAI_API_KEY = directConnections.OPENAI_API_KEYS[urlIdx];
-						const API_CONFIG = directConnections.OPENAI_API_CONFIGS[urlIdx];
-
-						try {
-							if (API_CONFIG?.prefix_id) {
-								const prefixId = API_CONFIG.prefix_id;
-								form_data['model'] = form_data['model'].replace(`${prefixId}.`, ``);
-							}
-
-							const [res, controller] = await chatCompletion(
-								OPENAI_API_KEY,
-								form_data,
-								OPENAI_API_URL
-							);
-
-							if (res) {
-								// raise if the response is not ok
-								if (!res.ok) {
-									throw await res.json();
-								}
-
-								if (form_data?.stream ?? false) {
-									cb({
-										status: true
-									});
-									console.log({ status: true });
-
-									// res will either be SSE or JSON
-									const reader = res.body.getReader();
-									const decoder = new TextDecoder();
-
-									const processStream = async () => {
-										// eslint-disable-next-line no-constant-condition -- SSE stream read loop
-										while (true) {
-											// Read data chunks from the response stream
-											const { done, value } = await reader.read();
-											if (done) {
-												break;
-											}
-
-											// Decode the received chunk
-											const chunk = decoder.decode(value, { stream: true });
-
-											// Process lines within the chunk
-											const lines = chunk.split('\n').filter((line) => line.trim() !== '');
-
-											for (const line of lines) {
-												console.log(line);
-												$socket?.emit(channel, line);
-											}
-										}
-									};
-
-									// Process the stream in the background
-									await processStream();
-								} else {
-									const data = await res.json();
-									cb(data);
-								}
-							} else {
-								throw new Error('An error occurred while fetching the completion');
-							}
-						} catch (error) {
-							console.error('chatCompletion', error);
-							cb(error);
-						}
-					}
-				} catch (error) {
-					console.error('chatCompletion', error);
-					cb(error);
-				} finally {
-					$socket.emit(channel, {
-						done: true
-					});
-				}
 				return;
 			}
 		}
@@ -916,12 +828,7 @@
 			const token = localStorage.token;
 			if (token) {
 				models.set(
-					await getModels(
-						token,
-						$config?.features?.enable_direct_connections
-							? ($settings?.directConnections ?? null)
-							: null
-					)
+					await getModels(token)
 				);
 			}
 			return;

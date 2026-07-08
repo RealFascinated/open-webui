@@ -7,6 +7,7 @@
 
 	import { updateUserSettings } from '$lib/apis/users';
 	import equal from 'fast-deep-equal';
+	import { getAvailableModelIds, resolveSelectedModels } from '$lib/utils/models';
 	const i18n = getContext('i18n');
 
 	export let selectedModels = [''];
@@ -26,22 +27,13 @@
 		toast.success($i18n.t('Default model updated'));
 	};
 
-	const pinModelHandler = async (modelId) => {
-		let pinnedModels = $settings?.pinnedModels ?? [];
-
-		if (pinnedModels.includes(modelId)) {
-			pinnedModels = pinnedModels.filter((id) => id !== modelId);
-		} else {
-			pinnedModels = [...new Set([...pinnedModels, modelId])];
-		}
-
-		settings.set({ ...$settings, pinnedModels: pinnedModels });
-		await updateUserSettings(localStorage.token, { ui: $settings });
-	};
-
 	$: if (selectedModels.length > 0 && $models.length > 0) {
-		const _selectedModels = selectedModels.map((model) =>
-			$models.map((m) => m.id).includes(model) ? model : ''
+		const availableModelIds = getAvailableModelIds($models);
+		const defaultModelIds = $config?.default_models ? $config.default_models.split(',') : [];
+		const _selectedModels = resolveSelectedModels(
+			selectedModels,
+			availableModelIds,
+			defaultModelIds
 		);
 
 		if (!equal(_selectedModels, selectedModels)) {
@@ -63,13 +55,12 @@
 							label: model.name,
 							model: model
 						}))}
-						{pinModelHandler}
 						bind:value={selectedModel}
 					/>
 				</div>
 			</div>
 
-			{#if $user?.role === 'admin' || ($user?.permissions?.chat?.multiple_models ?? true)}
+			{#if $user?.role === 'admin'}
 				{#if selectedModelIdx === 0}
 					<div
 						class="  self-center mx-1 disabled:text-gray-600 disabled:hover:text-gray-600 -translate-y-[0.5px]"

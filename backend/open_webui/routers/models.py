@@ -127,7 +127,7 @@ async def get_models(
     order_by: str | None = None,
     direction: str | None = None,
     page: int | None = 1,
-    user=Depends(get_verified_user),
+    user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     limit = PAGE_ITEM_COUNT
@@ -147,28 +147,14 @@ async def get_models(
     if direction:
         filter['direction'] = direction
 
-    # Pre-fetch user group IDs once - used for both filter and write_access check
-    groups = await Groups.get_groups_by_member_id(user.id, db=db)
-    user_group_ids = {group.id for group in groups}
-
     if not user.role == 'admin' or not BYPASS_ADMIN_ACCESS_CONTROL:
-        if groups:
-            filter['group_ids'] = [group.id for group in groups]
-
         filter['user_id'] = user.id
 
-    result = await Models.search_models(user.id, filter=filter, skip=skip, limit=limit, db=db)
+    result = await Models.search_base_models(user.id, filter=filter, skip=skip, limit=limit, db=db)
 
     # Batch-fetch writable model IDs in a single query instead of N has_access calls
     model_ids = [model.id for model in result.items]
-    writable_model_ids = await AccessGrants.get_accessible_resource_ids(
-        user_id=user.id,
-        resource_type='model',
-        resource_ids=model_ids,
-        permission='write',
-        user_group_ids=user_group_ids,
-        db=db,
-    )
+    writable_model_ids = set(model_ids)
 
     # Strip profile_image_url from meta — images are served via /model/profile/image.
     items = []
@@ -219,10 +205,11 @@ async def get_base_models(
 
 
 @router.get('/tags', response_model=list[str])
-async def get_model_tags(user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)):
+async def get_model_tags(user=Depends(get_admin_user), db: AsyncSession = Depends(get_async_session)):
     tags = await Models.get_all_tags(
         user_id=user.id,
-        is_admin=(user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL),
+        is_admin=True,
+        is_base_model=True,
         db=db,
     )
     return sorted(tags)
@@ -237,16 +224,14 @@ async def get_model_tags(user=Depends(get_verified_user), db: AsyncSession = Dep
 async def create_new_model(
     request: Request,
     form_data: ModelForm,
-    user=Depends(get_verified_user),
+    user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    """Create a new workspace model entry."""
-    if user.role != 'admin' and not await has_permission(
-        user.id, 'workspace.models', await Config.get('user.permissions'), db=db
-    ):
+    """Create a new admin base-model override entry."""
+    if form_data.base_model_id is not None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='User-defined preset models are not supported',
         )
 
     model = await Models.get_model_by_id(form_data.id, db=db)
@@ -302,24 +287,10 @@ async def create_new_model(
 @router.get('/export', response_model=list[ModelModel])
 async def export_models(
     request: Request,
-    user=Depends(get_verified_user),
+    user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    if user.role != 'admin' and not await has_permission(
-        user.id,
-        'workspace.models_export',
-        await Config.get('user.permissions'),
-        db=db,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
-        )
-
-    if user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL:
-        return await Models.get_models(db=db)
-    else:
-        return await Models.get_models_by_user_id(user.id, db=db)
+    return await Models.get_base_models(db=db)
 
 
 ############################
@@ -334,20 +305,10 @@ class ModelsImportForm(BaseModel):
 @router.post('/import', response_model=bool)
 async def import_models(
     request: Request,
-    user=Depends(get_verified_user),
+    user=Depends(get_admin_user),
     form_data: ModelsImportForm = (...),
     db: AsyncSession = Depends(get_async_session),
 ):
-    if user.role != 'admin' and not await has_permission(
-        user.id,
-        'workspace.models_import',
-        await Config.get('user.permissions'),
-        db=db,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
-        )
     try:
         data = form_data.models
         if isinstance(data, list):
@@ -383,6 +344,13 @@ async def import_models(
                 model_id = model_data.get('id')
 
                 if model_id and is_valid_model_id(model_id):
+                    if model_data.get('base_model_id'):
+                        log.warning(
+                            'import_models: skipped preset model %s (user-defined models removed)',
+                            model_id,
+                        )
+                        continue
+
                     imported_ids.append(model_id)
                     # Defense-in-depth: skip models referencing inaccessible files
                     try:
@@ -497,46 +465,19 @@ class ModelIdForm(BaseModel):
 
 # Note: We're not using the typical url path param here, but instead using a query parameter to allow '/' in the id
 @router.get('/model', response_model=ModelAccessResponse | None)
-async def get_model_by_id(id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)):
+async def get_model_by_id(id: str, user=Depends(get_admin_user), db: AsyncSession = Depends(get_async_session)):
     model = await Models.get_model_by_id(id, db=db)
     if model:
-        write_access = (
-            (user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL)
-            or user.id == model.user_id
-            or await AccessGrants.has_access(
-                user_id=user.id,
-                resource_type='model',
-                resource_id=model.id,
-                permission='write',
-                db=db,
-            )
-        )
-
-        if write_access or await AccessGrants.has_access(
-            user_id=user.id,
-            resource_type='model',
-            resource_id=model.id,
-            permission='read',
-            db=db,
-        ):
-            model_dict = model.model_dump()
-            # Strip params (system prompt and other admin-curated config)
-            # for read-only callers — matches the params strip already
-            # enforced on /api/models in utils/models.py.  Owners, admins
-            # under BYPASS_ADMIN_ACCESS_CONTROL, and write-grant holders
-            # still receive the full object so the workspace edit UI keeps
-            # working for users who legitimately curate the model.
-            if not write_access:
-                model_dict['params'] = {}
-            return ModelAccessResponse(
-                **model_dict,
-                write_access=write_access,
-            )
-        else:
+        if model.base_model_id is not None:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ERROR_MESSAGES.NOT_FOUND,
             )
+
+        return ModelAccessResponse(
+            **model.model_dump(),
+            write_access=True,
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -632,48 +573,38 @@ async def get_model_profile_image(
 
 @router.post('/model/toggle', response_model=ModelResponse | None)
 async def toggle_model_by_id(
-    request: Request, id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
+    request: Request, id: str, user=Depends(get_admin_user), db: AsyncSession = Depends(get_async_session)
 ):
     model = await Models.get_model_by_id(id, db=db)
     if model:
-        if (
-            user.role == 'admin'
-            or model.user_id == user.id
-            or await AccessGrants.has_access(
-                user_id=user.id,
-                resource_type='model',
-                resource_id=model.id,
-                permission='write',
-                db=db,
-            )
-        ):
-            model = await Models.toggle_model_by_id(id, db=db)
-
-            if model:
-                await publish_event(
-                    request,
-                    EVENTS.MODEL_ENABLED if model.is_active else EVENTS.MODEL_DISABLED,
-                    actor=user,
-                    subject_id=model.id,
-                    subject_type='model',
-                    data={'name': model.name},
-                )
-                return model
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT('Error updating function'),
-                )
-        else:
+        if model.base_model_id is not None:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.UNAUTHORIZED,
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ERROR_MESSAGES.NOT_FOUND,
             )
-    else:
+
+        model = await Models.toggle_model_by_id(id, db=db)
+
+        if model:
+            await publish_event(
+                request,
+                EVENTS.MODEL_ENABLED if model.is_active else EVENTS.MODEL_DISABLED,
+                actor=user,
+                subject_id=model.id,
+                subject_type='model',
+                data={'name': model.name},
+            )
+            return model
+
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT('Error updating function'),
         )
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=ERROR_MESSAGES.NOT_FOUND,
+    )
 
 
 ############################
@@ -685,10 +616,10 @@ async def toggle_model_by_id(
 async def update_model_by_id(
     request: Request,
     form_data: ModelForm,
-    user=Depends(get_verified_user),
+    user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    """Update a workspace model's configuration."""
+    """Update an admin base-model override configuration."""
     model = await Models.get_model_by_id(form_data.id, db=db)
     if not model:
         raise HTTPException(
@@ -696,20 +627,10 @@ async def update_model_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        model.user_id != user.id
-        and not await AccessGrants.has_access(
-            user_id=user.id,
-            resource_type='model',
-            resource_id=model.id,
-            permission='write',
-            db=db,
-        )
-        and user.role != 'admin'
-    ):
+    if model.base_model_id is not None or form_data.base_model_id is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+            detail='User-defined preset models are not supported',
         )
 
     await _verify_knowledge_file_access(
@@ -756,7 +677,7 @@ class ModelAccessGrantsForm(BaseModel):
 async def update_model_access_by_id(
     request: Request,
     form_data: ModelAccessGrantsForm,
-    user=Depends(get_verified_user),
+    user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     model = await Models.get_model_by_id(form_data.id, db=db)
@@ -764,11 +685,6 @@ async def update_model_access_by_id(
     # Non-preset models (e.g. direct Ollama/OpenAI models) may not have a DB
     # entry yet. Create a minimal one so access grants can be stored.
     if not model:
-        if user.role != 'admin':
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-            )
         model = await Models.insert_new_model(
             ModelForm(
                 id=form_data.id,
@@ -785,20 +701,10 @@ async def update_model_access_by_id(
                 detail=ERROR_MESSAGES.DEFAULT('Error creating model entry'),
             )
 
-    if (
-        model.user_id != user.id
-        and not await AccessGrants.has_access(
-            user_id=user.id,
-            resource_type='model',
-            resource_id=model.id,
-            permission='write',
-            db=db,
-        )
-        and user.role != 'admin'
-    ):
+    if model.base_model_id is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+            detail='User-defined preset models are not supported',
         )
 
     form_data.access_grants = await filter_allowed_access_grants(
@@ -832,7 +738,7 @@ async def update_model_access_by_id(
 async def delete_model_by_id(
     request: Request,
     form_data: ModelIdForm,
-    user=Depends(get_verified_user),
+    user=Depends(get_admin_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     model = await Models.get_model_by_id(form_data.id, db=db)
@@ -842,20 +748,10 @@ async def delete_model_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        user.role != 'admin'
-        and model.user_id != user.id
-        and not await AccessGrants.has_access(
-            user_id=user.id,
-            resource_type='model',
-            resource_id=model.id,
-            permission='write',
-            db=db,
-        )
-    ):
+    if model.base_model_id is not None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='User-defined preset models are not supported',
         )
 
     result = await Models.delete_model_by_id(form_data.id, db=db)

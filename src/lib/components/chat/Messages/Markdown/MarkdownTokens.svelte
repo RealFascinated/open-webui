@@ -162,6 +162,7 @@
 				{token}
 				lang={token?.lang ?? ''}
 				code={token?.text ?? ''}
+				{done}
 				{attributes}
 				{save}
 				{preview}
@@ -562,11 +563,11 @@
 		{/if}
 	{:else if token.type === 'inlineKatex'}
 		{#if token.text}
-			<KatexRenderer content={token.text} displayMode={token?.displayMode ?? false} />
+			<KatexRenderer content={token.text} displayMode={token?.displayMode ?? false} {done} />
 		{/if}
 	{:else if token.type === 'blockKatex'}
 		{#if token.text}
-			<KatexRenderer content={token.text} displayMode={token?.displayMode ?? false} />
+			<KatexRenderer content={token.text} displayMode={token?.displayMode ?? false} {done} />
 		{/if}
 	{:else if token.type === 'colonFence'}
 		<ColonFenceBlock

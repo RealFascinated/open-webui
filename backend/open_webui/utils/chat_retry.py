@@ -93,6 +93,21 @@ _RETRY_DESCRIPTIONS = {
     'timeout': 'Model stopped responding — retrying ({attempt}/{max_attempts})',
 }
 
+_EXHAUSTED_DESCRIPTIONS = {
+    'empty': 'Model returned no response — all {max_attempts} retry attempts failed',
+    'timeout': 'Model stopped responding — all {max_attempts} retry attempts failed',
+}
+
+
+def upsert_status_entry(status_history: list | None, status: dict) -> list:
+    """Replace the latest chat_retry status instead of appending another one."""
+    history = list(status_history or [])
+    if status.get('action') == 'chat_retry' and history and history[-1].get('action') == 'chat_retry':
+        history[-1] = status
+        return history
+    history.append(status)
+    return history
+
 
 async def emit_chat_retry_status(
     event_emitter,
@@ -111,6 +126,27 @@ async def emit_chat_retry_status(
                 'action': 'chat_retry',
                 'description': template.format(attempt=attempt, max_attempts=max_attempts),
                 'done': False,
+            },
+        }
+    )
+
+
+async def emit_chat_retry_exhausted(
+    event_emitter,
+    max_attempts: int = CHAT_RESPONSE_MAX_EMPTY_RETRIES,
+    reason: str = 'empty',
+) -> None:
+    if not event_emitter:
+        return
+
+    template = _EXHAUSTED_DESCRIPTIONS.get(reason, _EXHAUSTED_DESCRIPTIONS['empty'])
+    await event_emitter(
+        {
+            'type': 'status',
+            'data': {
+                'action': 'chat_retry',
+                'description': template.format(max_attempts=max_attempts),
+                'done': True,
             },
         }
     )

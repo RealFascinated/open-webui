@@ -11,10 +11,16 @@
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 
 	const dispatch = createEventDispatcher();
 
 	const i18n = getContext('i18n');
+
+	let dirty = false;
+	let saving = false;
+	let initialSnapshot = '';
 
 	let taskConfig = {
 		TASK_MODEL: '',
@@ -39,15 +45,31 @@
 
 	let chatConfig = {
 		ENABLE_CONTEXT_COMPACTION: false,
-		CONTEXT_COMPACTION_TOKEN_THRESHOLD: 80000,
+		CONTEXT_COMPACTION_CONTEXT_PERCENT: 80,
 		CONTEXT_COMPACTION_PROMPT_TEMPLATE: ''
 	};
 
+	const snapshot = () => JSON.stringify({ taskConfig, chatConfig });
+
+	$: if (initialSnapshot && taskConfig && chatConfig) {
+		dirty = snapshot() !== initialSnapshot;
+	}
+
 	const updateInterfaceHandler = async () => {
-		[taskConfig, chatConfig] = await Promise.all([
-			updateTaskConfig(localStorage.token, taskConfig),
-			updateChatConfig(localStorage.token, chatConfig)
-		]);
+		saving = true;
+		try {
+			[taskConfig, chatConfig] = await Promise.all([
+				updateTaskConfig(localStorage.token, taskConfig),
+				updateChatConfig(localStorage.token, chatConfig)
+			]);
+			initialSnapshot = snapshot();
+			dirty = false;
+			dispatch('save');
+		} catch (err) {
+			console.error('Failed to update Interface settings:', err);
+			toast.error(err?.detail ?? err?.message ?? $i18n.t('Failed to update settings'));
+		}
+		saving = false;
 	};
 
 	let workspaceModels = null;
@@ -63,7 +85,7 @@
 			]);
 
 			workspaceModels = await getBaseModels(localStorage.token);
-			baseModels = await getModels(localStorage.token, null, false);
+			baseModels = await getModels(localStorage.token, false);
 
 			models = baseModels.map((m) => {
 				const workspaceModel = workspaceModels.find((wm) => wm.id === m.id);
@@ -85,6 +107,8 @@
 			});
 
 			console.debug('models', models);
+			initialSnapshot = snapshot();
+			dirty = false;
 		} catch (err) {
 			console.error('Failed to initialize Interface settings:', err);
 			toast.error(err?.detail ?? err?.message ?? $i18n.t('Failed to load Interface settings'));
@@ -95,22 +119,19 @@
 	onMount(async () => {
 		await init();
 	});
+
+	const discardHandler = async () => {
+		await init();
+	};
 </script>
 
 {#if models !== null && taskConfig && chatConfig}
-	<form
-		class="flex flex-col h-full justify-between space-y-3 text-sm"
-		on:submit|preventDefault={() => {
-			updateInterfaceHandler();
-			dispatch('save');
-		}}
-	>
-		<div class="  overflow-y-scroll scrollbar-hidden h-full pr-1.5">
-			<div class="mb-3.5">
-				<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Tasks')}</div>
-
-				<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+	<form class="flex flex-col space-y-3 text-sm">
+		<div class="pr-1.5">
+			<AdminSettingsCard
+				title="Tasks & Prompts"
+				description="Task model, context compaction, and generation prompt templates."
+			>
 				<div class=" mb-2 font-medium flex items-center">
 					<div class=" text-xs mr-1">{$i18n.t('Task Model')}</div>
 					<Tooltip
@@ -235,20 +256,21 @@
 
 				{#if chatConfig.ENABLE_CONTEXT_COMPACTION}
 					<div class="mb-2.5">
-						<div class=" mb-1 text-xs font-medium">{$i18n.t('Token Threshold')}</div>
+						<div class=" mb-1 text-xs font-medium">{$i18n.t('Context Usage Threshold')}</div>
 
 						<Tooltip
 							content={$i18n.t(
-								'Older messages are summarized when estimated context exceeds this token limit.'
+								'Older messages are summarized when estimated context exceeds this percentage of the model context window.'
 							)}
 							placement="top-start"
 						>
 							<input
 								type="number"
 								min="1"
+								max="100"
 								step="1"
 								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
-								bind:value={chatConfig.CONTEXT_COMPACTION_TOKEN_THRESHOLD}
+								bind:value={chatConfig.CONTEXT_COMPACTION_CONTEXT_PERCENT}
 							/>
 						</Tooltip>
 					</div>
@@ -491,17 +513,10 @@
 						/>
 					</Tooltip>
 				</div>
-			</div>
+			</AdminSettingsCard>
 		</div>
 
-		<div class="flex justify-end text-sm font-medium">
-			<button
-				class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-				type="submit"
-			>
-				{$i18n.t('Save')}
-			</button>
-		</div>
+		<AdminSaveBar {dirty} {saving} onSave={updateInterfaceHandler} onDiscard={discardHandler} />
 	</form>
 {:else}
 	<div class=" h-full w-full flex justify-center items-center">

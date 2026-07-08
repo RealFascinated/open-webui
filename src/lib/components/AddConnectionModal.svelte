@@ -27,7 +27,6 @@
 	export let edit = false;
 
 	export let ollama = false;
-	export let direct = false;
 
 	export let connection = null;
 
@@ -40,7 +39,6 @@
 	$: azure =
 		provider === 'azure' ||
 		((url.includes('azure.') || url.includes('cognitive.microsoft.com')) &&
-			!direct &&
 			provider === '' &&
 			!/\/openai\/v1(\/|$)/.test(url));
 
@@ -95,21 +93,17 @@
 			}
 		}
 
-		const res = await verifyOpenAIConnection(
-			localStorage.token,
-			{
-				url,
-				key,
-				config: {
-					auth_type,
-					...(provider ? { provider } : {}),
-					...(azure ? { azure: true } : {}),
-					api_version: apiVersion,
-					...(_headers ? { headers: _headers } : {})
-				}
-			},
-			direct
-		).catch((error) => {
+		const res = await verifyOpenAIConnection(localStorage.token, {
+			url,
+			key,
+			config: {
+				auth_type,
+				...(provider ? { provider } : {}),
+				...(azure ? { azure: true } : {}),
+				api_version: apiVersion,
+				...(_headers ? { headers: _headers } : {})
+			}
+		}).catch((error) => {
 			toast.error(`${error}`);
 		});
 
@@ -277,8 +271,7 @@
 					}}
 				>
 					<div class="px-1">
-						{#if !direct}
-							<div class="flex gap-2">
+						<div class="flex gap-2">
 								<div class="flex w-full justify-between items-center">
 									<div class=" text-xs text-gray-500">{$i18n.t('Connection Type')}</div>
 
@@ -299,7 +292,6 @@
 									</div>
 								</div>
 							</div>
-						{/if}
 
 						<div class="flex gap-2 mt-1.5">
 							<div class="flex flex-col w-full">
@@ -391,10 +383,8 @@
 
 											{#if !ollama}
 												<option value="session">{$i18n.t('Session')}</option>
-												{#if !direct}
-													<option value="system_oauth">{$i18n.t('OAuth')}</option>
-													<option value="microsoft_entra_id">{$i18n.t('Entra ID')}</option>
-												{/if}
+												<option value="system_oauth">{$i18n.t('OAuth')}</option>
+												<option value="microsoft_entra_id">{$i18n.t('Entra ID')}</option>
 											{/if}
 										</select>
 									</div>
@@ -436,11 +426,10 @@
 							</div>
 						</div>
 
-						{#if !direct}
-							<div class="flex gap-2 mt-2">
-								<div class="flex flex-col w-full">
-									<label
-										for="headers-input"
+						<div class="flex gap-2 mt-2">
+							<div class="flex flex-col w-full">
+								<label
+									for="headers-input"
 										class={`mb-0.5 text-xs text-gray-500
 								${($settings?.highContrastMode ?? false) ? 'text-gray-800 dark:text-gray-100' : ''}`}
 										>{$i18n.t('Headers')}</label
@@ -462,8 +451,7 @@
 										</Tooltip>
 									</div>
 								</div>
-							</div>
-						{/if}
+						</div>
 
 						<div class="flex gap-2 mt-2">
 							<div class="flex flex-col w-full">
@@ -493,7 +481,7 @@
 							</div>
 						</div>
 
-						{#if !ollama && !direct}
+						{#if !ollama}
 							<div class="flex flex-row justify-between items-center w-full mt-2">
 								<label
 									for="provider-select"
@@ -541,7 +529,7 @@
 							</div>
 						{/if}
 
-						{#if !ollama && !direct}
+						{#if !ollama}
 							<div class="flex flex-row justify-between items-center w-full mt-1">
 								<label
 									for="api-type-toggle"

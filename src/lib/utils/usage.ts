@@ -144,6 +144,14 @@ export const isLlamacppUsage = (usage: UsageRecord): boolean => {
 	);
 };
 
+export const isLlamacppModel = (model?: UsageModel): boolean => {
+	return model?.provider === 'llama.cpp';
+};
+
+export const isLlamacppContext = (usage: UsageRecord, model?: UsageModel): boolean => {
+	return isLlamacppModel(model) || isLlamacppUsage(usage);
+};
+
 const roundCachedPercent = (cached: number, prompt: number): number => {
 	if (prompt <= 0) {
 		return cached > 0 ? 100 : 0;
@@ -256,6 +264,29 @@ const modelContextCandidates = (model: UsageModel): Record<string, unknown>[] =>
 	return candidates;
 };
 
+const llamacppSlotContextFromEntry = (
+	entry: Record<string, unknown> | null | undefined
+): number | null => {
+	if (!entry || typeof entry !== 'object') return null;
+
+	const meta = entry.meta;
+	if (meta && typeof meta === 'object') {
+		const slotCtx = parsePositiveInt((meta as UsageRecord).n_ctx);
+		if (slotCtx) return slotCtx;
+	}
+
+	return parsePositiveInt(entry.n_ctx);
+};
+
+export const getLlamacppSlotContextFromModel = (model?: UsageModel): number | null => {
+	for (const entry of modelContextCandidates(model ?? null)) {
+		const value = llamacppSlotContextFromEntry(entry);
+		if (value) return value;
+	}
+
+	return null;
+};
+
 export const getContextFromModel = (model?: UsageModel): number | null => {
 	for (const entry of modelContextCandidates(model ?? null)) {
 		const value = contextFromEntry(entry);
@@ -301,6 +332,20 @@ export const getContextWindowSize = (
 	usage: UsageRecord,
 	model?: UsageModel
 ): number | null => {
+	if (isLlamacppContext(usage, model)) {
+		const fromUsage = parsePositiveInt(usage.n_ctx);
+		if (fromUsage) return fromUsage;
+
+		const generationSettings =
+			usage.generation_settings && typeof usage.generation_settings === 'object'
+				? (usage.generation_settings as UsageRecord)
+				: null;
+		const fromGeneration = parsePositiveInt(generationSettings?.n_ctx);
+		if (fromGeneration) return fromGeneration;
+
+		return getLlamacppSlotContextFromModel(model);
+	}
+
 	const generationSettings =
 		usage.generation_settings && typeof usage.generation_settings === 'object'
 			? (usage.generation_settings as UsageRecord)
@@ -330,13 +375,17 @@ export const resolveContextWindowSize = async (
 	model: UsageModel,
 	token: string
 ): Promise<number | null> => {
-	const sync = getContextWindowSize(usage, model);
-	if (sync) return sync;
-
 	const urlIdx = parseUrlIdx(model?.urlIdx);
 	if (urlIdx === null) return null;
 
-	const cacheKey = `${urlIdx}:${model?.id ?? ''}:${isLlamacppUsage(usage) ? 'llama' : 'api'}`;
+	const llamacpp = isLlamacppContext(usage, model);
+
+	if (!llamacpp) {
+		const sync = getContextWindowSize(usage, model);
+		if (sync) return sync;
+	}
+
+	const cacheKey = `${urlIdx}:${model?.id ?? ''}:${llamacpp ? 'llama' : 'api'}`;
 	const cached = contextSizeCache.get(cacheKey);
 	if (cached && cached.expiry > Date.now()) {
 		return cached.size;
@@ -344,7 +393,6 @@ export const resolveContextWindowSize = async (
 
 	try {
 		const { getConnectionContext } = await import('$lib/apis/openai');
-		const llamacpp = isLlamacppUsage(usage);
 		const result = await getConnectionContext(token, urlIdx, {
 			modelId: model?.id,
 			llamacpp
@@ -355,11 +403,21 @@ export const resolveContextWindowSize = async (
 			: parsePositiveInt(result?.context_length);
 
 		if (size) {
-			contextSizeCache.set(cacheKey, { size, expiry: Date.now() + 600_000 });
+			contextSizeCache.set(cacheKey, {
+				size,
+				expiry: Date.now() + (llamacpp ? 60_000 : 600_000)
+			});
 			return size;
 		}
 	} catch {
+		if (llamacpp) {
+			return getLlamacppSlotContextFromModel(model) ?? getContextWindowSize(usage, model);
+		}
 		return null;
+	}
+
+	if (llamacpp) {
+		return getLlamacppSlotContextFromModel(model) ?? getContextWindowSize(usage, model);
 	}
 
 	return null;

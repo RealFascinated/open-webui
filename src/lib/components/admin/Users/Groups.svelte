@@ -21,6 +21,7 @@
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
 	import Check from '$lib/components/icons/Check.svelte';
 	import Select from '$lib/components/common/Select.svelte';
+	import AdminEmptyState from '$lib/components/admin/AdminEmptyState.svelte';
 	import { createNewGroup, getGroups } from '$lib/apis/groups';
 	import {
 		getUserDefaultPermissions,
@@ -209,15 +210,11 @@
 				{/each}
 			</div>
 		{:else}
-			<div class="w-full h-full flex flex-col justify-center items-center my-16 mb-24">
-				<div class="max-w-md text-center">
-					<div class="text-3xl mb-3">👥</div>
-					<div class="text-lg font-medium mb-1">{$i18n.t('No groups found')}</div>
-					<div class="text-gray-500 text-center text-xs">
-						{$i18n.t('Use groups to organize your users and assign permissions.')}
-					</div>
-				</div>
-			</div>
+			<AdminEmptyState
+				icon="👥"
+				title={$i18n.t('No groups found')}
+				description={$i18n.t('Use groups to organize your users and assign permissions.')}
+			/>
 		{/if}
 	</div>
 

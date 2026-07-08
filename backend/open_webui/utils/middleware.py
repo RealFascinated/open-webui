@@ -82,6 +82,7 @@ from open_webui.utils.chat_retry import (
     aclose_streaming_response,
     aiter_with_idle_timeout,
     assistant_response_has_content,
+    emit_chat_retry_exhausted,
     emit_chat_retry_status,
     get_retry_reason,
     prepare_chat_retry,
@@ -1900,7 +1901,7 @@ def apply_params_to_form_data(form_data, model):
         'stream_delta_chunk_size': int,
         'function_calling': str,
         'reasoning_tags': list,
-        'compact_token_threshold': int,
+        'compact_context_percent': int,
         'system': str,
     }
 
@@ -2381,12 +2382,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         form_data['messages'].append({'role': 'user', 'content': regeneration_prompt})
 
     if chat_id and user_message_id and not chat_id.startswith('local:') and not chat_id.startswith('channel:'):
-        if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-            compaction_models = {
-                request.state.model['id']: request.state.model,
-            }
-        else:
-            compaction_models = request.app.state.MODELS
+        compaction_models = request.app.state.MODELS
 
         system_message = get_system_message(form_data.get('messages', []))
         system_prompt = get_content_from_message(system_message) if system_message else ''
@@ -2448,12 +2444,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     }
     # Initialize events to store additional event to be sent to the client
     # Initialize contexts and citation
-    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
-            request.state.model['id']: request.state.model,
-        }
-    else:
-        models = request.app.state.MODELS
+    models = request.app.state.MODELS
 
     task_model_id = get_task_model_id(
         form_data['model'],
@@ -4253,7 +4244,7 @@ async def streaming_chat_response_handler(response, ctx):
                             )
 
                             if data:
-                                if 'event' in data and not getattr(request.state, 'direct', False):
+                                if 'event' in data:
                                     await event_emitter(data.get('event', {}))
 
                                 if 'selected_model_id' in data:
@@ -5458,6 +5449,11 @@ async def streaming_chat_response_handler(response, ctx):
                     if retry_reason is None:
                         break
                     if attempt >= CHAT_RESPONSE_MAX_EMPTY_RETRIES:
+                        await emit_chat_retry_exhausted(
+                            event_emitter,
+                            CHAT_RESPONSE_MAX_EMPTY_RETRIES,
+                            retry_reason,
+                        )
                         break
 
                 # Mark all in-progress items as completed
@@ -5645,6 +5641,7 @@ async def process_non_streaming_with_retries(response, ctx):
         if get_retry_reason(assistant_message.get('output'), assistant_message.get('content')) is None:
             return result
         if attempt >= CHAT_RESPONSE_MAX_EMPTY_RETRIES:
+            await emit_chat_retry_exhausted(event_emitter, CHAT_RESPONSE_MAX_EMPTY_RETRIES, 'empty')
             return result
 
     return result

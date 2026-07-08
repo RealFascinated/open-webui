@@ -8,9 +8,12 @@ export type ThinkingEffort = (typeof THINKING_EFFORT_OPTIONS)[number];
 export const DEFAULT_THINKING_EFFORT: ThinkingEffort = 'medium';
 
 export function getResolvedThink(
-	settingsParams?: Record<string, unknown> | null
+	userSettings?: { think?: boolean | string | null; params?: Record<string, unknown> } | null
 ): boolean | string | null | undefined {
-	return settingsParams?.think as boolean | string | null | undefined;
+	if (userSettings?.think !== undefined) {
+		return userSettings.think;
+	}
+	return userSettings?.params?.think as boolean | string | null | undefined;
 }
 
 export function isThinkingEnabled(resolvedThink: unknown): boolean {
@@ -29,9 +32,9 @@ export function getThinkingEffort(resolvedThink: unknown): ThinkingEffort {
 }
 
 export function resolveThinkForRequest(
-	settingsParams?: Record<string, unknown> | null
+	userSettings?: { think?: boolean | string | null; params?: Record<string, unknown> } | null
 ): boolean | string {
-	const resolved = getResolvedThink(settingsParams);
+	const resolved = getResolvedThink(userSettings);
 	if (resolved === false) return false;
 	if (resolved === true) return DEFAULT_THINKING_EFFORT;
 	if (typeof resolved === 'string') return resolved;
@@ -42,10 +45,7 @@ export async function saveUserThinkingPreference(think: boolean | string) {
 	const current = get(settings);
 	const updated = {
 		...current,
-		params: {
-			...(current?.params ?? {}),
-			think
-		}
+		think
 	};
 
 	settings.set(updated);
@@ -54,6 +54,6 @@ export async function saveUserThinkingPreference(think: boolean | string) {
 
 export async function ensureDefaultThinkingPreference() {
 	const current = get(settings);
-	if (current?.params?.think !== undefined) return;
+	if (getResolvedThink(current) !== undefined) return;
 	await saveUserThinkingPreference(DEFAULT_THINKING_EFFORT);
 }

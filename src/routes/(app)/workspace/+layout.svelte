@@ -21,9 +21,7 @@
 
 	onMount(async () => {
 		if ($user?.role !== 'admin') {
-			if ($page.url.pathname.includes('/models') && !$user?.permissions?.workspace?.models) {
-				goto('/');
-			} else if (
+			if (
 				$page.url.pathname.includes('/knowledge') &&
 				!$user?.permissions?.workspace?.knowledge
 			) {
@@ -84,17 +82,6 @@
 					<div
 						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent py-1 touch-auto pointer-events-auto"
 					>
-						{#if $user?.role === 'admin' || $user?.permissions?.workspace?.models}
-							<a
-								draggable="false"
-								aria-current={$page.url.pathname.includes('/workspace/models') ? 'page' : null}
-								class="min-w-fit p-1.5 {$page.url.pathname.includes('/workspace/models')
-									? ''
-									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
-								href="/workspace/models">{$i18n.t('Models')}</a
-							>
-						{/if}
-
 						{#if $user?.role === 'admin' || $user?.permissions?.workspace?.knowledge}
 							<a
 								draggable="false"

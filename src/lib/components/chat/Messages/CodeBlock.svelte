@@ -43,6 +43,7 @@
 	export let token;
 	export let lang = '';
 	export let code = '';
+	export let done = true;
 	export let attributes = {};
 
 	export let className = '';
@@ -611,11 +612,17 @@
 								result) &&
 								'border-bottom-left-radius: 0px; border-bottom-right-radius: 0px;'}"
 						><code class="language-{lang} rounded-t-none whitespace-pre text-sm">
-								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-								{#if lang && hljs.getLanguage(lang)}{@html hljs.highlight(code, {
+								{#if !done}
+									{code}
+								{:else if lang && hljs.getLanguage(lang)}
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+									{@html hljs.highlight(code, {
 										language: lang,
 										ignoreIllegals: true
-									}).value}{:else}{code}{/if}</code></pre>
+									}).value}
+								{:else}
+									{code}
+								{/if}</code></pre>
 					{/if}
 				{:else}
 					<div

@@ -209,8 +209,6 @@
 							return item.model?.connection_type === 'local';
 						} else if (selectedConnectionType === 'external') {
 							return item.model?.connection_type === 'external';
-						} else if (selectedConnectionType === 'direct') {
-							return item.model?.direct;
 						}
 					})
 			: items
@@ -229,8 +227,6 @@
 							return item.model?.connection_type === 'local';
 						} else if (selectedConnectionType === 'external') {
 							return item.model?.connection_type === 'external';
-						} else if (selectedConnectionType === 'direct') {
-							return item.model?.direct;
 						}
 					})
 	).filter((item) => includeHidden || !(item.model?.info?.meta?.hidden ?? false));
@@ -381,10 +377,7 @@
 				);
 
 				models.set(
-					await getModels(
-						localStorage.token,
-						$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-					)
+					await getModels(localStorage.token)
 				);
 			} else {
 				toast.error($i18n.t('Download canceled'));
@@ -441,10 +434,7 @@
 		if (res) {
 			toast.success($i18n.t('Model unloaded successfully'));
 			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
+				await getModels(localStorage.token)
 			);
 		}
 	};
@@ -477,10 +467,7 @@
 			}
 
 			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
+				await getModels(localStorage.token)
 			);
 		}
 
@@ -534,10 +521,7 @@
 		on:click={toggleOpen}
 		on:mouseenter={async () => {
 			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
+				await getModels(localStorage.token)
 			);
 		}}
 	>
@@ -635,7 +619,7 @@
 									class="flex gap-1 w-fit text-center text-sm rounded-full bg-transparent px-1.5 whitespace-nowrap"
 									bind:this={tagsContainerElement}
 								>
-									{#if items.find((item) => item.model?.connection_type === 'local') || items.find((item) => item.model?.connection_type === 'external') || items.find((item) => item.model?.direct) || tags.length > 0}
+									{#if items.find((item) => item.model?.connection_type === 'local') || items.find((item) => item.model?.connection_type === 'external') || tags.length > 0}
 										<button
 											class="min-w-fit outline-none px-1.5 py-0.5 {selectedTag === '' &&
 											selectedConnectionType === ''
@@ -680,22 +664,6 @@
 											}}
 										>
 											{$i18n.t('External')}
-										</button>
-									{/if}
-
-									{#if items.find((item) => item.model?.direct)}
-										<button
-											class="min-w-fit outline-none px-1.5 py-0.5 {selectedConnectionType ===
-											'direct'
-												? ''
-												: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
-											aria-pressed={selectedConnectionType === 'direct'}
-											on:click={() => {
-												selectedTag = '';
-												selectedConnectionType = 'direct';
-											}}
-										>
-											{$i18n.t('Direct')}
 										</button>
 									{/if}
 

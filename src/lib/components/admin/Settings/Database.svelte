@@ -9,6 +9,7 @@
 	import { getAllUserChats } from '$lib/apis/chats';
 	import { getAllUsers } from '$lib/apis/users';
 	import { exportConfig, importConfig } from '$lib/apis/configs';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -49,8 +50,8 @@
 	});
 </script>
 
-<div class="flex flex-col h-full justify-between text-sm" data-save-handler={!!saveHandler}>
-	<div class="space-y-3 overflow-y-scroll scrollbar-hidden h-full">
+<div class="flex flex-col text-sm" data-save-handler={!!saveHandler}>
+	<div class="space-y-3">
 		<input
 			id="config-json-input"
 			hidden
@@ -77,9 +78,11 @@
 			}}
 		/>
 
-		<div>
-			<div class="mb-1 text-sm font-medium">{$i18n.t('Config')}</div>
-
+		<AdminSettingsCard
+			title="Config"
+			description="Import or export instance configuration as JSON."
+			className="mb-3"
+		>
 			<div>
 				<div class="py-0.5 flex w-full justify-between">
 					<div class="self-center text-xs">{$i18n.t('Import Config')}</div>
@@ -113,12 +116,13 @@
 					</button>
 				</div>
 			</div>
-		</div>
+		</AdminSettingsCard>
 
 		{#if $config?.features.enable_admin_export ?? true}
-			<div>
-				<div class="mb-1 text-sm font-medium">{$i18n.t('Database')}</div>
-
+			<AdminSettingsCard
+				title="Database"
+				description="Download backups and export chats or user data."
+			>
 				<div>
 					<div class="py-0.5 flex w-full justify-between">
 						<div class="self-center text-xs">{$i18n.t('Download Database')}</div>
@@ -165,7 +169,7 @@
 						</button>
 					</div>
 				</div>
-			</div>
+			</AdminSettingsCard>
 		{/if}
 	</div>
 </div>

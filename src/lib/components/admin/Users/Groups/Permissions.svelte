@@ -6,9 +6,23 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 
 	import { DEFAULT_PERMISSIONS } from '$lib/constants/permissions';
+	import {
+		PERMISSION_PRESETS,
+		type PermissionPresetId
+	} from '$lib/utils/permissionPresets';
+	import PermissionsSection from './PermissionsSection.svelte';
+	import PermissionsPresets from './PermissionsPresets.svelte';
 
 	export let permissions = {};
 	export let defaultPermissions = {};
+
+	let activePreset: PermissionPresetId | null = null;
+	let openWorkspace = true;
+	let openSharing = false;
+	let openAccessGrants = false;
+	let openChat = false;
+	let openFeatures = false;
+	let openSettings = false;
 
 	// Reactive statement to ensure all fields are present in `permissions`
 	$: {
@@ -28,52 +42,40 @@
 		};
 	}
 
+	const applyPreset = (event: CustomEvent<PermissionPresetId>) => {
+		const presetId = event.detail;
+		permissions = fillMissingProperties(
+			PERMISSION_PRESETS[presetId].permissions,
+			DEFAULT_PERMISSIONS
+		);
+		activePreset = presetId;
+	};
+
+	const permissionsSnapshot = (value: unknown) =>
+		JSON.stringify(fillMissingProperties(value, DEFAULT_PERMISSIONS));
+
+	$: if (activePreset) {
+		const presetPermissions = permissionsSnapshot(
+			PERMISSION_PRESETS[activePreset].permissions
+		);
+		if (permissionsSnapshot(permissions) !== presetPermissions) {
+			activePreset = null;
+		}
+	}
+
 	onMount(() => {
 		permissions = fillMissingProperties(permissions, DEFAULT_PERMISSIONS);
 	});
 </script>
 
-<div class="space-y-2">
-	<!-- {$i18n.t('Default Model')}
-	{$i18n.t('Model Filtering')}
-	{$i18n.t('Model Permissions')}
-	{$i18n.t('No model IDs')} -->
+<div class="space-y-3">
+	<PermissionsPresets {activePreset} on:apply={applyPreset} />
 
-	<div>
-		<div class=" mb-2 text-sm font-medium">{$i18n.t('Workspace Permissions')}</div>
-
-		<div class="flex flex-col w-full">
-			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-medium">
-					{$i18n.t('Models Access')}
-				</div>
-				<Switch bind:state={permissions.workspace.models} />
-			</div>
-
-			{#if permissions.workspace.models}
-				<div class="ml-2 flex flex-col gap-2 pt-0.5 pb-1">
-					<div class="flex w-full justify-between">
-						<div class="self-center text-xs">
-							{$i18n.t('Import Models')}
-						</div>
-						<Switch bind:state={permissions.workspace.models_import} />
-					</div>
-					<div class="flex w-full justify-between">
-						<div class="self-center text-xs">
-							{$i18n.t('Export Models')}
-						</div>
-						<Switch bind:state={permissions.workspace.models_export} />
-					</div>
-				</div>
-			{:else if defaultPermissions?.workspace?.models}
-				<div class="pb-0.5">
-					<div class="text-xs text-gray-500">
-						{$i18n.t('This is a default user permission and will remain enabled.')}
-					</div>
-				</div>
-			{/if}
-		</div>
-
+	<PermissionsSection
+		title="Workspace Permissions"
+		description="Control access to knowledge, prompts, tools, and skills."
+		bind:open={openWorkspace}
+	>
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
 				<div class=" self-center text-xs font-medium">
@@ -197,47 +199,13 @@
 				</div>
 			{/if}
 		</div>
-	</div>
+	</PermissionsSection>
 
-	<hr class=" border-gray-100/30 dark:border-gray-850/30" />
-
-	<div>
-		<div class=" mb-2 text-sm font-medium">{$i18n.t('Sharing Permissions')}</div>
-
-		<div class="flex flex-col w-full">
-			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-medium">
-					{$i18n.t('Models Sharing')}
-				</div>
-				<Switch bind:state={permissions.sharing.models} />
-			</div>
-			{#if defaultPermissions?.sharing?.models && !permissions.sharing.models}
-				<div>
-					<div class="text-xs text-gray-500">
-						{$i18n.t('This is a default user permission and will remain enabled.')}
-					</div>
-				</div>
-			{/if}
-		</div>
-
-		{#if permissions.sharing.models}
-			<div class="flex flex-col w-full">
-				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-medium">
-						{$i18n.t('Models Public Sharing')}
-					</div>
-					<Switch bind:state={permissions.sharing.public_models} />
-				</div>
-				{#if defaultPermissions?.sharing?.public_models && !permissions.sharing.public_models}
-					<div>
-						<div class="text-xs text-gray-500">
-							{$i18n.t('This is a default user permission and will remain enabled.')}
-						</div>
-					</div>
-				{/if}
-			</div>
-		{/if}
-
+	<PermissionsSection
+		title="Sharing Permissions"
+		description="Public and private sharing for workspace resources."
+		bind:open={openSharing}
+	>
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
 				<div class=" self-center text-xs font-medium">
@@ -459,13 +427,13 @@
 				{/if}
 			</div>
 		{/if}
-	</div>
+	</PermissionsSection>
 
-	<hr class=" border-gray-100/30 dark:border-gray-850/30" />
-
-	<div>
-		<div class=" mb-2 text-sm font-medium">{$i18n.t('Access Grants')}</div>
-
+	<PermissionsSection
+		title="Access Grants"
+		description="Who users can share resources with."
+		bind:open={openAccessGrants}
+	>
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
 				<div class=" self-center text-xs font-medium">
@@ -481,13 +449,13 @@
 				</div>
 			{/if}
 		</div>
-	</div>
+	</PermissionsSection>
 
-	<hr class=" border-gray-100/30 dark:border-gray-850/30" />
-
-	<div>
-		<div class=" mb-2 text-sm font-medium">{$i18n.t('Chat Permissions')}</div>
-
+	<PermissionsSection
+		title="Chat Permissions"
+		description="Uploads, editing, sharing, and voice features in chat."
+		bind:open={openChat}
+	>
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
 				<div class=" self-center text-xs font-medium">
@@ -519,72 +487,6 @@
 				</div>
 			{/if}
 		</div>
-
-		<div class="flex flex-col w-full">
-			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-medium">
-					{$i18n.t('Allow Chat Controls')}
-				</div>
-				<Switch bind:state={permissions.chat.controls} />
-			</div>
-			{#if defaultPermissions?.chat?.controls && !permissions.chat.controls}
-				<div>
-					<div class="text-xs text-gray-500">
-						{$i18n.t('This is a default user permission and will remain enabled.')}
-					</div>
-				</div>
-			{/if}
-		</div>
-
-		{#if permissions.chat.controls}
-			<div class="flex flex-col w-full">
-				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-medium">
-						{$i18n.t('Allow Chat Valves')}
-					</div>
-					<Switch bind:state={permissions.chat.valves} />
-				</div>
-				{#if defaultPermissions?.chat?.valves && !permissions.chat.valves}
-					<div>
-						<div class="text-xs text-gray-500">
-							{$i18n.t('This is a default user permission and will remain enabled.')}
-						</div>
-					</div>
-				{/if}
-			</div>
-
-			<div class="flex flex-col w-full">
-				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-medium">
-						{$i18n.t('Allow Chat System Prompt')}
-					</div>
-					<Switch bind:state={permissions.chat.system_prompt} />
-				</div>
-				{#if defaultPermissions?.chat?.system_prompt && !permissions.chat.system_prompt}
-					<div>
-						<div class="text-xs text-gray-500">
-							{$i18n.t('This is a default user permission and will remain enabled.')}
-						</div>
-					</div>
-				{/if}
-			</div>
-
-			<div class="flex flex-col w-full">
-				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-medium">
-						{$i18n.t('Allow Chat Params')}
-					</div>
-					<Switch bind:state={permissions.chat.params} />
-				</div>
-				{#if defaultPermissions?.chat?.params && !permissions.chat.params}
-					<div>
-						<div class="text-xs text-gray-500">
-							{$i18n.t('This is a default user permission and will remain enabled.')}
-						</div>
-					</div>
-				{/if}
-			</div>
-		{/if}
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
@@ -781,22 +683,6 @@
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
 				<div class=" self-center text-xs font-medium">
-					{$i18n.t('Allow Multiple Models in Chat')}
-				</div>
-				<Switch bind:state={permissions.chat.multiple_models} />
-			</div>
-			{#if defaultPermissions?.chat?.multiple_models && !permissions.chat.multiple_models}
-				<div>
-					<div class="text-xs text-gray-500">
-						{$i18n.t('This is a default user permission and will remain enabled.')}
-					</div>
-				</div>
-			{/if}
-		</div>
-
-		<div class="flex flex-col w-full">
-			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Temporary Chat')}
 				</div>
 				<Switch bind:state={permissions.chat.temporary} />
@@ -827,13 +713,13 @@
 				{/if}
 			</div>
 		{/if}
-	</div>
+	</PermissionsSection>
 
-	<hr class=" border-gray-100/30 dark:border-gray-850/30" />
-
-	<div>
-		<div class=" mb-2 text-sm font-medium">{$i18n.t('Features Permissions')}</div>
-
+	<PermissionsSection
+		title="Features Permissions"
+		description="Optional product features like notes, channels, and automations."
+		bind:open={openFeatures}
+	>
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
 				<div class=" self-center text-xs font-medium">
@@ -1031,13 +917,13 @@
 				</div>
 			{/if}
 		</div>
-	</div>
+	</PermissionsSection>
 
-	<hr class=" border-gray-100/30 dark:border-gray-850/30" />
-
-	<div>
-		<div class=" mb-2 text-sm font-medium">{$i18n.t('Settings Permissions')}</div>
-
+	<PermissionsSection
+		title="Settings Permissions"
+		description="User-facing settings access."
+		bind:open={openSettings}
+	>
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
 				<div class=" self-center text-xs font-medium">
@@ -1053,5 +939,5 @@
 				</div>
 			{/if}
 		</div>
-	</div>
+	</PermissionsSection>
 </div>

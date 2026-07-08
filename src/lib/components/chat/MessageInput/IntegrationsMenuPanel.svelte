@@ -87,6 +87,15 @@
 		}
 	};
 
+	const openTools = () => {
+		if (toolsFlyoutPanel?.canOpenAsSideFlyout(toolsTriggerElement)) {
+			toggleToolsFlyout();
+		} else {
+			activeSubmenu = null;
+			tab = 'tools';
+		}
+	};
+
 	$: if (active) {
 		init();
 	}
@@ -153,9 +162,9 @@
 					<button
 						class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
 						type="button"
-						on:mouseenter={openToolsFlyout}
+						on:mouseenter={() => toolsFlyoutPanel?.canOpenAsSideFlyout(toolsTriggerElement) && openToolsFlyout()}
 						on:mouseleave={closeToolsFlyout}
-						on:click={toggleToolsFlyout}
+						on:click={openTools}
 					>
 						<Wrench />
 
@@ -358,6 +367,27 @@
 			</Tooltip>
 		{/if}
 		{/if}
+	</div>
+{:else if !rootOnly && tab === 'tools'}
+	<div in:fly={{ x: 20, duration: 150 }}>
+		<button
+			class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
+			type="button"
+			on:click={() => {
+				tab = '';
+			}}
+		>
+			<ChevronLeft />
+
+			<div class="flex items-center w-full justify-between">
+				<div>
+					{$i18n.t('Tools')}
+					<span class="ml-0.5 text-gray-500">{toolsMenuCount}</span>
+				</div>
+			</div>
+		</button>
+
+		<ToolsMenuPanel active={active} bind:selectedToolIds {onShowValves} />
 	</div>
 {:else if !rootOnly && tab === 'skills' && skills}
 	<div in:fly={{ x: 20, duration: 150 }}>

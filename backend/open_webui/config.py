@@ -215,12 +215,6 @@ if CUSTOM_NAME:
 
 
 ####################################
-# DIRECT CONNECTIONS
-####################################
-
-ENABLE_DIRECT_CONNECTIONS = os.getenv('ENABLE_DIRECT_CONNECTIONS', 'False').lower() == 'true'
-
-####################################
 # OLLAMA_BASE_URL
 ####################################
 
@@ -1901,13 +1895,10 @@ USER_PERMISSIONS_SETTINGS_INTERFACE = os.getenv('USER_PERMISSIONS_SETTINGS_INTER
 
 DEFAULT_USER_PERMISSIONS = {
     'workspace': {
-        'models': USER_PERMISSIONS_WORKSPACE_MODELS_ACCESS,
         'knowledge': USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ACCESS,
         'prompts': USER_PERMISSIONS_WORKSPACE_PROMPTS_ACCESS,
         'tools': USER_PERMISSIONS_WORKSPACE_TOOLS_ACCESS,
         'skills': USER_PERMISSIONS_WORKSPACE_SKILLS_ACCESS,
-        'models_import': USER_PERMISSIONS_WORKSPACE_MODELS_IMPORT,
-        'models_export': USER_PERMISSIONS_WORKSPACE_MODELS_EXPORT,
         'prompts_import': USER_PERMISSIONS_WORKSPACE_PROMPTS_IMPORT,
         'prompts_export': USER_PERMISSIONS_WORKSPACE_PROMPTS_EXPORT,
         'tools_import': USER_PERMISSIONS_WORKSPACE_TOOLS_IMPORT,
@@ -1916,8 +1907,6 @@ DEFAULT_USER_PERMISSIONS = {
         'skills_export': USER_PERMISSIONS_WORKSPACE_SKILLS_EXPORT,
     },
     'sharing': {
-        'models': USER_PERMISSIONS_WORKSPACE_MODELS_ALLOW_SHARING,
-        'public_models': USER_PERMISSIONS_WORKSPACE_MODELS_ALLOW_PUBLIC_SHARING,
         'knowledge': USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ALLOW_SHARING,
         'public_knowledge': USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ALLOW_PUBLIC_SHARING,
         'prompts': USER_PERMISSIONS_WORKSPACE_PROMPTS_ALLOW_SHARING,
@@ -1936,10 +1925,6 @@ DEFAULT_USER_PERMISSIONS = {
         'allow_users': USER_PERMISSIONS_ACCESS_GRANTS_ALLOW_USERS,
     },
     'chat': {
-        'controls': USER_PERMISSIONS_CHAT_CONTROLS,
-        'valves': USER_PERMISSIONS_CHAT_VALVES,
-        'system_prompt': USER_PERMISSIONS_CHAT_SYSTEM_PROMPT,
-        'params': USER_PERMISSIONS_CHAT_PARAMS,
         'file_upload': USER_PERMISSIONS_CHAT_FILE_UPLOAD,
         'web_upload': USER_PERMISSIONS_CHAT_WEB_UPLOAD,
         'delete': USER_PERMISSIONS_CHAT_DELETE,
@@ -1954,7 +1939,6 @@ DEFAULT_USER_PERMISSIONS = {
         'stt': USER_PERMISSIONS_CHAT_STT,
         'tts': USER_PERMISSIONS_CHAT_TTS,
         'call': USER_PERMISSIONS_CHAT_CALL,
-        'multiple_models': USER_PERMISSIONS_CHAT_MULTIPLE_MODELS,
         'temporary': USER_PERMISSIONS_CHAT_TEMPORARY,
         'temporary_enforced': USER_PERMISSIONS_CHAT_TEMPORARY_ENFORCED,
     },
@@ -2136,7 +2120,7 @@ TASK_MODEL_EXTERNAL = os.getenv('TASK_MODEL_EXTERNAL', '')
 
 ENABLE_CONTEXT_COMPACTION = os.getenv('ENABLE_CONTEXT_COMPACTION', 'False').lower() == 'true'
 
-CONTEXT_COMPACTION_TOKEN_THRESHOLD = int(os.getenv('CONTEXT_COMPACTION_TOKEN_THRESHOLD', '80000'))
+CONTEXT_COMPACTION_CONTEXT_PERCENT = int(os.getenv('CONTEXT_COMPACTION_CONTEXT_PERCENT', '80'))
 
 CONTEXT_COMPACTION_PROMPT_TEMPLATE = os.getenv('CONTEXT_COMPACTION_PROMPT_TEMPLATE', '')
 
@@ -2753,7 +2737,6 @@ ENABLE_LDAP_GROUP_CREATION = os.getenv('ENABLE_LDAP_GROUP_CREATION', 'False').lo
 LDAP_ATTRIBUTE_FOR_GROUPS = os.getenv('LDAP_ATTRIBUTE_FOR_GROUPS', 'memberOf')
 
 DEFAULT_CONFIG = {
-    'direct.enable': ENABLE_DIRECT_CONNECTIONS,
     'ollama.enable': ENABLE_OLLAMA_API,
     'ollama.base_urls': OLLAMA_BASE_URLS,
     'ollama.api_configs': OLLAMA_API_CONFIGS,
@@ -3050,7 +3033,7 @@ DEFAULT_CONFIG = {
     'task.model.default': TASK_MODEL,
     'task.model.external': TASK_MODEL_EXTERNAL,
     'chat.context_compaction.enable': ENABLE_CONTEXT_COMPACTION,
-    'chat.context_compaction.token_threshold': CONTEXT_COMPACTION_TOKEN_THRESHOLD,
+    'chat.context_compaction.context_percent': CONTEXT_COMPACTION_CONTEXT_PERCENT,
     'chat.context_compaction.prompt_template': CONTEXT_COMPACTION_PROMPT_TEMPLATE,
     'task.title.prompt_template': TITLE_GENERATION_PROMPT_TEMPLATE,
     'task.tags.prompt_template': TAGS_GENERATION_PROMPT_TEMPLATE,

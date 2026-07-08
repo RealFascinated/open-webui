@@ -24,6 +24,7 @@
 
 	export let content: string;
 	export let displayMode: boolean = false;
+	export let done = true;
 
 	let renderToString: typeof katexRenderToString | null = null;
 
@@ -34,16 +35,20 @@
 	// Cache rendered HTML — only re-compute when content, displayMode, or renderToString changes,
 	// not on every parent re-render during streaming
 	let renderedHTML: string = '';
-	$: if (renderToString) {
+	$: if (renderToString && done) {
 		try {
 			renderedHTML = renderToString(content, { displayMode, throwOnError: false });
 		} catch {
 			renderedHTML = content;
 		}
+	} else if (!done) {
+		renderedHTML = '';
 	}
 </script>
 
-{#if renderToString && renderedHTML}
+{#if !done}
+	{content}
+{:else if renderToString && renderedHTML}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<svelte:element
 		this={displayMode ? 'div' : 'span'}

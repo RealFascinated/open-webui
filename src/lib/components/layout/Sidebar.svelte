@@ -102,9 +102,7 @@
 
 	let showCreateFolderModal = false;
 
-	let pinnedModels = [];
-
-	let showPinnedModels = false;
+	let showPinnedModels = true;
 	let showPinnedNotes = false;
 	let showChannels = false;
 	let showFolders = false;
@@ -134,7 +132,6 @@
 			case 'workspace':
 				return (
 					$user?.role === 'admin' ||
-					$user?.permissions?.workspace?.models ||
 					$user?.permissions?.workspace?.knowledge ||
 					$user?.permissions?.workspace?.prompts ||
 					$user?.permissions?.workspace?.tools ||
@@ -624,12 +621,6 @@
 					}
 				}
 			}),
-			settings.subscribe((value) => {
-				if (pinnedModels != value?.pinnedModels ?? []) {
-					pinnedModels = value?.pinnedModels ?? [];
-					showPinnedModels = pinnedModels.length > 0;
-				}
-			})
 		];
 
 		window.addEventListener('keydown', onKeyDown);
@@ -1242,7 +1233,7 @@
 					</div>
 				</div>
 
-				{#if ($models ?? []).length > 0 && (($settings?.pinnedModels ?? []).length > 0 || $config?.default_pinned_models)}
+				{#if ($models ?? []).length > 0 && $config?.default_pinned_models}
 					<Folder
 						id="sidebar-models"
 						bind:open={showPinnedModels}

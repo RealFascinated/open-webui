@@ -190,7 +190,9 @@
 		{:else if status?.action === 'chat_retry'}
 			<div class="flex flex-col justify-center -space-y-0.5">
 				<div
-					class="shimmer text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+					class="{(done || status?.done) === false
+						? 'shimmer'
+						: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
 				>
 					{status?.description}
 				</div>

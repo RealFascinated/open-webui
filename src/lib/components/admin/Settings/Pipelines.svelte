@@ -20,10 +20,15 @@
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
 
 	const i18n: Writable<i18nType> = getContext('i18n');
 
 	export let saveHandler: (...args: unknown[]) => unknown;
+
+	let dirty = false;
+	let saving = false;
+	let initialSnapshot = '';
 
 	let downloading = false;
 	let uploading = false;
@@ -41,10 +46,23 @@
 
 	let pipelineDownloadUrl = '';
 
+	const snapshot = () =>
+		JSON.stringify({ valves, selectedPipelineIdx, selectedPipelinesUrlIdx });
+
+	$: if (initialSnapshot) {
+		dirty = snapshot() !== initialSnapshot;
+	}
+
+	const refreshSnapshot = () => {
+		initialSnapshot = snapshot();
+		dirty = false;
+	};
+
 	const updateHandler = async () => {
 		const pipeline = pipelines[selectedPipelineIdx];
 
 		if (pipeline && (pipeline?.valves ?? false)) {
+			saving = true;
 			for (const property in valves_spec.properties) {
 				if (valves_spec.properties[property]?.type === 'array') {
 					valves[property] = (valves[property] ?? '').split(',').map((v) => v.trim());
@@ -63,17 +81,21 @@
 			if (res) {
 				toast.success($i18n.t('Valves updated successfully'));
 				setPipelines();
-				models.set(
-					await getModels(
-						localStorage.token,
-						$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-					)
-				);
+				models.set(await getModels(localStorage.token));
 				saveHandler();
+				refreshSnapshot();
 			}
+			saving = false;
 		} else {
 			toast.error($i18n.t('No valves to update'));
 		}
+	};
+
+	const discardHandler = async () => {
+		if (selectedPipelineIdx !== null) {
+			await getValves(selectedPipelineIdx);
+		}
+		refreshSnapshot();
 	};
 
 	const getValves = async (idx) => {
@@ -96,6 +118,9 @@
 				valves[property] = valves[property].join(',');
 			}
 		}
+
+		await tick();
+		refreshSnapshot();
 	};
 
 	const setPipelines = async () => {
@@ -131,10 +156,7 @@
 			toast.success($i18n.t('Pipeline downloaded successfully'));
 			setPipelines();
 			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
+				await getModels(localStorage.token)
 			);
 		}
 
@@ -161,10 +183,7 @@
 				toast.success($i18n.t('Pipeline downloaded successfully'));
 				setPipelines();
 				models.set(
-					await getModels(
-						localStorage.token,
-						$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-					)
+					await getModels(localStorage.token)
 				);
 			}
 		} else {
@@ -195,10 +214,7 @@
 			toast.success($i18n.t('Pipeline deleted successfully'));
 			setPipelines();
 			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
+				await getModels(localStorage.token)
 			);
 		}
 	};
@@ -215,13 +231,8 @@
 	});
 </script>
 
-<form
-	class="flex flex-col h-full justify-between space-y-3 text-sm"
-	on:submit|preventDefault={async () => {
-		updateHandler();
-	}}
->
-	<div class="overflow-y-scroll scrollbar-hidden h-full">
+<form class="flex flex-col space-y-3 text-sm">
+	<div>
 		{#if PIPELINES_LIST !== null}
 			<div class="flex w-full justify-between mb-2">
 				<div class=" self-center text-sm font-medium">
@@ -568,13 +579,6 @@
 	</div>
 
 	{#if PIPELINES_LIST !== null && PIPELINES_LIST.length > 0}
-		<div class="flex justify-end pt-3 text-sm font-medium">
-			<button
-				class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-				type="submit"
-			>
-				{$i18n.t('Save')}
-			</button>
-		</div>
+		<AdminSaveBar {dirty} {saving} onSave={updateHandler} onDiscard={discardHandler} />
 	{/if}
 </form>

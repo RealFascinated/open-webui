@@ -19,6 +19,16 @@ from open_webui.utils.task import (
 
 log = logging.getLogger(__name__)
 
+DEFAULT_CONTEXT_COMPACTION_CONTEXT_PERCENT = 80
+
+CONTEXT_WINDOW_KEYS = (
+    'context_length',
+    'max_context',
+    'max_model_len',
+    'num_ctx',
+    'n_ctx',
+)
+
 DEFAULT_CONTEXT_COMPACTION_PROMPT = """### Task:
 Summarize the conversation history that will be compacted out of the active chat context.
 
@@ -61,7 +71,13 @@ async def compact_messages_for_request(
         return [system_message, *msgs] if system_message else msgs
 
     messages, previous_summary = _apply_latest_summary_checkpoint(messages)
-    token_threshold = _resolve_token_threshold(config['token_threshold'], metadata)
+    context_percent = _resolve_context_percent(config['context_percent'], metadata)
+    context_length = _get_model_context_length(model_id, models, metadata)
+    if context_length is None:
+        log.debug('Context compaction skipped: unknown context length for model=%s', model_id)
+        return _restore(messages), previous_summary, False
+
+    token_threshold = _compaction_token_threshold(context_length, context_percent)
     if not _exceeds_token_threshold(messages, system_prompt, previous_summary, token_threshold) or len(messages) <= 3:
         return _restore(messages), previous_summary, False
 
@@ -193,12 +209,15 @@ async def compact_chat_branch(request, user, chat: Any, model_id: str, models: d
 async def _load_config() -> dict:
     values = await Config.get_many(
         'chat.context_compaction.enable',
-        'chat.context_compaction.token_threshold',
+        'chat.context_compaction.context_percent',
         'chat.context_compaction.prompt_template',
     )
+    context_percent = _parse_positive_int(values.get('chat.context_compaction.context_percent'))
+    if context_percent is None:
+        context_percent = DEFAULT_CONTEXT_COMPACTION_CONTEXT_PERCENT
     return {
         'enable': bool(values.get('chat.context_compaction.enable', False)),
-        'token_threshold': int(values.get('chat.context_compaction.token_threshold', 80000) or 80000),
+        'context_percent': min(100, max(1, context_percent)),
         'prompt_template': values.get('chat.context_compaction.prompt_template', '') or '',
     }
 
@@ -211,11 +230,84 @@ def _parse_positive_int(value: Any) -> int | None:
     return parsed if parsed > 0 else None
 
 
-def _resolve_token_threshold(global_threshold: int, metadata: dict) -> int:
-    configured_threshold = _parse_positive_int((metadata.get('params') or {}).get('compact_token_threshold'))
-    if configured_threshold is None:
-        return global_threshold
-    return min(configured_threshold, global_threshold)
+def _resolve_context_percent(global_percent: int, metadata: dict) -> int:
+    configured_percent = _parse_positive_int((metadata.get('params') or {}).get('compact_context_percent'))
+    if configured_percent is None:
+        return global_percent
+    return min(configured_percent, global_percent)
+
+
+def _compaction_token_threshold(context_length: int, context_percent: int) -> int:
+    return max(1, int(context_length * context_percent / 100))
+
+
+def _context_from_model_entry(entry: dict | None) -> int | None:
+    if not isinstance(entry, dict):
+        return None
+
+    meta = entry.get('meta')
+    if isinstance(meta, dict):
+        meta_n_ctx = meta.get('n_ctx')
+        if isinstance(meta_n_ctx, (int, float)) and meta_n_ctx > 0:
+            return int(meta_n_ctx)
+
+    for key in CONTEXT_WINDOW_KEYS:
+        value = entry.get(key)
+        if isinstance(value, (int, float)) and value > 0:
+            return int(value)
+
+    top_provider = entry.get('top_provider')
+    if isinstance(top_provider, dict):
+        value = top_provider.get('context_length')
+        if isinstance(value, (int, float)) and value > 0:
+            return int(value)
+
+    info = entry.get('info')
+    if isinstance(info, dict):
+        params = info.get('params')
+        if isinstance(params, dict):
+            num_ctx = params.get('num_ctx')
+            if isinstance(num_ctx, (int, float)) and num_ctx > 0:
+                return int(num_ctx)
+        nested = _context_from_model_entry(info)
+        if nested:
+            return nested
+
+    return None
+
+
+def _model_context_candidates(model: dict | None) -> list[dict]:
+    if not isinstance(model, dict):
+        return []
+
+    candidates = [model]
+    for key in ('meta', 'openai', 'ollama', 'info'):
+        nested = model.get(key)
+        if not isinstance(nested, dict):
+            continue
+        candidates.append(nested)
+        nested_meta = nested.get('meta')
+        if isinstance(nested_meta, dict):
+            candidates.append(nested_meta)
+    return candidates
+
+
+def _get_model_context_length(model_id: str, models: dict, metadata: dict) -> int | None:
+    model = models.get(model_id) if model_id and isinstance(models, dict) else None
+    if model is None:
+        model = metadata.get('model')
+
+    for entry in _model_context_candidates(model if isinstance(model, dict) else None):
+        value = _context_from_model_entry(entry)
+        if value:
+            return value
+
+    params = metadata.get('params') or {}
+    num_ctx = _parse_positive_int(params.get('num_ctx'))
+    if num_ctx:
+        return num_ctx
+
+    return None
 
 
 def _apply_latest_summary_checkpoint(messages: list[dict]) -> tuple[list[dict], str | None]:

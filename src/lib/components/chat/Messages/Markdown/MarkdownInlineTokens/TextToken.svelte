@@ -8,9 +8,10 @@
 {#if done}
 	{raw}
 {:else}
-	{#each raw.split(' ') as text}
-		<span class="fade-in-token">
-			{text}{' '}
-		</span>
-	{/each}
+	{@const lastSpaceIdx = raw.lastIndexOf(' ')}
+	{#if lastSpaceIdx === -1}
+		<span class="fade-in-token">{raw}</span>
+	{:else}
+		{raw.slice(0, lastSpaceIdx + 1)}<span class="fade-in-token">{raw.slice(lastSpaceIdx + 1)}</span>
+	{/if}
 {/if}

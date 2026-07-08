@@ -119,9 +119,7 @@
 		} else {
 			if (modelSuggestions) {
 				_models = [
-					...$models
-						.filter((m) => !m?.direct)
-						.map((m) => ({ type: 'model', id: m.id, label: m.name, data: m }))
+					...$models.map((m) => ({ type: 'model', id: m.id, label: m.name, data: m }))
 				];
 			}
 		}

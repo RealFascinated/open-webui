@@ -18,11 +18,15 @@
 	import { config } from '$lib/stores';
 	import { getContext, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
 
 	const i18n = getContext('i18n');
 
 	let adminConfig = null;
 	let groups = [];
+	let dirty = false;
+	let saving = false;
+	let initialSnapshot = '';
 
 	let ENABLE_LDAP = false;
 	let LDAP_SERVER = {
@@ -41,6 +45,45 @@
 	};
 
 	let oauthConfig: unknown = null;
+
+	const snapshot = () =>
+		JSON.stringify({
+			adminConfig,
+			ENABLE_LDAP,
+			LDAP_SERVER,
+			oauthConfig
+		});
+
+	$: if (initialSnapshot && adminConfig !== null) {
+		dirty = snapshot() !== initialSnapshot;
+	}
+
+	const loadData = async () => {
+		await Promise.all([
+			(async () => {
+				adminConfig = await getAdminConfig(localStorage.token);
+			})(),
+			(async () => {
+				groups = await getGroups(localStorage.token);
+			})(),
+			(async () => {
+				LDAP_SERVER = await getLdapServer(localStorage.token);
+			})(),
+			(async () => {
+				oauthConfig = await getOAuthConfig(localStorage.token).catch(() => null);
+			})()
+		]);
+
+		const ldapConfig = await getLdapConfig(localStorage.token);
+		ENABLE_LDAP = ldapConfig.ENABLE_LDAP;
+
+		initialSnapshot = snapshot();
+		dirty = false;
+	};
+
+	const discardHandler = async () => {
+		await loadData();
+	};
 
 	const updateLdapServerHandler = async () => {
 		await updateLdapConfig(localStorage.token, ENABLE_LDAP);
@@ -76,6 +119,7 @@
 	};
 
 	const submitHandler = async () => {
+		saving = true;
 		const adminSaved = await updateAdminHandler();
 		const ldapSaved = await updateLdapServerHandler();
 		const oauthSaved = await updateOAuthHandler();
@@ -83,35 +127,20 @@
 		if (adminSaved && ldapSaved && oauthSaved) {
 			toast.success($i18n.t('Settings saved successfully!'));
 			await config.set(await getBackendConfig());
+			initialSnapshot = snapshot();
+			dirty = false;
 		}
+		saving = false;
 	};
 
-	onMount(async () => {
-		await Promise.all([
-			(async () => {
-				adminConfig = await getAdminConfig(localStorage.token);
-			})(),
-			(async () => {
-				groups = await getGroups(localStorage.token);
-			})(),
-			(async () => {
-				LDAP_SERVER = await getLdapServer(localStorage.token);
-			})(),
-			(async () => {
-				oauthConfig = await getOAuthConfig(localStorage.token).catch(() => null);
-			})()
-		]);
-
-		const ldapConfig = await getLdapConfig(localStorage.token);
-		ENABLE_LDAP = ldapConfig.ENABLE_LDAP;
-	});
+	onMount(loadData);
 </script>
 
 <form
-	class="flex flex-col h-full justify-between space-y-3 text-sm"
+	class="flex flex-col space-y-3 text-sm"
 	on:submit|preventDefault={submitHandler}
 >
-	<div class="space-y-3 overflow-y-scroll scrollbar-hidden h-full">
+	<div class="space-y-3">
 		{#if adminConfig !== null}
 			<div class="mb-3">
 				<div class="mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('User Access')}</div>
@@ -765,12 +794,5 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-			type="submit"
-		>
-			{$i18n.t('Save')}
-		</button>
-	</div>
+	<AdminSaveBar {dirty} {saving} onSave={submitHandler} onDiscard={discardHandler} />
 </form>

@@ -769,20 +769,25 @@ async def _attach_llamacpp_context_breakdown(
 def _n_ctx_from_props(data: dict | None) -> int | None:
     if not isinstance(data, dict):
         return None
-    n_ctx = data.get('n_ctx')
-    if isinstance(n_ctx, (int, float)) and n_ctx > 0:
-        return int(n_ctx)
     gen = data.get('default_generation_settings')
     if isinstance(gen, dict):
         gen_n_ctx = gen.get('n_ctx')
         if isinstance(gen_n_ctx, (int, float)) and gen_n_ctx > 0:
             return int(gen_n_ctx)
+    n_ctx = data.get('n_ctx')
+    if isinstance(n_ctx, (int, float)) and n_ctx > 0:
+        return int(n_ctx)
     return None
 
 
 def _context_from_model_entry(entry: dict | None) -> int | None:
     if not isinstance(entry, dict):
         return None
+    meta = entry.get('meta')
+    if isinstance(meta, dict):
+        meta_n_ctx = meta.get('n_ctx')
+        if isinstance(meta_n_ctx, (int, float)) and meta_n_ctx > 0:
+            return int(meta_n_ctx)
     for key in ('context_length', 'max_context', 'max_model_len', 'num_ctx', 'n_ctx'):
         value = entry.get(key)
         if isinstance(value, (int, float)) and value > 0:

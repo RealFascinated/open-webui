@@ -1,6 +1,7 @@
 from open_webui.utils.chat_retry import (
     assistant_response_has_content,
     get_retry_reason,
+    upsert_status_entry,
 )
 
 
@@ -34,3 +35,22 @@ def test_tool_call_counts_as_content():
 
 def test_idle_timeout_requests_retry():
     assert get_retry_reason([], '', stream_timed_out=True) == 'timeout'
+
+
+def test_upsert_status_entry_replaces_chat_retry():
+    history = [{'action': 'chat_retry', 'description': 'retrying (1/10)', 'done': False}]
+    updated = upsert_status_entry(
+        history,
+        {'action': 'chat_retry', 'description': 'retrying (2/10)', 'done': False},
+    )
+    assert len(updated) == 1
+    assert updated[0]['description'] == 'retrying (2/10)'
+
+
+def test_upsert_status_entry_appends_other_actions():
+    history = [{'action': 'web_search', 'description': 'Searching', 'done': False}]
+    updated = upsert_status_entry(
+        history,
+        {'action': 'chat_retry', 'description': 'retrying (1/10)', 'done': False},
+    )
+    assert len(updated) == 2

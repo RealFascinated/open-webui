@@ -13,17 +13,20 @@
 		updateConfig,
 		verifyConfigUrl
 	} from '$lib/apis/images';
-	import Spinner from '$lib/components/common/Spinner.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import CodeEditorModal from '$lib/components/common/CodeEditorModal.svelte';
+	import AdminSaveBar from '../AdminSaveBar.svelte';
+	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 	const dispatch = createEventDispatcher();
 
 	const i18n = getContext('i18n');
 
-	let loading = false;
+	let dirty = false;
+	let saving = false;
+	let initialSnapshot = '';
 
 	let models = null;
 	let config = null;
@@ -90,6 +93,18 @@
 			node_ids: ''
 		}
 	];
+
+	const snapshot = () =>
+		JSON.stringify({ config, REQUIRED_WORKFLOW_NODES, REQUIRED_EDIT_WORKFLOW_NODES });
+
+	$: if (initialSnapshot && config) {
+		dirty = snapshot() !== initialSnapshot;
+	}
+
+	const refreshSnapshot = () => {
+		initialSnapshot = snapshot();
+		dirty = false;
+	};
 
 	const getModels = async () => {
 		models = await getImageGenerationModels(localStorage.token).catch((error) => {
@@ -166,12 +181,12 @@
 	};
 
 	const saveHandler = async () => {
-		loading = true;
+		saving = true;
 
 		if (config?.COMFYUI_WORKFLOW) {
 			if (!validateJSON(config?.COMFYUI_WORKFLOW)) {
 				toast.error($i18n.t('Invalid JSON format for ComfyUI Workflow.'));
-				loading = false;
+				saving = false;
 				return;
 			}
 
@@ -188,7 +203,7 @@
 		if (config?.IMAGES_EDIT_COMFYUI_WORKFLOW) {
 			if (!validateJSON(config?.IMAGES_EDIT_COMFYUI_WORKFLOW)) {
 				toast.error($i18n.t('Invalid JSON format for ComfyUI Edit Workflow.'));
-				loading = false;
+				saving = false;
 				return;
 			}
 
@@ -205,100 +220,101 @@
 		const res = await updateConfigHandler();
 		if (res) {
 			dispatch('save');
+			refreshSnapshot();
 		}
 
-		loading = false;
+		saving = false;
 	};
 
-	onMount(async () => {
-		if ($user?.role === 'admin') {
-			const res = await getConfig(localStorage.token).catch((error) => {
-				toast.error(`${error}`);
-				return null;
-			});
+	const loadData = async () => {
+		if ($user?.role !== 'admin') return;
 
-			if (res) {
-				config = res;
-			}
+		const res = await getConfig(localStorage.token).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
 
-			if (!config) {
-				return;
-			}
-
-			if (config.ENABLE_IMAGE_GENERATION) {
-				getModels();
-			}
-
-			if (config.COMFYUI_WORKFLOW) {
-				try {
-					config.COMFYUI_WORKFLOW = JSON.stringify(JSON.parse(config.COMFYUI_WORKFLOW), null, 2);
-				} catch (e) {
-					console.error(e);
-				}
-			}
-
-			REQUIRED_WORKFLOW_NODES = REQUIRED_WORKFLOW_NODES.map((node) => {
-				const n = config.COMFYUI_WORKFLOW_NODES.find((n) => n.type === node.type) ?? node;
-				console.debug(n);
-
-				return {
-					type: n.type,
-					key: n.key,
-					node_ids: typeof n.node_ids === 'string' ? n.node_ids : n.node_ids.join(',')
-				};
-			});
-
-			if (config.IMAGES_EDIT_COMFYUI_WORKFLOW) {
-				try {
-					config.IMAGES_EDIT_COMFYUI_WORKFLOW = JSON.stringify(
-						JSON.parse(config.IMAGES_EDIT_COMFYUI_WORKFLOW),
-						null,
-						2
-					);
-				} catch (e) {
-					console.error(e);
-				}
-			}
-
-			config.IMAGES_OPENAI_API_PARAMS =
-				typeof config.IMAGES_OPENAI_API_PARAMS === 'object'
-					? JSON.stringify(config.IMAGES_OPENAI_API_PARAMS ?? {}, null, 2)
-					: config.IMAGES_OPENAI_API_PARAMS;
-
-			config.AUTOMATIC1111_PARAMS =
-				typeof config.AUTOMATIC1111_PARAMS === 'object'
-					? JSON.stringify(config.AUTOMATIC1111_PARAMS ?? {}, null, 2)
-					: config.AUTOMATIC1111_PARAMS;
-
-			REQUIRED_EDIT_WORKFLOW_NODES = REQUIRED_EDIT_WORKFLOW_NODES.map((node) => {
-				const n =
-					config.IMAGES_EDIT_COMFYUI_WORKFLOW_NODES.find((n) => n.type === node.type) ?? node;
-				console.debug(n);
-
-				return {
-					type: n.type,
-					key: n.key,
-					node_ids: typeof n.node_ids === 'string' ? n.node_ids : n.node_ids.join(',')
-				};
-			});
+		if (res) {
+			config = res;
 		}
-	});
+
+		if (!config) {
+			return;
+		}
+
+		if (config.ENABLE_IMAGE_GENERATION) {
+			getModels();
+		}
+
+		if (config.COMFYUI_WORKFLOW) {
+			try {
+				config.COMFYUI_WORKFLOW = JSON.stringify(JSON.parse(config.COMFYUI_WORKFLOW), null, 2);
+			} catch (e) {
+				console.error(e);
+			}
+		}
+
+		REQUIRED_WORKFLOW_NODES = REQUIRED_WORKFLOW_NODES.map((node) => {
+			const n = config.COMFYUI_WORKFLOW_NODES.find((n) => n.type === node.type) ?? node;
+
+			return {
+				type: n.type,
+				key: n.key,
+				node_ids: typeof n.node_ids === 'string' ? n.node_ids : n.node_ids.join(',')
+			};
+		});
+
+		if (config.IMAGES_EDIT_COMFYUI_WORKFLOW) {
+			try {
+				config.IMAGES_EDIT_COMFYUI_WORKFLOW = JSON.stringify(
+					JSON.parse(config.IMAGES_EDIT_COMFYUI_WORKFLOW),
+					null,
+					2
+				);
+			} catch (e) {
+				console.error(e);
+			}
+		}
+
+		config.IMAGES_OPENAI_API_PARAMS =
+			typeof config.IMAGES_OPENAI_API_PARAMS === 'object'
+				? JSON.stringify(config.IMAGES_OPENAI_API_PARAMS ?? {}, null, 2)
+				: config.IMAGES_OPENAI_API_PARAMS;
+
+		config.AUTOMATIC1111_PARAMS =
+			typeof config.AUTOMATIC1111_PARAMS === 'object'
+				? JSON.stringify(config.AUTOMATIC1111_PARAMS ?? {}, null, 2)
+				: config.AUTOMATIC1111_PARAMS;
+
+		REQUIRED_EDIT_WORKFLOW_NODES = REQUIRED_EDIT_WORKFLOW_NODES.map((node) => {
+			const n =
+				config.IMAGES_EDIT_COMFYUI_WORKFLOW_NODES.find((n) => n.type === node.type) ?? node;
+
+			return {
+				type: n.type,
+				key: n.key,
+				node_ids: typeof n.node_ids === 'string' ? n.node_ids : n.node_ids.join(',')
+			};
+		});
+
+		refreshSnapshot();
+	};
+
+	const discardHandler = async () => {
+		await loadData();
+	};
+
+	onMount(loadData);
 </script>
 
-<form
-	class="flex flex-col h-full justify-between space-y-3 text-sm"
-	on:submit|preventDefault={async () => {
-		saveHandler();
-	}}
->
-	<div class=" space-y-3 overflow-y-scroll scrollbar-hidden pr-2">
+<form class="flex flex-col space-y-3 text-sm">
+	<div class=" space-y-3 pr-2">
 		{#if config}
-			<div>
-				<div class="mb-3">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="General"
+				description="Enable image generation for your instance."
+				className="mb-3"
+			>
 					<div class="mb-2.5">
 						<div class="flex w-full justify-between items-center">
 							<div class="text-xs pr-2">
@@ -310,13 +326,13 @@
 							<Switch bind:state={config.ENABLE_IMAGE_GENERATION} />
 						</div>
 					</div>
-				</div>
+			</AdminSettingsCard>
 
-				<div class="mb-3">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Create Image')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Create Image"
+				description="Generation engine, models, and provider settings."
+				className="mb-3"
+			>
 					{#if config.ENABLE_IMAGE_GENERATION}
 						<div class="mb-2.5">
 							<div class="flex w-full justify-between items-center">
@@ -883,13 +899,12 @@
 							</div>
 						</div>
 					{/if}
-				</div>
+			</AdminSettingsCard>
 
-				<div class="mb-3">
-					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Edit Image')}</div>
-
-					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
+			<AdminSettingsCard
+				title="Edit Image"
+				description="Image editing engine and ComfyUI workflow configuration."
+			>
 					<div class="mb-2.5">
 						<div class="flex w-full justify-between items-center">
 							<div class="text-xs pr-2">
@@ -1269,26 +1284,11 @@
 							</div>
 						</div>
 					{/if}
-				</div>
-			</div>
+			</AdminSettingsCard>
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex items-center gap-2 whitespace-nowrap {loading
-				? ' cursor-not-allowed'
-				: ''}"
-			type="submit"
-			disabled={loading}
-		>
-			{$i18n.t('Save')}
-
-			{#if loading}
-				<span class="shrink-0">
-					<Spinner />
-				</span>
-			{/if}
-		</button>
-	</div>
+	{#if config}
+		<AdminSaveBar {dirty} {saving} onSave={saveHandler} onDiscard={discardHandler} />
+	{/if}
 </form>

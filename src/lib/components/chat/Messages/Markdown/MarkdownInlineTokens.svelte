@@ -110,7 +110,7 @@
 		<del><svelte:self id={`${id}-del`} tokens={token.tokens} {onSourceClick} /></del>
 	{:else if token.type === 'inlineKatex'}
 		{#if token.text}
-			<KatexRenderer content={token.text} displayMode={token?.displayMode ?? false} />
+			<KatexRenderer content={token.text} displayMode={token?.displayMode ?? false} {done} />
 		{/if}
 	{:else if token.type === 'iframe'}
 		<iframe

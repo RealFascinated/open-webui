@@ -247,7 +247,6 @@ type TerminalServerConnection = {
 };
 
 type Settings = {
-	pinnedModels?: never[];
 	toolServers?: ToolServerConnection[];
 	terminalServers?: TerminalServerConnection[];
 	showUpdateToast?: boolean;
@@ -269,7 +268,7 @@ type Settings = {
 	hapticFeedback?: boolean;
 	responseAutoCopy?: boolean;
 	richTextInput?: boolean;
-	params?: Record<string, unknown>;
+	think?: boolean | string;
 	userLocation?: boolean | Record<string, unknown>;
 	webSearch?: boolean | string | null;
 	memory?: boolean;
@@ -282,7 +281,6 @@ type Settings = {
 	iframeSandboxAllowSameOrigin?: boolean;
 	scrollOnBranchChange?: boolean;
 	showFilesOnTerminalSelect?: boolean;
-	directConnections?: null;
 	chatBubble?: boolean;
 	copyFormatted?: boolean;
 	models?: string[];
@@ -305,7 +303,6 @@ type Settings = {
 	pinnedMenuItems?: string[];
 	pinnedNotesOrder?: string[];
 
-	system?: string;
 	seed?: number;
 	temperature?: string;
 	repeat_penalty?: string;
@@ -371,7 +368,6 @@ type Config = {
 		enable_community_sharing: boolean;
 		enable_memories: boolean;
 		enable_autocomplete_generation: boolean;
-		enable_direct_connections: boolean;
 		enable_version_update_check: boolean;
 		enable_pyodide_file_persistence?: boolean;
 		folder_max_file_count?: number;

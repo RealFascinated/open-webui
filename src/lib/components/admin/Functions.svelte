@@ -41,6 +41,8 @@
 	import TagSelector from '../workspace/common/TagSelector.svelte';
 	import { capitalizeFirstLetter } from '$lib/utils';
 	import Spinner from '../common/Spinner.svelte';
+	import AdminPageHeader from './AdminPageHeader.svelte';
+	import AdminEmptyState from './AdminEmptyState.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -168,10 +170,7 @@
 
 			_functions.set(await getFunctions(localStorage.token));
 			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null),
-					false,
+				await getModels(localStorage.token, false,
 					true
 				)
 			);
@@ -200,10 +199,7 @@
 
 			_functions.set(await getFunctions(localStorage.token));
 			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null),
-					false,
+				await getModels(localStorage.token, false,
 					true
 				)
 			);
@@ -272,7 +268,16 @@
 />
 
 {#if loaded}
-	<div class="px-4.5 w-full">
+	<div class="px-4.5 w-full h-full min-h-0 overflow-y-auto overscroll-contain">
+		<AdminPageHeader
+			breadcrumbs={[
+				{ label: 'Admin Panel', href: '/admin' },
+				{ label: 'Functions' }
+			]}
+			title="Functions"
+			description="Manage filter and action functions available across chats."
+		/>
+
 		<div class="flex flex-col gap-1 px-1 mt-2.5 mb-2">
 			<div class="flex justify-between items-center mb-1 w-full">
 				<input
@@ -288,18 +293,7 @@
 					}}
 				/>
 
-				<div class="flex justify-between items-center w-full">
-					<div class="flex items-center md:self-center text-xl font-medium px-0.5 gap-2 shrink-0">
-						<div>
-							{$i18n.t('Functions')}
-						</div>
-
-						<div class="text-lg font-medium text-gray-500 dark:text-gray-500">
-							{filteredItems.length}
-						</div>
-					</div>
-
-					<div class="flex w-full justify-end gap-1.5">
+				<div class="flex justify-end items-center w-full gap-1.5">
 						{#if $user?.role === 'admin'}
 							<button
 								class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-200 transition"
@@ -351,7 +345,6 @@
 								<div class=" hidden md:block md:ml-1 text-xs">{$i18n.t('New Function')}</div>
 							</div>
 						</AddFunctionMenu>
-					</div>
 				</div>
 			</div>
 		</div>
@@ -575,11 +568,7 @@
 											on:change={async (e) => {
 												toggleFunctionById(localStorage.token, func.id);
 												models.set(
-													await getModels(
-														localStorage.token,
-														$config?.features?.enable_direct_connections &&
-															($settings?.directConnections ?? null),
-														false,
+													await getModels(localStorage.token, false,
 														true
 													)
 												);
@@ -592,15 +581,11 @@
 					{/each}
 				</div>
 			{:else}
-				<div class=" w-full h-full flex flex-col justify-center items-center my-16 mb-24">
-					<div class="max-w-md text-center">
-						<div class=" text-3xl mb-3">😕</div>
-						<div class=" text-lg font-medium mb-1">{$i18n.t('No functions found')}</div>
-						<div class=" text-gray-500 text-center text-xs">
-							{$i18n.t('Try adjusting your search or filter to find what you are looking for.')}
-						</div>
-					</div>
-				</div>
+				<AdminEmptyState
+					icon="😕"
+					title={$i18n.t('No functions found')}
+					description={$i18n.t('Try adjusting your search or filter to find what you are looking for.')}
+				/>
 			{/if}
 		</div>
 
@@ -658,10 +643,7 @@
 		on:save={async () => {
 			await tick();
 			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null),
-					false,
+				await getModels(localStorage.token, false,
 					true
 				)
 			);
@@ -692,10 +674,7 @@
 				functions = await getFunctionList(localStorage.token);
 				_functions.set(await getFunctions(localStorage.token));
 				models.set(
-					await getModels(
-						localStorage.token,
-						$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null),
-						false,
+					await getModels(localStorage.token, false,
 						true
 					)
 				);
