@@ -9,7 +9,6 @@
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher<{ updateEmbeddingModel: void }>();
 
-	export let RAGConfig: Record<string, unknown>;
 	export let RAG_EMBEDDING_ENGINE = '';
 	export let RAG_EMBEDDING_MODEL = '';
 	export let OpenAIUrl = '';

@@ -1,14 +1,14 @@
-<script>
-	import { toast } from 'svelte-sonner';
-	import { onMount, getContext } from 'svelte';
-	import { goto } from '$app/navigation';
+<script lang="ts">
+	import {toast} from 'svelte-sonner';
+	import {onMount, getContext} from 'svelte';
+	import {goto} from '$app/navigation';
 
-	import { config, functions, models, settings } from '$lib/stores';
-	import { createNewFunction, getFunctions } from '$lib/apis/functions';
+	import {functions, models} from '$lib/stores';
+	import {createNewFunction, getFunctions} from '$lib/apis/functions';
 	import FunctionEditor from '$lib/components/admin/Functions/FunctionEditor.svelte';
-	import { getModels } from '$lib/apis';
-	import { compareVersion, extractFrontmatter } from '$lib/utils';
-	import { WEBUI_VERSION } from '$lib/constants';
+	import {getModels} from '$lib/apis';
+	import {compareVersion, extractFrontmatter} from '$lib/utils';
+	import {WEBUI_VERSION} from '$lib/constants';
 
 	const i18n = getContext('i18n');
 
@@ -58,7 +58,7 @@
 	};
 
 	onMount(() => {
-		window.addEventListener('message', async (event) => {
+		window.addEventListener('message', async (event: Event) => {
 			if (
 				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'].includes(
 					event.origin

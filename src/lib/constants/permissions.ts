@@ -24,7 +24,9 @@ export const DEFAULT_PERMISSIONS = {
 		public_notes: false,
 		projects: false,
 		public_chats: false,
-		public_calendars: false
+		public_calendars: false,
+		models: false,
+		public_models: false
 	},
 	access_grants: {
 		allow_users: true

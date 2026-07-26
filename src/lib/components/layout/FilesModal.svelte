@@ -75,7 +75,7 @@
 			if (!query) {
 				fileCount = await getFileCount(localStorage.token);
 			}
-		} catch (error) {
+		} catch (_error) {
 			// Handle 404 or other errors - show empty state instead of spinner
 			files = [];
 			allFilesLoaded = true;
@@ -97,7 +97,7 @@
 			if (newFiles.length > 0) {
 				files = sortFiles([...(files || []), ...newFiles]);
 			}
-		} catch (error) {
+		} catch (_error) {
 			// Handle errors silently for load more
 			allFilesLoaded = true;
 		}

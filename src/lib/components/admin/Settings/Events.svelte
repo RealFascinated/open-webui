@@ -56,9 +56,9 @@
 	$: events = eventItems.map((item) => item.event);
 	$: eventDetails = Object.fromEntries(eventItems.map((item) => [item.event, item]));
 	$: eventFilter = pattern.trim().toLowerCase().replace(/\*$/, '');
-	$: filteredEvents = events.filter((event) => !eventFilter || event.includes(eventFilter));
+	$: filteredEvents = events.filter((event: Event) => !eventFilter || event.includes(eventFilter));
 	$: allEvents = form.events.includes('*');
-	$: selectedExactEvents = form.events.filter((event) => event !== '*' && !event.endsWith('.*'));
+	$: selectedExactEvents = form.events.filter((event: Event) => event !== '*' && !event.endsWith('.*'));
 
 	const sortWebhooks = (items: EventWebhook[]) =>
 		[...items].sort((a, b) => {
@@ -214,7 +214,7 @@
 		if (!value.endsWith('.*')) {
 			return false;
 		}
-		return events.some((event) => event.startsWith(value.slice(0, -1)));
+		return events.some((event: Event) => event.startsWith(value.slice(0, -1)));
 	};
 
 	const addPattern = () => {
@@ -230,7 +230,7 @@
 		form.events =
 			value === '*'
 				? ['*']
-				: [...new Set(form.events.filter((event) => event !== '*').concat(value))];
+				: [...new Set(form.events.filter((event: Event) => event !== '*').concat(value))];
 		pattern = '';
 	};
 
@@ -243,8 +243,8 @@
 		}
 
 		return [
-			...targetUserIds.map((id) => ({ type: 'user' as const, id })),
-			...targetGroupIds.map((id) => ({ type: 'group' as const, id }))
+			...targetUserIds.map((id: string) => ({ type: 'user' as const, id })),
+			...targetGroupIds.map((id: string) => ({ type: 'group' as const, id }))
 		];
 	};
 
@@ -253,7 +253,7 @@
 		selectedGroups = {};
 
 		await Promise.all(
-			targetUserIds.map(async (id) => {
+			targetUserIds.map(async (id: string) => {
 				const user = await getUserInfoById(localStorage.token, id).catch(() => null);
 				if (user) {
 					selectedUsers = { ...selectedUsers, [id]: user };
@@ -262,7 +262,7 @@
 		);
 
 		await Promise.all(
-			targetGroupIds.map(async (id) => {
+			targetGroupIds.map(async (id: string) => {
 				const group =
 					groups.find((group) => group.id === id) ??
 					(await getGroupInfoById(localStorage.token, id).catch(() => null));

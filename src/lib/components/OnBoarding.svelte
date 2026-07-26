@@ -1,8 +1,8 @@
 <script>
-	import { getContext, onMount } from 'svelte';
+	import {getContext} from 'svelte';
 	const i18n = getContext('i18n');
 
-	import { WEBUI_BASE_URL } from '$lib/constants';
+	import {WEBUI_BASE_URL} from '$lib/constants';
 
 	import Marquee from './common/Marquee.svelte';
 	import SlideShow from './common/SlideShow.svelte';

@@ -108,7 +108,7 @@
 	};
 
 	const unarchiveHandler = async (chatId: string) => {
-		const res = await archiveChatById(localStorage.token, chatId).catch((error) => {
+		const _res = await archiveChatById(localStorage.token, chatId).catch((error) => {
 			toast.error(`${error}`);
 		});
 

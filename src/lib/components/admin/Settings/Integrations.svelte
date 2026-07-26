@@ -1,16 +1,14 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { createEventDispatcher, onMount, getContext, tick } from 'svelte';
-	import { getModels as _getModels } from '$lib/apis';
-	import type { Writable } from 'svelte/store';
-	import type { i18n as i18nType } from 'i18next';
-
-	const dispatch = createEventDispatcher();
+	import {toast} from 'svelte-sonner';
+	import {onMount, getContext} from 'svelte';
+	import {getModels as _getModels} from '$lib/apis';
+	import type {Writable} from 'svelte/store';
+	import type {i18n as i18nType} from 'i18next';
 	const i18n = getContext<Writable<i18nType>>('i18n');
 
-	import { models, settings, user, terminalServers } from '$lib/stores';
-	import { getTerminalServers } from '$lib/apis/terminal';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {terminalServers} from '$lib/stores';
+	import {getTerminalServers} from '$lib/apis/terminal';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -19,20 +17,13 @@
 	import Cog6 from '$lib/components/icons/Cog6.svelte';
 	import Cloud from '$lib/components/icons/Cloud.svelte';
 	import Connection from '$lib/components/chat/Settings/Tools/Connection.svelte';
-	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
-
-	import AddToolServerModal from '$lib/components/AddToolServerModal.svelte';
+import AddToolServerModal from '$lib/components/AddToolServerModal.svelte';
 	import AddTerminalServerModal from '$lib/components/AddTerminalServerModal.svelte';
 	import ExternalKnowledge from './ExternalKnowledge.svelte';
 	import AdminSaveBar from '../AdminSaveBar.svelte';
 	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 
-	import {
-		getToolServerConnections,
-		setToolServerConnections,
-		getTerminalServerConnections,
-		setTerminalServerConnections
-	} from '$lib/apis/configs';
+	import {getToolServerConnections, setToolServerConnections, getTerminalServerConnections, setTerminalServerConnections} from '$lib/apis/configs';
 
 	type ToolServerConnection = Record<string, unknown>;
 	type TerminalConnection = {
@@ -75,7 +66,7 @@
 	const updateHandler = async () => {
 		const res = await setToolServerConnections(localStorage.token, {
 			TOOL_SERVER_CONNECTIONS: servers
-		}).catch((err) => {
+		}).catch((_err) => {
 			toast.error($i18n.t('Failed to save connections'));
 			return null;
 		});
@@ -89,7 +80,7 @@
 	const saveTerminalServers = async () => {
 		const res = await setTerminalServerConnections(localStorage.token, {
 			TERMINAL_SERVER_CONNECTIONS: terminalConnections
-		}).catch((err) => {
+		}).catch((_err) => {
 			toast.error($i18n.t('Failed to save terminal servers'));
 			return null;
 		});

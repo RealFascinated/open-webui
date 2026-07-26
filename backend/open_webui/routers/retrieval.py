@@ -103,7 +103,11 @@ from open_webui.retrieval.web.ollama import search_ollama_cloud
 from open_webui.retrieval.web.perplexity import search_perplexity
 from open_webui.retrieval.web.perplexity_search import search_perplexity_search
 from open_webui.retrieval.web.searchapi import search_searchapi
-from open_webui.retrieval.web.searxng import search_searxng
+from open_webui.retrieval.web.searxng import (
+    search_searxng,
+    searxng_options_from_config,
+    searxng_response_to_documents,
+)
 from open_webui.retrieval.web.serpapi import search_serpapi
 from open_webui.retrieval.web.serper import search_serper
 from open_webui.retrieval.web.serphouse import search_serphouse
@@ -368,6 +372,16 @@ RETRIEVAL_CONFIG_KEYS = {
     'SEARCHAPI_ENGINE': 'web.search.searchapi_engine',
     'SEARXNG_LANGUAGE': 'web.search.searxng_language',
     'SEARXNG_QUERY_URL': 'web.search.searxng_query_url',
+    'SEARXNG_TIME_RANGE': 'web.search.searxng_time_range',
+    'SEARXNG_CATEGORIES': 'web.search.searxng_categories',
+    'SEARXNG_SAFESEARCH': 'web.search.searxng_safesearch',
+    'SEARXNG_ENGINES': 'web.search.searxng_engines',
+    'SEARXNG_AUTO_SPELLING_CORRECTION': 'web.search.searxng_auto_spelling_correction',
+    'SEARXNG_FETCH_PAGE_2': 'web.search.searxng_fetch_page_2',
+    'SEARXNG_MIN_SCORE_RATIO': 'web.search.searxng_min_score_ratio',
+    'SEARXNG_MIN_ABSOLUTE_SCORE': 'web.search.searxng_min_absolute_score',
+    'SEARXNG_MAX_RESULTS_PER_DOMAIN': 'web.search.searxng_max_results_per_domain',
+    'WEB_SEARCH_CACHE_TTL': 'web.search.cache_ttl',
     'SERPAPI_API_KEY': 'web.search.serpapi_api_key',
     'SERPAPI_ENGINE': 'web.search.serpapi_engine',
     'SERPER_API_KEY': 'web.search.serper_api_key',
@@ -720,6 +734,16 @@ async def get_rag_config(request: Request, user=Depends(get_admin_user)):
             'OLLAMA_CLOUD_WEB_SEARCH_API_KEY': config.OLLAMA_CLOUD_WEB_SEARCH_API_KEY,
             'SEARXNG_QUERY_URL': config.SEARXNG_QUERY_URL,
             'SEARXNG_LANGUAGE': config.SEARXNG_LANGUAGE,
+            'SEARXNG_TIME_RANGE': config.SEARXNG_TIME_RANGE,
+            'SEARXNG_CATEGORIES': config.SEARXNG_CATEGORIES,
+            'SEARXNG_SAFESEARCH': config.SEARXNG_SAFESEARCH,
+            'SEARXNG_ENGINES': config.SEARXNG_ENGINES,
+            'SEARXNG_AUTO_SPELLING_CORRECTION': config.SEARXNG_AUTO_SPELLING_CORRECTION,
+            'SEARXNG_FETCH_PAGE_2': config.SEARXNG_FETCH_PAGE_2,
+            'SEARXNG_MIN_SCORE_RATIO': config.SEARXNG_MIN_SCORE_RATIO,
+            'SEARXNG_MIN_ABSOLUTE_SCORE': config.SEARXNG_MIN_ABSOLUTE_SCORE,
+            'SEARXNG_MAX_RESULTS_PER_DOMAIN': config.SEARXNG_MAX_RESULTS_PER_DOMAIN,
+            'WEB_SEARCH_CACHE_TTL': config.WEB_SEARCH_CACHE_TTL,
             'YACY_QUERY_URL': config.YACY_QUERY_URL,
             'YACY_USERNAME': config.YACY_USERNAME,
             'YACY_PASSWORD': config.YACY_PASSWORD,
@@ -801,6 +825,16 @@ class WebConfig(BaseModel):
     OLLAMA_CLOUD_WEB_SEARCH_API_KEY: str | None = None
     SEARXNG_QUERY_URL: str | None = None
     SEARXNG_LANGUAGE: str | None = None
+    SEARXNG_TIME_RANGE: str | None = None
+    SEARXNG_CATEGORIES: str | None = None
+    SEARXNG_SAFESEARCH: str | None = None
+    SEARXNG_ENGINES: str | None = None
+    SEARXNG_AUTO_SPELLING_CORRECTION: bool | None = None
+    SEARXNG_FETCH_PAGE_2: bool | None = None
+    SEARXNG_MIN_SCORE_RATIO: float | None = None
+    SEARXNG_MIN_ABSOLUTE_SCORE: float | None = None
+    SEARXNG_MAX_RESULTS_PER_DOMAIN: int | None = None
+    WEB_SEARCH_CACHE_TTL: int | None = None
     YACY_QUERY_URL: str | None = None
     YACY_USERNAME: str | None = None
     YACY_PASSWORD: str | None = None
@@ -1275,6 +1309,22 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
         config.OLLAMA_CLOUD_WEB_SEARCH_API_KEY = form_data.web.OLLAMA_CLOUD_WEB_SEARCH_API_KEY
         config.SEARXNG_QUERY_URL = form_data.web.SEARXNG_QUERY_URL
         config.SEARXNG_LANGUAGE = form_data.web.SEARXNG_LANGUAGE
+        config.SEARXNG_TIME_RANGE = form_data.web.SEARXNG_TIME_RANGE
+        config.SEARXNG_CATEGORIES = form_data.web.SEARXNG_CATEGORIES
+        config.SEARXNG_SAFESEARCH = form_data.web.SEARXNG_SAFESEARCH
+        config.SEARXNG_ENGINES = form_data.web.SEARXNG_ENGINES
+        if form_data.web.SEARXNG_AUTO_SPELLING_CORRECTION is not None:
+            config.SEARXNG_AUTO_SPELLING_CORRECTION = form_data.web.SEARXNG_AUTO_SPELLING_CORRECTION
+        if form_data.web.SEARXNG_FETCH_PAGE_2 is not None:
+            config.SEARXNG_FETCH_PAGE_2 = form_data.web.SEARXNG_FETCH_PAGE_2
+        if form_data.web.SEARXNG_MIN_SCORE_RATIO is not None:
+            config.SEARXNG_MIN_SCORE_RATIO = form_data.web.SEARXNG_MIN_SCORE_RATIO
+        if form_data.web.SEARXNG_MIN_ABSOLUTE_SCORE is not None:
+            config.SEARXNG_MIN_ABSOLUTE_SCORE = form_data.web.SEARXNG_MIN_ABSOLUTE_SCORE
+        if form_data.web.SEARXNG_MAX_RESULTS_PER_DOMAIN is not None:
+            config.SEARXNG_MAX_RESULTS_PER_DOMAIN = form_data.web.SEARXNG_MAX_RESULTS_PER_DOMAIN
+        if form_data.web.WEB_SEARCH_CACHE_TTL is not None:
+            config.WEB_SEARCH_CACHE_TTL = form_data.web.WEB_SEARCH_CACHE_TTL
         config.YACY_QUERY_URL = form_data.web.YACY_QUERY_URL
         config.YACY_USERNAME = form_data.web.YACY_USERNAME
         config.YACY_PASSWORD = form_data.web.YACY_PASSWORD
@@ -1429,6 +1479,16 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
             'OLLAMA_CLOUD_WEB_SEARCH_API_KEY': config.OLLAMA_CLOUD_WEB_SEARCH_API_KEY,
             'SEARXNG_QUERY_URL': config.SEARXNG_QUERY_URL,
             'SEARXNG_LANGUAGE': config.SEARXNG_LANGUAGE,
+            'SEARXNG_TIME_RANGE': config.SEARXNG_TIME_RANGE,
+            'SEARXNG_CATEGORIES': config.SEARXNG_CATEGORIES,
+            'SEARXNG_SAFESEARCH': config.SEARXNG_SAFESEARCH,
+            'SEARXNG_ENGINES': config.SEARXNG_ENGINES,
+            'SEARXNG_AUTO_SPELLING_CORRECTION': config.SEARXNG_AUTO_SPELLING_CORRECTION,
+            'SEARXNG_FETCH_PAGE_2': config.SEARXNG_FETCH_PAGE_2,
+            'SEARXNG_MIN_SCORE_RATIO': config.SEARXNG_MIN_SCORE_RATIO,
+            'SEARXNG_MIN_ABSOLUTE_SCORE': config.SEARXNG_MIN_ABSOLUTE_SCORE,
+            'SEARXNG_MAX_RESULTS_PER_DOMAIN': config.SEARXNG_MAX_RESULTS_PER_DOMAIN,
+            'WEB_SEARCH_CACHE_TTL': config.WEB_SEARCH_CACHE_TTL,
             'YACY_QUERY_URL': config.YACY_QUERY_URL,
             'YACY_USERNAME': config.YACY_USERNAME,
             'YACY_PASSWORD': config.YACY_PASSWORD,
@@ -2238,14 +2298,16 @@ async def search_web(request: Request, engine: str, query: str, user=None) -> li
             raise Exception('No PERPLEXITY_API_KEY found in environment variables')
     elif engine == 'searxng':
         if config.SEARXNG_QUERY_URL:
-            searxng_kwargs = {'language': config.SEARXNG_LANGUAGE}
-            return await search_searxng(
+            options = searxng_options_from_config(config)
+            response = await search_searxng(
                 config.SEARXNG_QUERY_URL,
                 query,
                 config.WEB_SEARCH_RESULT_COUNT,
                 config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-                **searxng_kwargs,
+                options=options,
+                cache_scope=getattr(user, 'id', None) if user else None,
             )
+            return response.results
         else:
             raise Exception('No SEARXNG_QUERY_URL found in environment variables')
     elif engine == 'yacy':
@@ -2568,17 +2630,47 @@ async def process_web_search(request: Request, form_data: SearchForm, user=Depen
 
     urls = []
     result_items = []
+    searxng_responses = []
 
     try:
         logging.debug(f'trying to web search with {config.WEB_SEARCH_ENGINE, form_data.queries}')
 
-        # Use semaphore to limit concurrent requests based on WEB_SEARCH_CONCURRENT_REQUESTS
-        # 0 or None = unlimited (previous behavior), positive number = limited concurrency
-        # Set to 1 for sequential execution (rate-limited APIs like Brave free tier)
         concurrent_limit = config.WEB_SEARCH_CONCURRENT_REQUESTS
 
-        if concurrent_limit:
-            # Limited concurrency with semaphore
+        if config.WEB_SEARCH_ENGINE == 'searxng' and config.SEARXNG_QUERY_URL:
+            options = searxng_options_from_config(config)
+            cache_scope = getattr(user, 'id', None)
+
+            async def search_searxng_query(query: str):
+                return await search_searxng(
+                    config.SEARXNG_QUERY_URL,
+                    query,
+                    config.WEB_SEARCH_RESULT_COUNT,
+                    config.WEB_SEARCH_DOMAIN_FILTER_LIST,
+                    options=options,
+                    cache_scope=cache_scope,
+                )
+
+            if concurrent_limit:
+                semaphore = asyncio.Semaphore(concurrent_limit)
+
+                async def search_query_with_semaphore(query):
+                    async with semaphore:
+                        return await search_searxng_query(query)
+
+                search_tasks = [search_query_with_semaphore(query) for query in form_data.queries]
+            else:
+                search_tasks = [search_searxng_query(query) for query in form_data.queries]
+
+            searxng_responses = await asyncio.gather(*search_tasks)
+            for response in searxng_responses:
+                if not response:
+                    continue
+                for item in response.results:
+                    if item and item.link:
+                        result_items.append(item)
+                        urls.append(item.link)
+        elif concurrent_limit:
             semaphore = asyncio.Semaphore(concurrent_limit)
 
             async def search_query_with_semaphore(query):
@@ -2591,8 +2683,15 @@ async def process_web_search(request: Request, form_data: SearchForm, user=Depen
                     )
 
             search_tasks = [search_query_with_semaphore(query) for query in form_data.queries]
+            search_results = await asyncio.gather(*search_tasks)
+
+            for result in search_results:
+                if result:
+                    for item in result:
+                        if item and item.link:
+                            result_items.append(item)
+                            urls.append(item.link)
         else:
-            # Unlimited parallel execution
             search_tasks = [
                 search_web(
                     request,
@@ -2602,15 +2701,14 @@ async def process_web_search(request: Request, form_data: SearchForm, user=Depen
                 )
                 for query in form_data.queries
             ]
+            search_results = await asyncio.gather(*search_tasks)
 
-        search_results = await asyncio.gather(*search_tasks)
-
-        for result in search_results:
-            if result:
-                for item in result:
-                    if item and item.link:
-                        result_items.append(item)
-                        urls.append(item.link)
+            for result in search_results:
+                if result:
+                    for item in result:
+                        if item and item.link:
+                            result_items.append(item)
+                            urls.append(item.link)
 
         urls = list(dict.fromkeys(urls))
         log.debug(f'urls: {urls}')
@@ -2619,7 +2717,8 @@ async def process_web_search(request: Request, form_data: SearchForm, user=Depen
         log.exception('Web search failed')
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.WEB_SEARCH_ERROR(e))
 
-    if len(urls) == 0:
+    has_searxng_content = any(response and response.has_content() for response in searxng_responses)
+    if len(urls) == 0 and not has_searxng_content:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.DEFAULT('No results found from web search'),
@@ -2627,36 +2726,87 @@ async def process_web_search(request: Request, form_data: SearchForm, user=Depen
 
     try:
         if config.BYPASS_WEB_SEARCH_WEB_LOADER:
-            search_results = [item for result in search_results for item in result if result]
-
-            docs = [
-                Document(
-                    page_content=result.snippet,
-                    metadata={
-                        'source': result.link,
-                        'title': result.title,
-                        'snippet': result.snippet,
-                        'link': result.link,
-                    },
-                )
-                for result in search_results
-                if hasattr(result, 'snippet') and result.snippet is not None
-            ]
+            if searxng_responses:
+                docs = []
+                for response in searxng_responses:
+                    if response:
+                        docs.extend(searxng_response_to_documents(response))
+            else:
+                docs = [
+                    Document(
+                        page_content=result.snippet,
+                        metadata={
+                            'source': result.link,
+                            'title': result.title,
+                            'snippet': result.snippet,
+                            'link': result.link,
+                            **result.model_dump(exclude_none=True),
+                        },
+                    )
+                    for result in result_items
+                    if hasattr(result, 'snippet') and result.snippet is not None
+                ]
         else:
-            loader = get_web_loader(
-                urls,
-                verify_ssl=config.ENABLE_WEB_LOADER_SSL_VERIFICATION,
-                requests_per_second=config.WEB_LOADER_CONCURRENT_REQUESTS,
-                trust_env=config.WEB_SEARCH_TRUST_ENV,
-            )
-            docs = await loader.aload()
+            if searxng_responses:
+                docs = []
+                for response in searxng_responses:
+                    if response:
+                        docs.extend(searxng_response_to_documents(response))
+                if urls:
+                    loader = get_web_loader(
+                        urls,
+                        verify_ssl=config.ENABLE_WEB_LOADER_SSL_VERIFICATION,
+                        requests_per_second=config.WEB_LOADER_CONCURRENT_REQUESTS,
+                        trust_env=config.WEB_SEARCH_TRUST_ENV,
+                        engine=config.WEB_LOADER_ENGINE,
+                        firecrawl_api_key=config.FIRECRAWL_API_KEY,
+                        firecrawl_api_url=config.FIRECRAWL_API_BASE_URL,
+                        firecrawl_timeout=config.FIRECRAWL_TIMEOUT,
+                        playwright_ws_url=config.PLAYWRIGHT_WS_URL,
+                        playwright_timeout=config.PLAYWRIGHT_TIMEOUT,
+                        tavily_api_key=config.TAVILY_API_KEY,
+                        tavily_extract_depth=config.TAVILY_EXTRACT_DEPTH,
+                        microsoft_web_iq_api_base_url=config.MICROSOFT_WEB_IQ_API_BASE_URL,
+                        microsoft_web_iq_api_key=config.MICROSOFT_WEB_IQ_API_KEY,
+                        microsoft_web_iq_language=config.MICROSOFT_WEB_IQ_LANGUAGE,
+                        external_web_loader_url=config.EXTERNAL_WEB_LOADER_URL,
+                        external_web_loader_api_key=config.EXTERNAL_WEB_LOADER_API_KEY,
+                        web_loader_timeout=config.WEB_LOADER_TIMEOUT,
+                    )
+                    docs.extend(await loader.aload())
+            elif urls:
+                loader = get_web_loader(
+                    urls,
+                    verify_ssl=config.ENABLE_WEB_LOADER_SSL_VERIFICATION,
+                    requests_per_second=config.WEB_LOADER_CONCURRENT_REQUESTS,
+                    trust_env=config.WEB_SEARCH_TRUST_ENV,
+                    engine=config.WEB_LOADER_ENGINE,
+                    firecrawl_api_key=config.FIRECRAWL_API_KEY,
+                    firecrawl_api_url=config.FIRECRAWL_API_BASE_URL,
+                    firecrawl_timeout=config.FIRECRAWL_TIMEOUT,
+                    playwright_ws_url=config.PLAYWRIGHT_WS_URL,
+                    playwright_timeout=config.PLAYWRIGHT_TIMEOUT,
+                    tavily_api_key=config.TAVILY_API_KEY,
+                    tavily_extract_depth=config.TAVILY_EXTRACT_DEPTH,
+                    microsoft_web_iq_api_base_url=config.MICROSOFT_WEB_IQ_API_BASE_URL,
+                    microsoft_web_iq_api_key=config.MICROSOFT_WEB_IQ_API_KEY,
+                    microsoft_web_iq_language=config.MICROSOFT_WEB_IQ_LANGUAGE,
+                    external_web_loader_url=config.EXTERNAL_WEB_LOADER_URL,
+                    external_web_loader_api_key=config.EXTERNAL_WEB_LOADER_API_KEY,
+                    web_loader_timeout=config.WEB_LOADER_TIMEOUT,
+                )
+                docs = await loader.aload()
+            else:
+                docs = []
 
         urls = [
             doc.metadata.get('source') for doc in docs if doc.metadata.get('source')
         ]  # only keep the urls returned by the loader
         result_items = [
-            dict(item) for item in result_items if item.link in urls
-        ]  # only keep the search results that have been loaded
+            item.model_dump(exclude_none=True) if hasattr(item, 'model_dump') else dict(item)
+            for item in result_items
+            if item.link in urls
+        ]
 
         if config.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL:
             return {

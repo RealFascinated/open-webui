@@ -4,11 +4,18 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from open_webui.utils.llamacpp_tokens import (
+    LLAMACPP_CONVERSATION_ID_HEADER,
+    apply_llamacpp_provider_payload,
+    apply_llamacpp_reasoning_params,
+    apply_task_thinking_policy,
     collect_tool_specs_by_source,
     compute_context_breakdown,
     count_templated_tokens,
+    llamacpp_conversation_id,
     non_system_messages,
     normalize_llamacpp_base,
+    openrouter_reasoning_payload,
+    reasoning_effort_to_budget_tokens,
     snapshot_messages,
 )
 from open_webui.utils.response import merge_usage
@@ -17,6 +24,143 @@ from open_webui.utils.response import merge_usage
 def test_normalize_llamacpp_base_strips_openai_suffixes():
     assert normalize_llamacpp_base('http://localhost:8080/v1/') == 'http://localhost:8080'
     assert normalize_llamacpp_base('http://localhost:8080/openai/v1') == 'http://localhost:8080'
+
+
+def test_llamacpp_conversation_id_skips_ephemeral_chats():
+    assert llamacpp_conversation_id(None) is None
+    assert llamacpp_conversation_id('local:abc') is None
+    assert llamacpp_conversation_id('channel:abc') is None
+
+
+def test_llamacpp_conversation_id_includes_model_for_router_mode():
+    assert llamacpp_conversation_id('chat-1') == 'chat-1'
+    assert llamacpp_conversation_id('chat-1', 'qwen3') == 'chat-1::qwen3'
+
+
+def test_reasoning_effort_to_budget_tokens_matches_llama_webui():
+    assert reasoning_effort_to_budget_tokens('low') == 512
+    assert reasoning_effort_to_budget_tokens('MEDIUM') == 2048
+    assert reasoning_effort_to_budget_tokens('high') == 8192
+    assert reasoning_effort_to_budget_tokens('max') == -1
+    assert reasoning_effort_to_budget_tokens('none') == 0
+
+
+def test_apply_llamacpp_reasoning_params_disables_thinking():
+    form_data = {'chat_template_kwargs': {'enable_thinking': False}}
+    apply_llamacpp_reasoning_params(form_data, {'provider': 'llama.cpp'})
+    assert form_data['reasoning_budget_tokens'] == 0
+    assert form_data['thinking_budget_tokens'] == 0
+    assert form_data['reasoning'] == {'enabled': False, 'effort': 'none'}
+
+
+def test_apply_llamacpp_reasoning_params_maps_effort():
+    form_data = {'reasoning_effort': 'high'}
+    apply_llamacpp_reasoning_params(form_data, {'provider': 'llama.cpp'})
+    assert form_data['reasoning_budget_tokens'] == 8192
+    assert form_data['thinking_budget_tokens'] == 8192
+    assert form_data['chat_template_kwargs']['enable_thinking'] is True
+    assert form_data['reasoning'] == {'enabled': True, 'effort': 'high'}
+
+
+def test_apply_llamacpp_reasoning_params_maps_max_effort():
+    form_data = {'reasoning_effort': 'max'}
+    apply_llamacpp_reasoning_params(form_data, {'provider': 'llama.cpp'})
+    assert form_data['reasoning_budget_tokens'] == -1
+    assert form_data['thinking_budget_tokens'] == -1
+    assert form_data['reasoning'] == {'enabled': True, 'effort': 'max'}
+
+
+def test_apply_llamacpp_reasoning_params_defaults_to_medium_budget():
+    form_data = {'chat_template_kwargs': {'enable_thinking': True}}
+    apply_llamacpp_reasoning_params(form_data, {'provider': 'llama.cpp'})
+    assert form_data['reasoning_budget_tokens'] == 2048
+    assert form_data['thinking_budget_tokens'] == 2048
+    assert form_data['reasoning'] == {'enabled': True, 'effort': 'medium'}
+
+
+def test_apply_llamacpp_reasoning_params_honors_explicit_thinking_budget():
+    form_data = {'thinking_budget_tokens': 1024}
+    apply_llamacpp_reasoning_params(form_data, {'provider': 'llama.cpp'})
+    assert form_data['reasoning_budget_tokens'] == 1024
+    assert form_data['thinking_budget_tokens'] == 1024
+    assert form_data['chat_template_kwargs']['enable_thinking'] is True
+
+
+def test_apply_task_thinking_policy_disables_thinking_for_tasks():
+    form_data = {
+        'chat_template_kwargs': {'enable_thinking': True},
+        'reasoning_effort': 'high',
+        'params': {'think': 'high'},
+    }
+    apply_task_thinking_policy(
+        form_data,
+        {'task': 'title_generation'},
+        model={'provider': 'llama.cpp'},
+    )
+    assert form_data['think'] is False
+    assert form_data['params']['think'] is False
+    assert form_data['chat_template_kwargs']['enable_thinking'] is False
+    assert form_data['thinking_budget_tokens'] == 0
+    assert form_data['reasoning_budget_tokens'] == 0
+
+
+def test_apply_task_thinking_policy_ignores_non_task_requests():
+    form_data = {'chat_template_kwargs': {'enable_thinking': True}}
+    apply_task_thinking_policy(form_data, None, model={'provider': 'llama.cpp'})
+    assert form_data['chat_template_kwargs']['enable_thinking'] is True
+    assert 'thinking_budget_tokens' not in form_data
+
+
+def test_apply_task_thinking_policy_disables_thinking_for_voice_mode():
+    form_data = {
+        'chat_template_kwargs': {'enable_thinking': True},
+        'reasoning_effort': 'high',
+        'params': {'think': 'high'},
+    }
+    apply_task_thinking_policy(
+        form_data,
+        {'features': {'voice': True}},
+        model={'provider': 'llama.cpp'},
+    )
+    assert form_data['think'] is False
+    assert form_data['params']['think'] is False
+    assert form_data['chat_template_kwargs']['enable_thinking'] is False
+    assert form_data['thinking_budget_tokens'] == 0
+
+
+def test_openrouter_reasoning_payload_none_when_unset():
+    assert openrouter_reasoning_payload({}) is None
+
+
+def test_apply_llamacpp_provider_payload_sets_parallel_tool_calls():
+    payload = {'tools': [{'type': 'function'}, {'type': 'function'}]}
+    apply_llamacpp_provider_payload(payload)
+    assert payload['parallel_tool_calls'] is True
+
+
+def test_apply_llamacpp_provider_payload_respects_existing_parallel_tool_calls():
+    payload = {
+        'tools': [{'type': 'function'}, {'type': 'function'}],
+        'parallel_tool_calls': False,
+    }
+    apply_llamacpp_provider_payload(payload)
+    assert payload['parallel_tool_calls'] is False
+
+
+def test_apply_llamacpp_provider_payload_skips_single_tool():
+    payload = {'tools': [{'type': 'function'}]}
+    apply_llamacpp_provider_payload(payload)
+    assert 'parallel_tool_calls' not in payload
+
+
+def test_apply_llamacpp_reasoning_params_ignores_other_providers():
+    form_data = {'reasoning_effort': 'high'}
+    apply_llamacpp_reasoning_params(form_data, {'provider': 'openai'})
+    assert 'reasoning_budget_tokens' not in form_data
+
+
+def test_llamacpp_conversation_id_header_constant():
+    assert LLAMACPP_CONVERSATION_ID_HEADER == 'X-Conversation-Id'
 
 
 def test_snapshot_messages_deep_copies():

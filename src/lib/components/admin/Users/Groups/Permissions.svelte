@@ -6,6 +6,7 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 
 	import { DEFAULT_PERMISSIONS } from '$lib/constants/permissions';
+	import type { DefaultPermissions, UserPermissions } from '$lib/types/permissions';
 	import {
 		PERMISSION_PRESETS,
 		type PermissionPresetId
@@ -13,8 +14,24 @@
 	import PermissionsSection from './PermissionsSection.svelte';
 	import PermissionsPresets from './PermissionsPresets.svelte';
 
-	export let permissions = {};
-	export let defaultPermissions = {};
+	function fillMissingProperties(
+		obj: UserPermissions,
+		defaults: DefaultPermissions
+	): DefaultPermissions {
+		return {
+			...defaults,
+			...obj,
+			workspace: { ...defaults.workspace, ...obj.workspace },
+			sharing: { ...defaults.sharing, ...obj.sharing },
+			access_grants: { ...defaults.access_grants, ...obj.access_grants },
+			chat: { ...defaults.chat, ...obj.chat },
+			features: { ...defaults.features, ...obj.features },
+			settings: { ...defaults.settings, ...obj.settings }
+		};
+	}
+
+	export let permissions: DefaultPermissions = fillMissingProperties({}, DEFAULT_PERMISSIONS);
+	export let defaultPermissions: UserPermissions = {};
 
 	let activePreset: PermissionPresetId | null = null;
 	let openWorkspace = true;
@@ -29,19 +46,6 @@
 		permissions = fillMissingProperties(permissions, DEFAULT_PERMISSIONS);
 	}
 
-	function fillMissingProperties(obj: unknown, defaults: unknown) {
-		return {
-			...defaults,
-			...obj,
-			workspace: { ...defaults.workspace, ...obj.workspace },
-			sharing: { ...defaults.sharing, ...obj.sharing },
-			access_grants: { ...defaults.access_grants, ...obj.access_grants },
-			chat: { ...defaults.chat, ...obj.chat },
-			features: { ...defaults.features, ...obj.features },
-			settings: { ...defaults.settings, ...obj.settings }
-		};
-	}
-
 	const applyPreset = (event: CustomEvent<PermissionPresetId>) => {
 		const presetId = event.detail;
 		permissions = fillMissingProperties(
@@ -51,7 +55,7 @@
 		activePreset = presetId;
 	};
 
-	const permissionsSnapshot = (value: unknown) =>
+	const permissionsSnapshot = (value: UserPermissions) =>
 		JSON.stringify(fillMissingProperties(value, DEFAULT_PERMISSIONS));
 
 	$: if (activePreset) {

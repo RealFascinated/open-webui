@@ -542,6 +542,19 @@ class SafeMicrosoftWebIQLoader(BaseLoader, RateLimitMixin, URLProcessingMixin):
                 raise e
 
 
+# Read-back types (their body reaches page.content()) get per-hop redirect
+# re-validation; everything else just gets the destination check.
+MAX_WEB_LOADER_REDIRECTS = 20
+_READBACK_RESOURCE_TYPES = {'document', 'xhr', 'fetch'}
+
+
+def _redirect_location(resp) -> str | None:
+    location = resp.headers.get('location')
+    if not location:
+        return None
+    return urllib.parse.urljoin(resp.url, location)
+
+
 class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessingMixin):
     """Load HTML pages safely with Playwright, supporting SSL verification, rate limiting, and remote browser connection.
 
@@ -600,56 +613,76 @@ class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessing
     def _intercept_navigation_sync(self, route, request=None):
         req = request or route.request
 
-        if req.resource_type != 'document':
-            route.continue_()
-            return
-
+        # Validate every request, not just the document navigation.
         try:
             validate_url(req.url)
         except Exception:
             route.abort()
             return
 
-        if AIOHTTP_CLIENT_ALLOW_REDIRECTS:
-            resp = route.fetch()
-        else:
-            try:
-                resp = route.fetch(max_redirects=0)
-            except TypeError:
-                route.abort()
-                return
+        if req.resource_type not in _READBACK_RESOURCE_TYPES:
+            route.continue_()
+            return
 
-            if 300 <= resp.status < 400:
+        try:
+            resp = route.fetch(max_redirects=0)
+        except TypeError:
+            route.abort()
+            return
+
+        redirects = 0
+        while 300 <= resp.status < 400:
+            if not AIOHTTP_CLIENT_ALLOW_REDIRECTS or redirects >= MAX_WEB_LOADER_REDIRECTS:
                 route.abort()
                 return
+            next_url = _redirect_location(resp)
+            if not next_url:
+                break
+            try:
+                validate_url(next_url)
+                resp = route.fetch(url=next_url, max_redirects=0)
+            except Exception:
+                route.abort()
+                return
+            redirects += 1
 
         route.fulfill(response=resp)
 
     async def _intercept_navigation(self, route, request=None):
         req = request or route.request
 
-        if req.resource_type != 'document':
-            await route.continue_()
-            return
-
+        # Validate every request, not just the document navigation.
         try:
             await run_in_threadpool(validate_url, req.url)
         except Exception:
             await route.abort()
             return
 
-        if AIOHTTP_CLIENT_ALLOW_REDIRECTS:
-            resp = await route.fetch()
-        else:
-            try:
-                resp = await route.fetch(max_redirects=0)
-            except TypeError:
-                await route.abort()
-                return
+        if req.resource_type not in _READBACK_RESOURCE_TYPES:
+            await route.continue_()
+            return
 
-            if 300 <= resp.status < 400:
+        try:
+            resp = await route.fetch(max_redirects=0)
+        except TypeError:
+            await route.abort()
+            return
+
+        redirects = 0
+        while 300 <= resp.status < 400:
+            if not AIOHTTP_CLIENT_ALLOW_REDIRECTS or redirects >= MAX_WEB_LOADER_REDIRECTS:
                 await route.abort()
                 return
+            next_url = _redirect_location(resp)
+            if not next_url:
+                break
+            try:
+                await run_in_threadpool(validate_url, next_url)
+                resp = await route.fetch(url=next_url, max_redirects=0)
+            except Exception:
+                await route.abort()
+                return
+            redirects += 1
 
         await route.fulfill(response=resp)
 
@@ -658,60 +691,86 @@ class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessing
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as p:
-            # Use remote browser if ws_endpoint is provided, otherwise use local browser
-            if self.playwright_ws_url:
-                browser = p.chromium.connect(self.playwright_ws_url)
-            else:
-                browser = p.chromium.launch(headless=self.headless, proxy=self.proxy)
+            browser = None
+            try:
+                if self.playwright_ws_url:
+                    browser = p.chromium.connect(self.playwright_ws_url)
+                else:
+                    browser = p.chromium.launch(headless=self.headless, proxy=self.proxy)
 
-            for url in self.urls:
-                try:
-                    self._safe_process_url_sync(url)
-                    page = browser.new_page()
-                    page.route('**/*', self._intercept_navigation_sync)
-                    response = page.goto(url, timeout=self.playwright_timeout)
-                    if response is None:
-                        raise ValueError(f'page.goto() returned None for url {url}')
+                for url in self.urls:
+                    page = None
+                    try:
+                        self._safe_process_url_sync(url)
+                        page = browser.new_page()
+                        page.route('**/*', self._intercept_navigation_sync)
+                        response = page.goto(url, timeout=self.playwright_timeout)
+                        if response is None:
+                            raise ValueError(f'page.goto() returned None for url {url}')
 
-                    text = self.evaluator.evaluate(page, browser, response)
-                    metadata = {'source': url}
-                    yield Document(page_content=text, metadata=metadata)
-                except Exception as e:
-                    if self.continue_on_failure:
-                        log.exception(f'Error loading {url}: {e}')
-                        continue
-                    raise e
-            browser.close()
+                        text = self.evaluator.evaluate(page, browser, response)
+                        metadata = {'source': url}
+                        yield Document(page_content=text, metadata=metadata)
+                    except Exception as e:
+                        if self.continue_on_failure:
+                            log.exception(f'Error loading {url}: {e}')
+                            continue
+                        raise e
+                    finally:
+                        if page is not None:
+                            try:
+                                page.close()
+                            except Exception:
+                                pass
+            finally:
+                if browser is not None:
+                    try:
+                        browser.close()
+                    except Exception:
+                        pass
 
     async def alazy_load(self) -> AsyncIterator[Document]:
         """Safely load URLs asynchronously with support for remote browser."""
         from playwright.async_api import async_playwright
 
         async with async_playwright() as p:
-            # Use remote browser if ws_endpoint is provided, otherwise use local browser
-            if self.playwright_ws_url:
-                browser = await p.chromium.connect(self.playwright_ws_url)
-            else:
-                browser = await p.chromium.launch(headless=self.headless, proxy=self.proxy)
+            browser = None
+            try:
+                if self.playwright_ws_url:
+                    browser = await p.chromium.connect(self.playwright_ws_url)
+                else:
+                    browser = await p.chromium.launch(headless=self.headless, proxy=self.proxy)
 
-            for url in self.urls:
-                try:
-                    await self._safe_process_url(url)
-                    page = await browser.new_page()
-                    await page.route('**/*', self._intercept_navigation)
-                    response = await page.goto(url, timeout=self.playwright_timeout)
-                    if response is None:
-                        raise ValueError(f'page.goto() returned None for url {url}')
+                for url in self.urls:
+                    page = None
+                    try:
+                        await self._safe_process_url(url)
+                        page = await browser.new_page()
+                        await page.route('**/*', self._intercept_navigation)
+                        response = await page.goto(url, timeout=self.playwright_timeout)
+                        if response is None:
+                            raise ValueError(f'page.goto() returned None for url {url}')
 
-                    text = await self.evaluator.evaluate_async(page, browser, response)
-                    metadata = {'source': url}
-                    yield Document(page_content=text, metadata=metadata)
-                except Exception as e:
-                    if self.continue_on_failure:
-                        log.exception(f'Error loading {url}: {e}')
-                        continue
-                    raise e
-            await browser.close()
+                        text = await self.evaluator.evaluate_async(page, browser, response)
+                        metadata = {'source': url}
+                        yield Document(page_content=text, metadata=metadata)
+                    except Exception as e:
+                        if self.continue_on_failure:
+                            log.exception(f'Error loading {url}: {e}')
+                            continue
+                        raise e
+                    finally:
+                        if page is not None:
+                            try:
+                                await page.close()
+                            except Exception:
+                                pass
+            finally:
+                if browser is not None:
+                    try:
+                        await browser.close()
+                    except Exception:
+                        pass
 
 
 class SafeWebBaseLoader(WebBaseLoader):
@@ -838,7 +897,51 @@ def get_web_loader(
     verify_ssl: bool = True,
     requests_per_second: int = 2,
     trust_env: bool = False,
+    *,
+    engine: Optional[str] = None,
+    firecrawl_api_key: Optional[str] = None,
+    firecrawl_api_url: Optional[str] = None,
+    firecrawl_timeout: Optional[str] = None,
+    playwright_ws_url: Optional[str] = None,
+    playwright_timeout: Optional[int] = None,
+    tavily_api_key: Optional[str] = None,
+    tavily_extract_depth: Optional[str] = None,
+    microsoft_web_iq_api_base_url: Optional[str] = None,
+    microsoft_web_iq_api_key: Optional[str] = None,
+    microsoft_web_iq_language: Optional[str] = None,
+    external_web_loader_url: Optional[str] = None,
+    external_web_loader_api_key: Optional[str] = None,
+    web_loader_timeout: Optional[str] = None,
 ):
+    # Use explicitly passed values, falling back to module-level defaults
+    # (which are only set at import time from env vars). Callers that read
+    # from the database at request time should pass these explicitly so that
+    # admin-panel changes take effect without a restart.
+    _engine = engine if engine is not None else WEB_LOADER_ENGINE
+    _firecrawl_api_key = firecrawl_api_key if firecrawl_api_key is not None else FIRECRAWL_API_KEY
+    _firecrawl_api_url = firecrawl_api_url if firecrawl_api_url is not None else FIRECRAWL_API_BASE_URL
+    _firecrawl_timeout = firecrawl_timeout if firecrawl_timeout is not None else FIRECRAWL_TIMEOUT
+    _playwright_ws_url = playwright_ws_url if playwright_ws_url is not None else PLAYWRIGHT_WS_URL
+    _playwright_timeout = playwright_timeout if playwright_timeout is not None else PLAYWRIGHT_TIMEOUT
+    _tavily_api_key = tavily_api_key if tavily_api_key is not None else TAVILY_API_KEY
+    _tavily_extract_depth = tavily_extract_depth if tavily_extract_depth is not None else TAVILY_EXTRACT_DEPTH
+    _microsoft_web_iq_api_base_url = (
+        microsoft_web_iq_api_base_url if microsoft_web_iq_api_base_url is not None else MICROSOFT_WEB_IQ_API_BASE_URL
+    )
+    _microsoft_web_iq_api_key = (
+        microsoft_web_iq_api_key if microsoft_web_iq_api_key is not None else MICROSOFT_WEB_IQ_API_KEY
+    )
+    _microsoft_web_iq_language = (
+        microsoft_web_iq_language if microsoft_web_iq_language is not None else MICROSOFT_WEB_IQ_LANGUAGE
+    )
+    _external_web_loader_url = (
+        external_web_loader_url if external_web_loader_url is not None else EXTERNAL_WEB_LOADER_URL
+    )
+    _external_web_loader_api_key = (
+        external_web_loader_api_key if external_web_loader_api_key is not None else EXTERNAL_WEB_LOADER_API_KEY
+    )
+    _web_loader_timeout = web_loader_timeout if web_loader_timeout is not None else WEB_LOADER_TIMEOUT
+
     # Check if the URLs are valid
     safe_urls = safe_validate_urls([urls] if isinstance(urls, str) else urls)
 
@@ -854,13 +957,15 @@ def get_web_loader(
         'trust_env': trust_env,
     }
 
-    if WEB_LOADER_ENGINE == '' or WEB_LOADER_ENGINE == 'safe_web':
+    WebLoaderClass = None
+
+    if _engine == '' or _engine == 'safe_web':
         WebLoaderClass = SafeWebBaseLoader
 
         request_kwargs = {}
-        if WEB_LOADER_TIMEOUT:
+        if _web_loader_timeout:
             try:
-                timeout_value = float(WEB_LOADER_TIMEOUT)
+                timeout_value = float(_web_loader_timeout)
             except ValueError:
                 timeout_value = None
 
@@ -870,42 +975,42 @@ def get_web_loader(
         if request_kwargs:
             web_loader_args['requests_kwargs'] = request_kwargs
 
-    if WEB_LOADER_ENGINE == 'playwright':
+    if _engine == 'playwright':
         WebLoaderClass = SafePlaywrightURLLoader
-        web_loader_args['playwright_timeout'] = PLAYWRIGHT_TIMEOUT
-        if PLAYWRIGHT_WS_URL:
-            web_loader_args['playwright_ws_url'] = PLAYWRIGHT_WS_URL
+        web_loader_args['playwright_timeout'] = _playwright_timeout
+        if _playwright_ws_url:
+            web_loader_args['playwright_ws_url'] = _playwright_ws_url
 
-    if WEB_LOADER_ENGINE == 'firecrawl':
+    if _engine == 'firecrawl':
         WebLoaderClass = SafeFireCrawlLoader
-        web_loader_args['api_key'] = FIRECRAWL_API_KEY
-        web_loader_args['api_url'] = FIRECRAWL_API_BASE_URL
-        if FIRECRAWL_TIMEOUT:
+        web_loader_args['api_key'] = _firecrawl_api_key
+        web_loader_args['api_url'] = _firecrawl_api_url
+        if _firecrawl_timeout:
             try:
-                web_loader_args['timeout'] = int(FIRECRAWL_TIMEOUT)
+                web_loader_args['timeout'] = int(_firecrawl_timeout)
             except ValueError:
                 pass
 
-    if WEB_LOADER_ENGINE == 'tavily':
+    if _engine == 'tavily':
         WebLoaderClass = SafeTavilyLoader
-        web_loader_args['api_key'] = TAVILY_API_KEY
-        web_loader_args['extract_depth'] = TAVILY_EXTRACT_DEPTH
+        web_loader_args['api_key'] = _tavily_api_key
+        web_loader_args['extract_depth'] = _tavily_extract_depth
 
-    if WEB_LOADER_ENGINE == 'microsoft_web_iq':
+    if _engine == 'microsoft_web_iq':
         WebLoaderClass = SafeMicrosoftWebIQLoader
-        web_loader_args['api_base_url'] = MICROSOFT_WEB_IQ_API_BASE_URL
-        web_loader_args['api_key'] = MICROSOFT_WEB_IQ_API_KEY
-        web_loader_args['language'] = MICROSOFT_WEB_IQ_LANGUAGE
-        if WEB_LOADER_TIMEOUT:
+        web_loader_args['api_base_url'] = _microsoft_web_iq_api_base_url
+        web_loader_args['api_key'] = _microsoft_web_iq_api_key
+        web_loader_args['language'] = _microsoft_web_iq_language
+        if _web_loader_timeout:
             try:
-                web_loader_args['timeout'] = int(WEB_LOADER_TIMEOUT)
+                web_loader_args['timeout'] = int(_web_loader_timeout)
             except ValueError:
                 pass
 
-    if WEB_LOADER_ENGINE == 'external':
+    if _engine == 'external':
         WebLoaderClass = ExternalWebLoader
-        web_loader_args['external_url'] = EXTERNAL_WEB_LOADER_URL
-        web_loader_args['external_api_key'] = EXTERNAL_WEB_LOADER_API_KEY
+        web_loader_args['external_url'] = _external_web_loader_url
+        web_loader_args['external_api_key'] = _external_web_loader_api_key
 
     if WebLoaderClass:
         web_loader = WebLoaderClass(**web_loader_args)
@@ -919,6 +1024,6 @@ def get_web_loader(
         return web_loader
     else:
         raise ValueError(
-            f'Invalid WEB_LOADER_ENGINE: {WEB_LOADER_ENGINE}. '
+            f'Invalid WEB_LOADER_ENGINE: {_engine}. '
             "Please set it to 'safe_web', 'playwright', 'firecrawl', 'tavily', 'external', or 'microsoft_web_iq'."
         )

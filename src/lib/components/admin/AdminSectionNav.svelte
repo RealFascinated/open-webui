@@ -34,7 +34,7 @@
 
 	onMount(() => {
 		if (containerElement) {
-			containerElement.addEventListener('wheel', (event) => {
+			containerElement.addEventListener('wheel', (event: Event) => {
 				if (event.deltaY !== 0) {
 					containerElement.scrollLeft += event.deltaY;
 				}

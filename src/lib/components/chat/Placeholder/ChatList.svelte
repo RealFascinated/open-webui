@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { getContext, onMount } from 'svelte';
+	import {getContext} from 'svelte';
 	const i18n = getContext('i18n');
 
 	import dayjs from 'dayjs';
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
-	import { getTimeRange } from '$lib/utils';
+	import {getTimeRange} from '$lib/utils';
 	import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
 	import Loader from '$lib/components/common/Loader.svelte';
@@ -22,7 +22,7 @@
 	export let showOwnerInfo = false;
 	export let show = false;
 
-	let chatList = null;
+	let chatList: Record<string, unknown>[] | null = null;
 
 	const init = async () => {
 		if (chats.length === 0) {
@@ -180,7 +180,7 @@
 
 		{#if !allChatsLoaded && loadHandler}
 			<Loader
-				on:visible={(e) => {
+				on:visible={(_e) => {
 					if (!chatListLoading) {
 						loadHandler();
 					}

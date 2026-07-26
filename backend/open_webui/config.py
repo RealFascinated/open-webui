@@ -1181,6 +1181,26 @@ SEARXNG_QUERY_URL = os.getenv('SEARXNG_QUERY_URL', '')
 
 SEARXNG_LANGUAGE = os.getenv('SEARXNG_LANGUAGE', 'all')
 
+SEARXNG_TIME_RANGE = os.getenv('SEARXNG_TIME_RANGE', '')
+
+SEARXNG_CATEGORIES = os.getenv('SEARXNG_CATEGORIES', '')
+
+SEARXNG_SAFESEARCH = os.getenv('SEARXNG_SAFESEARCH', '1')
+
+SEARXNG_ENGINES = os.getenv('SEARXNG_ENGINES', '')
+
+SEARXNG_AUTO_SPELLING_CORRECTION = os.getenv('SEARXNG_AUTO_SPELLING_CORRECTION', 'False').lower() == 'true'
+
+SEARXNG_FETCH_PAGE_2 = os.getenv('SEARXNG_FETCH_PAGE_2', 'True').lower() == 'true'
+
+SEARXNG_MIN_SCORE_RATIO = float(os.getenv('SEARXNG_MIN_SCORE_RATIO', '0.05'))
+
+SEARXNG_MIN_ABSOLUTE_SCORE = float(os.getenv('SEARXNG_MIN_ABSOLUTE_SCORE', '0.15'))
+
+SEARXNG_MAX_RESULTS_PER_DOMAIN = int(os.getenv('SEARXNG_MAX_RESULTS_PER_DOMAIN', '2'))
+
+WEB_SEARCH_CACHE_TTL = int(os.getenv('WEB_SEARCH_CACHE_TTL', '60'))
+
 YACY_QUERY_URL = os.getenv('YACY_QUERY_URL', '')
 
 YACY_USERNAME = os.getenv('YACY_USERNAME', '')
@@ -2884,6 +2904,16 @@ DEFAULT_CONFIG = {
     'web.search.ollama_cloud_api_key': OLLAMA_CLOUD_WEB_SEARCH_API_KEY,
     'web.search.searxng_query_url': SEARXNG_QUERY_URL,
     'web.search.searxng_language': SEARXNG_LANGUAGE,
+    'web.search.searxng_time_range': SEARXNG_TIME_RANGE,
+    'web.search.searxng_categories': SEARXNG_CATEGORIES,
+    'web.search.searxng_safesearch': SEARXNG_SAFESEARCH,
+    'web.search.searxng_engines': SEARXNG_ENGINES,
+    'web.search.searxng_auto_spelling_correction': SEARXNG_AUTO_SPELLING_CORRECTION,
+    'web.search.searxng_fetch_page_2': SEARXNG_FETCH_PAGE_2,
+    'web.search.searxng_min_score_ratio': SEARXNG_MIN_SCORE_RATIO,
+    'web.search.searxng_min_absolute_score': SEARXNG_MIN_ABSOLUTE_SCORE,
+    'web.search.searxng_max_results_per_domain': SEARXNG_MAX_RESULTS_PER_DOMAIN,
+    'web.search.cache_ttl': WEB_SEARCH_CACHE_TTL,
     'web.search.yacy_query_url': YACY_QUERY_URL,
     'web.search.yacy_username': YACY_USERNAME,
     'web.search.yacy_password': YACY_PASSWORD,

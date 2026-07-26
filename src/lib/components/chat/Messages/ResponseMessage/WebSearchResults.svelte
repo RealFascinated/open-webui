@@ -68,7 +68,7 @@
 		{/if}
 
 		{#if status?.items}
-			{#each status.items as item, itemIdx}
+			{#each status.items as item, _itemIdx}
 				{#if item.link}
 				<a
 					href={item.link}
@@ -110,7 +110,7 @@
 				{/if}
 			{/each}
 		{:else if status?.urls}
-			{#each status.urls as url, urlIdx}
+			{#each status.urls as url, _urlIdx}
 				<a
 					href={url}
 					target="_blank"

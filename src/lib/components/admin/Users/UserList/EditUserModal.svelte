@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 	import dayjs from 'dayjs';
-	import { createEventDispatcher } from 'svelte';
-	import { onMount, getContext } from 'svelte';
+	import {createEventDispatcher} from 'svelte';
+	import {getContext} from 'svelte';
 
-	import { goto } from '$app/navigation';
+	import {goto} from '$app/navigation';
 
-	import { updateUserById, getUserGroupsById } from '$lib/apis/users';
+	import {updateUserById, getUserGroupsById} from '$lib/apis/users';
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
@@ -240,7 +240,5 @@
 		-webkit-appearance: none;
 		margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
 	}
-
-
 
 </style>

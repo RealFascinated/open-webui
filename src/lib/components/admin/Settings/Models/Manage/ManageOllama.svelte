@@ -1,26 +1,14 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { getContext, onMount } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {getContext} from 'svelte';
 	const i18n = getContext('i18n');
 
-	import { WEBUI_NAME, models, MODEL_DOWNLOAD_POOL, user, config, settings } from '$lib/stores';
-	import { splitStream } from '$lib/utils';
+	import {models, MODEL_DOWNLOAD_POOL} from '$lib/stores';
+	import {splitStream} from '$lib/utils';
 
-	import {
-		createModel,
-		deleteModel,
-		downloadModel,
-		getOllamaUrls,
-		getOllamaVersion,
-		pullModel,
-		uploadModel,
-		getOllamaConfig,
-		getOllamaModels
-	} from '$lib/apis/ollama';
-	import { getModels } from '$lib/apis';
-
-	import Modal from '$lib/components/common/Modal.svelte';
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
+	import {createModel, deleteModel, downloadModel, pullModel, uploadModel, getOllamaModels} from '$lib/apis/ollama';
+	import {getModels} from '$lib/apis';
+import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import ModelDeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import AdminDangerZone from '../../../AdminDangerZone.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -52,9 +40,6 @@
 
 	let createModelDigest = '';
 	let createModelPullProgress = null;
-
-	let digest = '';
-	let pullProgress = null;
 
 	let modelUploadMode = 'file';
 	let modelInputFile: File[] | null = null;
@@ -398,16 +383,6 @@
 										!data.status.includes('sha256')
 									) {
 										toast.success(data.status);
-									} else {
-										if (data.digest) {
-											digest = data.digest;
-
-											if (data.completed) {
-												pullProgress = Math.round((data.completed / data.total) * 1000) / 10;
-											} else {
-												pullProgress = 100;
-											}
-										}
 									}
 								}
 							}
@@ -585,8 +560,7 @@
 
 	$: if (urlIdx !== null) {
 		init();
-	}
-</script>
+	}</script>
 
 <ModelDeleteConfirmDialog
 	title={$i18n.t('Delete Model')}

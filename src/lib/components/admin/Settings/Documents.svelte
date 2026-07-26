@@ -1,25 +1,15 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 
-	import { onMount, getContext, createEventDispatcher } from 'svelte';
-	import { page } from '$app/stores';
+	import {onMount, getContext, createEventDispatcher} from 'svelte';
+	import {page} from '$app/stores';
 
 	const dispatch = createEventDispatcher();
 
-	import {
-		getQuerySettings,
-		updateQuerySettings,
-		resetVectorDB,
-		getEmbeddingConfig,
-		updateEmbeddingConfig,
-		getRerankingConfig,
-		updateRerankingConfig,
-		getRAGConfig,
-		updateRAGConfig
-	} from '$lib/apis/retrieval';
+	import {resetVectorDB, getEmbeddingConfig, updateEmbeddingConfig, getRAGConfig, updateRAGConfig} from '$lib/apis/retrieval';
 
-	import { reindexKnowledgeFiles } from '$lib/apis/knowledge';
-	import { deleteAllFiles } from '$lib/apis/files';
+	import {reindexKnowledgeFiles} from '$lib/apis/knowledge';
+	import {deleteAllFiles} from '$lib/apis/files';
 
 	import ResetUploadDirConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import ResetVectorDBConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
@@ -34,7 +24,7 @@
 	import DocumentsFilesSection from './Documents/DocumentsFilesSection.svelte';
 	import AdminSaveBar from '../AdminSaveBar.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import { isDocumentSection } from './documentsSections';
+	import {isDocumentSection} from './documentsSections';
 
 	const i18n = getContext('i18n');
 
@@ -51,7 +41,6 @@
 	};
 
 	let updateEmbeddingModelLoading = false;
-	let updateRerankingModelLoading = false;
 
 	let showResetConfirm = false;
 	let showResetUploadDirConfirm = false;
@@ -64,8 +53,6 @@
 	let ENABLE_ASYNC_EMBEDDING = true;
 	let RAG_EMBEDDING_CONCURRENT_REQUESTS = 0;
 
-	let rerankingModel = '';
-
 	let OpenAIUrl = '';
 	let OpenAIKey = '';
 
@@ -76,7 +63,7 @@
 	let OllamaUrl = '';
 	let OllamaKey = '';
 
-	let querySettings = {
+	let _querySettings = {
 		template: '',
 		r: 0.0,
 		k: 4,
@@ -84,7 +71,7 @@
 		hybrid: false
 	};
 
-	let RAGConfig = null;
+	let RAGConfig: Record<string, unknown> = null;
 
 	const embeddingModelUpdateHandler = async () => {
 		if (RAG_EMBEDDING_ENGINE === '' && RAG_EMBEDDING_MODEL.split('/').length - 1 > 1) {
@@ -179,7 +166,7 @@
 					throw new Error('Headers must be a valid JSON object');
 				}
 				RAGConfig.EXTERNAL_DOCUMENT_LOADER_HEADERS = JSON.stringify(headers, null, 2);
-			} catch (error) {
+			} catch (_error) {
 				toast.error($i18n.t('Headers must be a valid JSON object'));
 				return;
 			}
@@ -199,7 +186,7 @@
 		) {
 			try {
 				JSON.parse(RAGConfig.DATALAB_MARKER_ADDITIONAL_CONFIG);
-			} catch (e) {
+			} catch (_e) {
 				toast.error($i18n.t('Invalid JSON format in Additional Config'));
 				return;
 			}
@@ -243,7 +230,7 @@
 		if (RAGConfig.DOCLING_PARAMS) {
 			try {
 				JSON.parse(RAGConfig.DOCLING_PARAMS);
-			} catch (e) {
+			} catch (_e) {
 				toast.error(
 					$i18n.t('Invalid JSON format in {{NAME}}', {
 						NAME: $i18n.t('Docling Parameters')
@@ -255,7 +242,7 @@
 		if (RAGConfig.MINERU_PARAMS) {
 			try {
 				JSON.parse(RAGConfig.MINERU_PARAMS);
-			} catch (e) {
+			} catch (_e) {
 				toast.error($i18n.t('Invalid JSON format in MinerU Parameters'));
 				return;
 			}
@@ -402,7 +389,6 @@
 	}}
 />
 
-
 <form
 	bind:this={formElement}
 	class="flex flex-col space-y-3 text-sm"
@@ -429,7 +415,6 @@
 
 				{#if !RAGConfig.BYPASS_EMBEDDING_AND_RETRIEVAL}
 					<DocumentsEmbeddingSection
-						bind:RAGConfig
 						bind:RAG_EMBEDDING_ENGINE
 						bind:RAG_EMBEDDING_MODEL
 						bind:OpenAIUrl

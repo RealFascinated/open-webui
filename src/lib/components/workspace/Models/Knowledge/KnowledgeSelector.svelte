@@ -1,19 +1,17 @@
 <script lang="ts">
 	import dayjs from 'dayjs';
 
-	import { onMount, onDestroy, getContext, createEventDispatcher } from 'svelte';
-	import { searchNotes } from '$lib/apis/notes';
-	import { searchKnowledgeBases, searchKnowledgeFiles } from '$lib/apis/knowledge';
+	import {onMount, onDestroy, getContext, createEventDispatcher} from 'svelte';
+	import {searchNotes} from '$lib/apis/notes';
+	import {searchKnowledgeBases, searchKnowledgeFiles} from '$lib/apis/knowledge';
 
-	import { decodeString } from '$lib/utils';
+	import {decodeString} from '$lib/utils';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Database from '$lib/components/icons/Database.svelte';
-	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
-	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
-	import PageEdit from '$lib/components/icons/PageEdit.svelte';
+import PageEdit from '$lib/components/icons/PageEdit.svelte';
 	import DocumentPage from '$lib/components/icons/DocumentPage.svelte';
 
 	const i18n = getContext('i18n');
@@ -89,7 +87,7 @@
 		});
 
 		if (res) {
-			fileItems = res.items.map((file) => {
+			fileItems = res.items.map((file: string) => {
 				return {
 					...file,
 					type: 'file',

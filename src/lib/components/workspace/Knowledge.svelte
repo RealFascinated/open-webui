@@ -3,22 +3,18 @@
 	import relativeTime from 'dayjs/plugin/relativeTime';
 	dayjs.extend(relativeTime);
 
-	import { toast } from 'svelte-sonner';
-	import { onMount, getContext, tick, onDestroy } from 'svelte';
-	import type { Writable } from 'svelte/store';
-	import type { i18n as i18nType } from 'i18next';
+	import {toast} from 'svelte-sonner';
+	import {onMount, getContext, tick, onDestroy} from 'svelte';
+	import type {Writable} from 'svelte/store';
+	import type {i18n as i18nType} from 'i18next';
 
 	const i18n = getContext<Writable<i18nType>>('i18n');
 
-	import { WEBUI_NAME, knowledge, user } from '$lib/stores';
-	import {
-		deleteKnowledgeById,
-		searchKnowledgeBases,
-		exportKnowledgeById
-	} from '$lib/apis/knowledge';
+	import {WEBUI_NAME, user} from '$lib/stores';
+	import {deleteKnowledgeById, searchKnowledgeBases, exportKnowledgeById} from '$lib/apis/knowledge';
 
-	import { goto } from '$app/navigation';
-	import { capitalizeFirstLetter } from '$lib/utils';
+	import {goto} from '$app/navigation';
+	import {capitalizeFirstLetter} from '$lib/utils';
 
 	import DeleteConfirmDialog from '../common/ConfirmDialog.svelte';
 	import ItemMenu from './Knowledge/ItemMenu.svelte';
@@ -137,7 +133,7 @@
 	const deleteHandler = async (item: KnowledgeListItem | null) => {
 		if (!item) return;
 
-		const res = await deleteKnowledgeById(localStorage.token, item.id).catch((e) => {
+		const res = await deleteKnowledgeById(localStorage.token, item.id).catch((e: Event) => {
 			toast.error(`${e}`);
 		});
 
@@ -384,7 +380,7 @@
 
 				{#if !allItemsLoaded}
 					<Loader
-						on:visible={(e) => {
+						on:visible={(_e) => {
 							if (!itemsLoading) {
 								loadMoreItems();
 							}

@@ -59,7 +59,7 @@
 						e.preventDefault();
 						show = false;
 					}}
-					on:click={(e) => {
+					on:click={(_e) => {
 						show = false;
 					}}
 				>

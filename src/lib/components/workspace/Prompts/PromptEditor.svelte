@@ -70,7 +70,7 @@
 		command = name !== '' ? slugify(name) : '';
 	}
 
-	function handleCommandInput(e: Event) {
+	function handleCommandInput(_e: Event) {
 		hasManualEdit = true;
 	}
 
@@ -632,7 +632,7 @@
 
 		{#if history.length > 0}
 			<div class="space-y-0 flex-1 overflow-y-auto" on:scroll={handleHistoryScroll}>
-				{#each history as entry, index}
+				{#each history as entry, _index}
 					<div class="flex">
 						<!-- Content -->
 						<button

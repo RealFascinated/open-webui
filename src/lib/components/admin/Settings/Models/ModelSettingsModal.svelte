@@ -1,29 +1,26 @@
-<script>
-	import { toast } from 'svelte-sonner';
+<script lang="ts">
+	import {toast} from 'svelte-sonner';
 
-	import { createEventDispatcher, getContext, onMount } from 'svelte';
+	import {getContext, onMount} from 'svelte';
 	const i18n = getContext('i18n');
-	const dispatch = createEventDispatcher();
-
-	import { models, config as _config } from '$lib/stores';
-	import { DEFAULT_CAPABILITIES } from '$lib/constants';
-	import { deleteAllModels } from '$lib/apis/models';
-	import { getModelsConfig, setModelsConfig, setDefaultPromptSuggestions } from '$lib/apis/configs';
-	import { getBackendConfig } from '$lib/apis';
+	import {models, config as _config} from '$lib/stores';
+	import {DEFAULT_CAPABILITIES} from '$lib/constants';
+	import {deleteAllModels} from '$lib/apis/models';
+	import {getModelsConfig, setModelsConfig, setDefaultPromptSuggestions} from '$lib/apis/configs';
+	import {getBackendConfig} from '$lib/apis';
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import AdminDangerZone from '../../AdminDangerZone.svelte';
+	import AdminSettingsCard from '../../AdminSettingsCard.svelte';
 	import ModelList from './ModelList.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import Minus from '$lib/components/icons/Minus.svelte';
-	import Plus from '$lib/components/icons/Plus.svelte';
-	import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
+import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import ModelSelector from './ModelSelector.svelte';
-	import Model from '../Evaluations/Model.svelte';
-	import AdvancedParams from '$lib/components/chat/Settings/Advanced/AdvancedParams.svelte';
+import AdvancedParams from '$lib/components/chat/Settings/Advanced/AdvancedParams.svelte';
+import ModelEditorSection from '$lib/components/workspace/Models/ModelEditorSection.svelte';
 
 	import Capabilities from '$lib/components/workspace/Models/Capabilities.svelte';
 	import DefaultFeatures from '$lib/components/workspace/Models/DefaultFeatures.svelte';
@@ -40,10 +37,8 @@
 
 	let selectedTab = 'defaults';
 
-	let selectedModelId = '';
 	let defaultModelIds = [];
 
-	let selectedPinnedModelId = '';
 	let defaultPinnedModelIds = [];
 
 	let modelIds = [];
@@ -70,13 +65,13 @@
 		config = await getModelsConfig(localStorage.token);
 
 		if (config?.DEFAULT_MODELS) {
-			defaultModelIds = config.DEFAULT_MODELS.split(',').filter((id) => id);
+			defaultModelIds = config.DEFAULT_MODELS.split(',').filter((id: string) => id);
 		} else {
 			defaultModelIds = [];
 		}
 
 		if (config?.DEFAULT_PINNED_MODELS) {
-			defaultPinnedModelIds = config.DEFAULT_PINNED_MODELS.split(',').filter((id) => id);
+			defaultPinnedModelIds = config.DEFAULT_PINNED_MODELS.split(',').filter((id: string) => id);
 		} else {
 			defaultPinnedModelIds = [];
 		}
@@ -89,9 +84,9 @@
 
 		modelIds = [
 			// Add all IDs from MODEL_ORDER_LIST that exist in allModelIds
-			...modelOrderList.filter((id) => orderedSet.has(id) && allModelIds.includes(id)),
+			...modelOrderList.filter((id: string) => orderedSet.has(id) && allModelIds.includes(id)),
 			// Add remaining IDs not in MODEL_ORDER_LIST, sorted alphabetically
-			...allModelIds.filter((id) => !orderedSet.has(id)).sort((a, b) => a.localeCompare(b))
+			...allModelIds.filter((id: string) => !orderedSet.has(id)).sort((a, b) => a.localeCompare(b))
 		];
 
 		sortKey = '';
@@ -229,147 +224,110 @@
 							<div class="flex-1 mt-1 lg:mt-1 lg:h-[30rem] lg:max-h-[30rem] flex flex-col min-w-0">
 								<div class="w-full h-full overflow-y-auto overflow-x-hidden scrollbar-hidden">
 									{#if selectedTab === 'defaults'}
-										<ModelSelector
-											title={$i18n.t('Selected Models')}
-											tooltip={$i18n.t(
-												'Set the default models that are automatically selected for all users when a new chat is created.'
-											)}
-											models={$models.filter((model) => !(model?.info?.meta?.hidden ?? false))}
-											bind:modelIds={defaultModelIds}
-										/>
-
-										<hr class=" border-gray-50 dark:border-gray-800/10 my-2.5 w-full" />
-
-										<ModelSelector
-											title={$i18n.t('Pinned Models')}
-											tooltip={$i18n.t(
-												'Set the models that are automatically pinned to the sidebar for all users.'
-											)}
-											models={$models.filter((model) => !(model?.info?.meta?.hidden ?? false))}
-											bind:modelIds={defaultPinnedModelIds}
-										/>
-
-										<hr class=" border-gray-50 dark:border-gray-800/10 my-2.5 w-full" />
-
-										<div>
-											<button
-												class="flex w-full justify-between items-center"
-												type="button"
-												on:click={() => {
-													showDefaultPromptSuggestions = !showDefaultPromptSuggestions;
-												}}
+										<div class="space-y-3">
+											<AdminSettingsCard
+												title="Default Models"
+												description="Models selected automatically when a new chat is created."
 											>
-												<div class="text-xs text-gray-500 font-medium">
-													{$i18n.t('Prompt Suggestions')}
-												</div>
-												<div>
-													{#if showDefaultPromptSuggestions}
-														<ChevronUp className="size-3" />
-													{:else}
-														<ChevronDown className="size-3" />
-													{/if}
-												</div>
-											</button>
+												<ModelSelector
+													title={$i18n.t('Selected Models')}
+													tooltip={$i18n.t(
+														'Set the default models that are automatically selected for all users when a new chat is created.'
+													)}
+													models={$models.filter((model) => !(model?.info?.meta?.hidden ?? false))}
+													bind:modelIds={defaultModelIds}
+												/>
+											</AdminSettingsCard>
 
-											{#if showDefaultPromptSuggestions}
-												<div class="mt-2">
-													<PromptSuggestions bind:promptSuggestions />
+											<AdminSettingsCard
+												title="Pinned Models"
+												description="Models pinned to the sidebar for all users."
+											>
+												<ModelSelector
+													title={$i18n.t('Pinned Models')}
+													tooltip={$i18n.t(
+														'Set the models that are automatically pinned to the sidebar for all users.'
+													)}
+													models={$models.filter((model) => !(model?.info?.meta?.hidden ?? false))}
+													bind:modelIds={defaultPinnedModelIds}
+												/>
+											</AdminSettingsCard>
 
-													{#if promptSuggestions.length > 0}
-														<div class="text-xs text-left w-full mt-2 text-gray-500">
-															{$i18n.t(
-																'Adjusting these settings will apply changes universally to all users.'
-															)}
+											<ModelEditorSection
+												title="Prompt Suggestions"
+												description="Starter prompts shown globally in the chat placeholder."
+												status={promptSuggestions.length > 0
+													? String(promptSuggestions.length)
+													: $i18n.t('Default')}
+												collapsible={true}
+												bind:open={showDefaultPromptSuggestions}
+											>
+												<PromptSuggestions bind:promptSuggestions />
+
+												{#if promptSuggestions.length > 0}
+													<div class="text-xs text-left w-full text-gray-500">
+														{$i18n.t(
+															'Adjusting these settings will apply changes universally to all users.'
+														)}
+													</div>
+												{/if}
+											</ModelEditorSection>
+
+											<ModelEditorSection
+												title="Model Capabilities"
+												description="Default capabilities applied to all models."
+												status={Object.values(defaultCapabilities).filter(Boolean).length > 0
+													? String(Object.values(defaultCapabilities).filter(Boolean).length)
+													: $i18n.t('Default')}
+												collapsible={true}
+												bind:open={showDefaultCapabilities}
+											>
+												<Capabilities bind:capabilities={defaultCapabilities} />
+
+												{#if Object.keys(defaultCapabilities).filter((key) => defaultCapabilities[key]).length > 0}
+													{@const availableFeatures = Object.entries(defaultCapabilities)
+														.filter(
+															([key, value]) => value && ['web_search'].includes(key)
+														)
+														.map(([key, _value]) => key)}
+
+													{#if availableFeatures.length > 0}
+														<div class="pt-2 border-t border-gray-100/30 dark:border-gray-850/30">
+															<DefaultFeatures
+																{availableFeatures}
+																bind:featureIds={defaultFeatureIds}
+															/>
 														</div>
 													{/if}
-												</div>
-											{/if}
-										</div>
+												{/if}
 
-										<hr class=" border-gray-50 dark:border-gray-800/10 my-2.5 w-full" />
+												{#if defaultCapabilities.builtin_tools}
+													<div class="pt-2 border-t border-gray-100/30 dark:border-gray-850/30">
+														<BuiltinTools bind:builtinTools />
+													</div>
+												{/if}
+											</ModelEditorSection>
 
-										<div>
-											<button
-												class="flex w-full justify-between items-center"
-												type="button"
-												on:click={() => {
-													showDefaultCapabilities = !showDefaultCapabilities;
-												}}
+											<ModelEditorSection
+												title="Model Parameters"
+												description="Default generation parameters for all models."
+												status={Object.keys(defaultParams).filter((key) => defaultParams[key] != null).length > 0
+													? String(
+															Object.keys(defaultParams).filter((key) => defaultParams[key] != null)
+																.length
+														)
+													: $i18n.t('Default')}
+												collapsible={true}
+												bind:open={showDefaultParams}
 											>
-												<div class="text-xs text-gray-500 font-medium">
-													{$i18n.t('Model Capabilities')}
-												</div>
-												<div>
-													{#if showDefaultCapabilities}
-														<ChevronUp className="size-3" />
-													{:else}
-														<ChevronDown className="size-3" />
-													{/if}
-												</div>
-											</button>
-
-											{#if showDefaultCapabilities}
-												<div class="mt-2">
-													<Capabilities bind:capabilities={defaultCapabilities} />
-
-													{#if Object.keys(defaultCapabilities).filter((key) => defaultCapabilities[key]).length > 0}
-														{@const availableFeatures = Object.entries(defaultCapabilities)
-															.filter(
-																([key, value]) =>
-																	value &&
-																	['web_search'].includes(key)
-															)
-															.map(([key, value]) => key)}
-
-														{#if availableFeatures.length > 0}
-															<div class="mt-4">
-																<DefaultFeatures
-																	{availableFeatures}
-																	bind:featureIds={defaultFeatureIds}
-																/>
-															</div>
-														{/if}
-													{/if}
-
-													{#if defaultCapabilities.builtin_tools}
-														<div class="mt-4">
-															<BuiltinTools bind:builtinTools />
-														</div>
-													{/if}
-												</div>
-											{/if}
-										</div>
-
-										<hr class=" border-gray-50 dark:border-gray-800/10 my-2.5 w-full" />
-
-										<div>
-											<button
-												class="flex w-full justify-between items-center"
-												type="button"
-												on:click={() => {
-													showDefaultParams = !showDefaultParams;
-												}}
-											>
-												<div class="text-xs text-gray-500 font-medium">
-													{$i18n.t('Model Parameters')}
-												</div>
-												<div>
-													{#if showDefaultParams}
-														<ChevronUp className="size-3" />
-													{:else}
-														<ChevronDown className="size-3" />
-													{/if}
-												</div>
-											</button>
-
-											{#if showDefaultParams}
-												<div class="mt-2">
-													<AdvancedParams admin={true} custom={true} bind:params={defaultParams} />
-												</div>
-											{/if}
+												<AdvancedParams admin={true} custom={true} bind:params={defaultParams} />
+											</ModelEditorSection>
 										</div>
 									{:else if selectedTab === 'display'}
-										<div>
+										<AdminSettingsCard
+											title="Display"
+											description="Control the order models appear in the selector."
+										>
 											<div class="flex flex-col w-full">
 												<button
 													class="mb-1 flex gap-2"
@@ -413,7 +371,7 @@
 
 												<ModelList bind:modelIds />
 											</div>
-										</div>
+										</AdminSettingsCard>
 									{/if}
 								</div>
 

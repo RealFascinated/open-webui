@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
+
+	const i18n = getContext('i18n');
+
 	export let sports: {
 		team?: string;
 		league?: string;
@@ -36,20 +40,22 @@
 
 	<div class="flex border-b border-gray-50 dark:border-gray-850 text-xs">
 		<button
+			type="button"
 			class="flex-1 py-2 {tab === 'recent'
 				? 'text-gray-900 dark:text-gray-100 border-b-2 border-gray-900 dark:border-gray-100'
 				: 'text-gray-500 dark:text-gray-400'}"
 			on:click={() => (tab = 'recent')}
 		>
-			Recent Results
+			{$i18n.t('Recent Results')}
 		</button>
 		<button
+			type="button"
 			class="flex-1 py-2 {tab === 'upcoming'
 				? 'text-gray-900 dark:text-gray-100 border-b-2 border-gray-900 dark:border-gray-100'
 				: 'text-gray-500 dark:text-gray-400'}"
 			on:click={() => (tab = 'upcoming')}
 		>
-			Upcoming
+			{$i18n.t('Upcoming')}
 		</button>
 	</div>
 
@@ -59,7 +65,7 @@
 				<div class="flex items-center justify-between text-sm py-1">
 					<div class="min-w-0">
 						<div class="text-gray-800 dark:text-gray-200 truncate">vs {match.opponent}</div>
-						<div class="text-xs text-gray-500 dark:text-gray-400">{match.cometition}</div>
+						<div class="text-xs text-gray-500 dark:text-gray-400">{match.competition}</div>
 					</div>
 					<div class="text-right shrink-0 ml-3">
 						{#if match.score}
@@ -69,7 +75,9 @@
 					</div>
 				</div>
 			{:else}
-				<div class="text-xs text-gray-500 dark:text-gray-400 py-2">No recent results</div>
+				<div class="text-xs text-gray-500 dark:text-gray-400 py-2">
+					{$i18n.t('No recent results')}
+				</div>
 			{/each}
 		{:else}
 			{#each sports.upcoming ?? [] as match, idx (idx)}
@@ -81,7 +89,9 @@
 					<div class="text-xs text-gray-500 dark:text-gray-400 shrink-0 ml-3">{match.date}</div>
 				</div>
 			{:else}
-				<div class="text-xs text-gray-500 dark:text-gray-400 py-2">No upcoming fixtures</div>
+				<div class="text-xs text-gray-500 dark:text-gray-400 py-2">
+					{$i18n.t('No upcoming fixtures')}
+				</div>
 			{/each}
 		{/if}
 	</div>

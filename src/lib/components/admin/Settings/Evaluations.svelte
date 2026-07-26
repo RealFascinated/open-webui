@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { models, settings, user, config } from '$lib/stores';
-	import { createEventDispatcher, onMount, getContext, tick } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {models, user} from '$lib/stores';
+	import {createEventDispatcher, onMount, getContext} from 'svelte';
 
 	const dispatch = createEventDispatcher();
-	import { getModels } from '$lib/apis';
-	import { getConfig, updateConfig } from '$lib/apis/evaluations';
+	import {getModels} from '$lib/apis';
+	import {getConfig, updateConfig} from '$lib/apis/evaluations';
 
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -171,7 +171,7 @@
 										on:edit={(e) => {
 											editModelHandler(e.detail, index);
 										}}
-										on:delete={(e) => {
+										on:delete={(_e) => {
 											deleteModelHandler(index);
 										}}
 									/>

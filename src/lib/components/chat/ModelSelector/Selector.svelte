@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { marked } from 'marked';
 	import Fuse from 'fuse.js';
 
 	import dayjs from '$lib/dayjs';
@@ -10,8 +9,7 @@
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import { flyAndScale } from '$lib/utils/transitions';
 
-	import { createEventDispatcher, onMount, getContext, tick } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { onMount, getContext, tick } from 'svelte';
 
 	import { deleteModel, getOllamaVersion, pullModel } from '$lib/apis/ollama';
 
@@ -20,29 +18,25 @@
 		MODEL_DOWNLOAD_POOL,
 		models,
 		mobile,
-		temporaryChatEnabled,
-		settings,
-		config
+		settings
 	} from '$lib/stores';
 	import { toast } from 'svelte-sonner';
-	import { capitalizeFirstLetter, sanitizeResponseContent, splitStream } from '$lib/utils';
+	import { splitStream } from '$lib/utils';
 	import { getModels } from '$lib/apis';
 
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
-	import Check from '$lib/components/icons/Check.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import Switch from '$lib/components/common/Switch.svelte';
-	import ChatBubbleOval from '$lib/components/icons/ChatBubbleOval.svelte';
 
 	import ModelItem from './ModelItem.svelte';
 
 	const i18n = getContext('i18n');
-	const dispatch = createEventDispatcher();
+
+	export let onChange: (value: string) => void = () => {};
 
 	const selectValue = (newValue: string) => {
 		value = newValue;
-		dispatch('change', newValue);
+		onChange(newValue);
 	};
 
 	export let id = '';
@@ -189,7 +183,7 @@
 		searchValue
 			? fuse
 					.search(searchValue)
-					.map((e) => {
+					.map((e: Event) => {
 						return e.item;
 					})
 					.filter((item) => {
@@ -391,7 +385,7 @@
 	};
 
 	const setOllamaVersion = async () => {
-		ollamaVersion = await getOllamaVersion(localStorage.token).catch((error) => false);
+		ollamaVersion = await getOllamaVersion(localStorage.token).catch((_error) => false);
 	};
 
 	onMount(async () => {

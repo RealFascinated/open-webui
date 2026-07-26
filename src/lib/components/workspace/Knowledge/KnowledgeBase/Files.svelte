@@ -28,14 +28,14 @@
 	export let files = [];
 	export let directories = [];
 
-	export let onClick = (fileId) => {};
-	export let onDelete = (fileId) => {};
-	export let onRename = (fileId: string, name: string) => {};
-	export let onNavigateDirectory = (directoryId: string) => {};
-	export let onRenameDirectory = (id: string, name: string) => {};
-	export let onDeleteDirectory = (id: string) => {};
-	export let onMoveFileToDirectory = (fileId: string, directoryId: string) => {};
-	export let onMoveDirectoryToDirectory = (dirId: string, targetDirectoryId: string) => {};
+	export let onClick = (_fileId) => {};
+	export let onDelete = (_fileId) => {};
+	export let onRename = (_fileId: string, _name: string) => {};
+	export let onNavigateDirectory = (_directoryId: string) => {};
+	export let onRenameDirectory = (_id: string, _name: string) => {};
+	export let onDeleteDirectory = (_id: string) => {};
+	export let onMoveFileToDirectory = (_fileId: string, _directoryId: string) => {};
+	export let onMoveDirectoryToDirectory = (_dirId: string, _targetDirectoryId: string) => {};
 
 	let editingFileId: string | null = null;
 	let editName = '';

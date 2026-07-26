@@ -45,6 +45,7 @@ from open_webui.utils.payload import (
     apply_model_params_to_body_openai,
     apply_system_prompt_to_body,
 )
+from open_webui.utils.llamacpp_tokens import apply_task_thinking_policy
 from open_webui.utils.session_pool import cleanup_response, get_session, stream_wrapper
 
 log = logging.getLogger(__name__)
@@ -1125,6 +1126,8 @@ async def generate_chat_completion(
     if prefix_id:
         payload['model'] = payload['model'].replace(f'{prefix_id}.', '')
 
+    apply_task_thinking_policy(payload, metadata, api_config=api_config)
+
     return await send_request(
         f'{url}/api/chat',
         payload=json.dumps(payload),
@@ -1271,6 +1274,8 @@ async def generate_openai_chat_completion(
     prefix_id = api_config.get('prefix_id')
     if prefix_id:
         payload['model'] = payload['model'].replace(f'{prefix_id}.', '')
+
+    apply_task_thinking_policy(payload, metadata, api_config=api_config)
 
     return await send_request(
         f'{url}/v1/chat/completions',

@@ -10,17 +10,17 @@
 	dayjs.extend(isYesterday);
 	dayjs.extend(localizedFormat);
 
-	import { getContext, onMount } from 'svelte';
-	import type { Writable } from 'svelte/store';
-	import type { i18n as i18nType } from 'i18next';
+	import {getContext, onMount} from 'svelte';
+	import type {Writable} from 'svelte/store';
+	import type {i18n as i18nType} from 'i18next';
 
 	const i18n = getContext<Writable<i18nType>>('i18n');
 
-	import { formatDate } from '$lib/utils';
+	import {formatDate} from '$lib/utils';
 
-	import { settings, user, shortCodesToEmojis } from '$lib/stores';
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-	import { getMessageData } from '$lib/apis/channels';
+	import {settings, user} from '$lib/stores';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
+	import {getMessageData} from '$lib/apis/channels';
 
 	import Markdown from '$lib/components/chat/Messages/Markdown.svelte';
 	import ProfileImage from '$lib/components/chat/Messages/ProfileImage.svelte';
@@ -81,7 +81,6 @@
 	let swipeOffsetX = 0;
 	let isSwiping = false;
 	let swipeLocked = false; // locked to horizontal once determined
-	let swipeMessageEl: HTMLElement | null = null;
 
 	const SWIPE_THRESHOLD = 60;
 	const SWIPE_MAX = 100;

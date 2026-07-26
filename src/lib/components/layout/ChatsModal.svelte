@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { getContext } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {getContext} from 'svelte';
 
 	import dayjs from 'dayjs';
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
@@ -9,8 +9,8 @@
 	dayjs.extend(localizedFormat);
 	dayjs.extend(calendar);
 
-	import { deleteChatById } from '$lib/apis/chats';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {deleteChatById} from '$lib/apis/chats';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -21,8 +21,7 @@
 	import XMark from '../icons/XMark.svelte';
 	import ChevronUp from '../icons/ChevronUp.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
-	import Link from '../icons/Link.svelte';
-	import LinkSlash from '../icons/LinkSlash.svelte';
+import LinkSlash from '../icons/LinkSlash.svelte';
 	import Clipboard from '../icons/Clipboard.svelte';
 
 	const i18n = getContext('i18n');
@@ -43,12 +42,11 @@
 	export let orderBy = 'updated_at';
 	export let direction = 'desc'; // 'asc' or 'desc'
 
-	export let chatList = null;
+	export let chatList: Record<string, unknown>[] | null = null;
 	export let allChatsLoaded = false;
 	export let chatListLoading = false;
 
 	let selectedChatId = null;
-	let selectedIdx = 0;
 	let showDeleteConfirmDialog = false;
 
 	export let onUpdate = () => {};
@@ -158,7 +156,6 @@
 									class="p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition"
 									on:click={() => {
 										query = '';
-										selectedIdx = 0;
 									}}
 								>
 									<XMark className="size-3" strokeWidth="2" />
@@ -401,7 +398,7 @@
 
 							{#if !allChatsLoaded && loadHandler}
 								<Loader
-									on:visible={(e) => {
+									on:visible={(_e) => {
 										if (!chatListLoading) {
 											loadHandler();
 										}

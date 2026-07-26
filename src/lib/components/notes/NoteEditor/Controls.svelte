@@ -1,18 +1,17 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
+	import {getContext} from 'svelte';
 	const i18n = getContext('i18n');
 
 	import XMark from '$lib/components/icons/XMark.svelte';
-	import { models } from '$lib/stores';
-	import Collapsible from '$lib/components/common/Collapsible.svelte';
-	import FileItem from '$lib/components/common/FileItem.svelte';
+	import {models} from '$lib/stores';
+import FileItem from '$lib/components/common/FileItem.svelte';
 	import Image from '$lib/components/common/Image.svelte';
 
 	export let show = false;
 	export let selectedModelId = '';
 	export let files = [];
 
-	export let onUpdate = (files: unknown[]) => {
+	export let onUpdate = (_files: unknown[]) => {
 		// Default no-op function
 	};
 </script>
@@ -42,7 +41,7 @@
 			<div class=" text-xs font-medium mb-2">{$i18n.t('Files')}</div>
 
 			<div class="flex flex-col gap-1">
-				{#each files.filter((file) => file.type !== 'image') as file, fileIdx}
+				{#each files.filter((file) => file.type !== 'image') as file, _fileIdx}
 					<FileItem
 						className="w-full"
 						item={file}
@@ -68,7 +67,7 @@
 				{/each}
 
 				<div class="flex items-center flex-wrap gap-2 mt-1.5">
-					{#each files.filter((file) => file.type === 'image' || (file?.content_type ?? '').startsWith('image/')) as file, fileIdx}
+					{#each files.filter((file) => file.type === 'image' || (file?.content_type ?? '').startsWith('image/')) as file, _fileIdx}
 						<Image
 							src={file.url}
 							imageClassName=" size-14 rounded-xl object-cover"

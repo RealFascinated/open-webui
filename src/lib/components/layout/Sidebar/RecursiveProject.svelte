@@ -1,34 +1,18 @@
-<script>
-	import { getContext, createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
+<script lang="ts">
+	import {getContext, createEventDispatcher, onMount, onDestroy, tick} from 'svelte';
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
-
-	import DOMPurify from 'dompurify';
-	import fileSaver from 'file-saver';
+import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { goto } from '$app/navigation';
-	import { toast } from 'svelte-sonner';
+	import {goto} from '$app/navigation';
+	import {toast} from 'svelte-sonner';
 
-	import { chatId, mobile, selectedProject, showSidebar, user } from '$lib/stores';
+	import {mobile, selectedProject, showSidebar, user} from '$lib/stores';
 
-	import {
-		deleteProjectById,
-		updateProjectIsExpandedById,
-		updateProjectById,
-		updateProjectParentIdById,
-		getProjectById,
-		createNewProject,
-		getSharedProjectChats
-	} from '$lib/apis/projects';
-	import {
-		getChatById,
-		getChatsByProjectId,
-		getChatListByProjectId,
-		updateChatProjectIdById,
-		importChats
-	} from '$lib/apis/chats';
+	import {deleteProjectById, updateProjectIsExpandedById, updateProjectById, updateProjectParentIdById, getProjectById, createNewProject, getSharedProjectChats} from '$lib/apis/projects';
+	import {getChatById, getChatsByProjectId, getChatListByProjectId, updateChatProjectIdById, importChats} from '$lib/apis/chats';
 
 	import ChevronDown from '../../icons/ChevronDown.svelte';
 	import ChevronRight from '../../icons/ChevronRight.svelte';
@@ -59,8 +43,8 @@
 
 	export let parentDragged = false;
 
-	export let onDelete = (e) => {};
-	export let onItemMove = (e) => {};
+	export let onDelete = (_e: Event) => {};
+	export let onItemMove = (_e: Event) => {};
 
 	let projectElement;
 
@@ -78,7 +62,7 @@
 
 	let name = '';
 
-	const onDragOver = (e) => {
+	const onDragOver = (e: Event) => {
 		e.preventDefault();
 		e.stopPropagation();
 		if (dragged || parentDragged || projects[projectId]?.shared) {
@@ -87,7 +71,7 @@
 		draggedOver = true;
 	};
 
-	const onDrop = async (e) => {
+	const onDrop = async (e: Event) => {
 		e.preventDefault();
 		e.stopPropagation();
 		if (dragged || parentDragged) {
@@ -157,7 +141,7 @@
 							} else if (type === 'chat') {
 								open = true;
 
-								let chat = await getChatById(localStorage.token, id).catch((error) => {
+								let chat = await getChatById(localStorage.token, id).catch((_error) => {
 									return null;
 								});
 								if (!chat && item) {
@@ -219,7 +203,7 @@
 		}
 	};
 
-	const onDragLeave = (e) => {
+	const onDragLeave = (e: Event) => {
 		e.preventDefault();
 		if (dragged || parentDragged) {
 			return;
@@ -235,7 +219,7 @@
 	let x;
 	let y;
 
-	const onDragStart = (event) => {
+	const onDragStart = (event: Event) => {
 		event.stopPropagation();
 		event.dataTransfer.setDragImage(dragImage, 0, 0);
 
@@ -253,14 +237,14 @@
 		projectElement.style.opacity = '0.5'; // Optional: Visual cue to show it's being dragged
 	};
 
-	const onDrag = (event) => {
+	const onDrag = (event: Event) => {
 		event.stopPropagation();
 
 		x = event.clientX;
 		y = event.clientY;
 	};
 
-	const onDragEnd = (event) => {
+	const onDragEnd = (event: Event) => {
 		event.stopPropagation();
 
 		projectElement.style.opacity = '1'; // Reset visual cue after drag
@@ -368,7 +352,7 @@
 	};
 
 	const isExpandedUpdateHandler = async () => {
-		const res = await updateProjectIsExpandedById(localStorage.token, projectId, open).catch(
+		const _res = await updateProjectIsExpandedById(localStorage.token, projectId, open).catch(
 			(error) => {
 				toast.error(`${error}`);
 				return null;
@@ -394,7 +378,7 @@
 			try {
 				const res = await getSharedProjectChats(localStorage.token, projectId);
 				chats = res?.chats ?? [];
-			} catch (error) {
+			} catch (_error) {
 				// Fallback to regular API
 				chats = await getChatListByProjectId(localStorage.token, projectId).catch((error) => {
 					toast.error(`${error}`);
@@ -540,7 +524,7 @@
 					: ''}"
 				role="button"
 				tabindex="0"
-				on:dblclick={(e) => {
+				on:dblclick={(_e) => {
 					if (projects[projectId]?.shared) return;
 					if (clickTimer) {
 						clearTimeout(clickTimer); // cancel the single-click action

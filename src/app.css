@@ -228,6 +228,20 @@ select {
 	color: #9a9a9a;
 }
 
+@media (prefers-reduced-motion: reduce) {
+	.shimmer {
+		animation: none;
+		background: none;
+		-webkit-text-fill-color: currentColor;
+		color: inherit;
+	}
+
+	.animate-size,
+	.animate-pulse {
+		animation: none !important;
+	}
+}
+
 @keyframes smoothFadeIn {
 	0% {
 		opacity: 0;

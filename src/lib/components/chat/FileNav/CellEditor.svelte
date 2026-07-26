@@ -49,7 +49,7 @@
 			basicSetup,
 			keymap.of([indentWithTab]),
 			indentUnit.of('    '),
-			EditorView.updateListener.of((e) => {
+			EditorView.updateListener.of((e: Event) => {
 				if (e.docChanged) {
 					value = e.state.doc.toString();
 					dispatch('change', value);

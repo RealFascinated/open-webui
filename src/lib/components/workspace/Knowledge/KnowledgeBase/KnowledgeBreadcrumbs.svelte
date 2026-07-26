@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { afterUpdate, getContext } from 'svelte';
-	const i18n = getContext('i18n');
+	import {afterUpdate} from 'svelte';
 
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 

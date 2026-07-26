@@ -1,42 +1,27 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 	import dayjs from 'dayjs';
 
-	import { createEventDispatcher, onDestroy } from 'svelte';
-	import { onMount, tick, getContext } from 'svelte';
-	import type { Writable } from 'svelte/store';
-	import type { i18n as i18nType, t } from 'i18next';
+	import {createEventDispatcher, onDestroy} from 'svelte';
+	import {onMount, tick, getContext} from 'svelte';
+	import {get, type Writable} from 'svelte/store';
+	import type {i18n as i18nType} from 'i18next';
+	import type {ChatHistory, ChatMessage, ChatFile} from '$lib/types/chat';
+	import type {Settings, Model} from '$lib/stores';
 
 	const i18n = getContext<Writable<i18nType>>('i18n');
 
 	const dispatch = createEventDispatcher();
 
-	import { createNewFeedback, getFeedbackById, updateFeedbackById } from '$lib/apis/evaluations';
-	import { getChatById } from '$lib/apis/chats';
-	import { generateTags } from '$lib/apis';
+	import {createNewFeedback, updateFeedbackById} from '$lib/apis/evaluations';
+	import {getChatById} from '$lib/apis/chats';
+	import {generateTags} from '$lib/apis';
 
-	import {
-		audioQueue,
-		config,
-		models,
-		settings,
-		temporaryChatEnabled,
-		TTSWorker,
-		user
-	} from '$lib/stores';
-	import { synthesizeOpenAISpeech } from '$lib/apis/audio';
-	import { imageGenerations } from '$lib/apis/images';
-	import {
-		copyToClipboard as _copyToClipboard,
-		approximateToHumanReadable,
-		getMessageContentParts,
-		sanitizeResponseContent,
-		createMessagesList,
-		formatDate,
-		removeDetails,
-		removeAllDetails
-	} from '$lib/utils';
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import {audioQueue, config, mobile, models, settings, temporaryChatEnabled, TTSWorker, user} from '$lib/stores';
+	import {synthesizeOpenAISpeech} from '$lib/apis/audio';
+	
+	import {copyToClipboard as _copyToClipboard, getMessageContentParts, createMessagesList, formatDate, removeAllDetails} from '$lib/utils';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 	import equal from 'fast-deep-equal';
 
 	import Name from './Name.svelte';
@@ -44,9 +29,7 @@
 	import Skeleton from './Skeleton.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import RateComment from './RateComment.svelte';
-	import Spinner from '$lib/components/common/Spinner.svelte';
-	import WebSearchResults from './ResponseMessage/WebSearchResults.svelte';
-	import Sparkles from '$lib/components/icons/Sparkles.svelte';
+import Sparkles from '$lib/components/icons/Sparkles.svelte';
 
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 
@@ -54,50 +37,59 @@
 	import Citations from './Citations.svelte';
 	import CodeExecutions from './CodeExecutions.svelte';
 	import ContentRenderer from './ContentRenderer.svelte';
-	import { KokoroWorker } from '$lib/workers/KokoroWorker';
+	import {KokoroWorker} from '$lib/workers/KokoroWorker';
 	import FollowUps from './ResponseMessage/FollowUps.svelte';
-	import FollowupChips from './ResponseMessage/FollowupChips.svelte';
 	import MessageRichResults from './ResponseMessage/MessageRichResults.svelte';
 	import {
 		getAssistantVisibleText,
 		getHiddenRichToolNames,
-		shouldShowRichContent,
-		shouldShowResponseSkeleton
+		shouldShowMessageResponseSkeleton,
+		shouldShowRichContent
 	} from '$lib/utils/messageRichContent';
-	import { fade } from 'svelte/transition';
-	import { flyAndScale } from '$lib/utils/transitions';
+	import {fade} from 'svelte/transition';
+	
 	import RegenerateMenu from './ResponseMessage/RegenerateMenu.svelte';
 	import StatusHistory from './ResponseMessage/StatusHistory.svelte';
 	import OutputEditView from './OutputEditView.svelte';
-	import { getOutputText, replaceOutputMessageText, type OutputItem } from './structuredOutput';
+	import {replaceOutputMessageText, type OutputItem} from './structuredOutput';
 
-	interface MessageType {
-		id: string;
+	type MessageStatus = {
+		done?: boolean;
+		action?: string;
+		description?: string;
+		urls?: string[];
+		query?: string;
+		hidden?: boolean;
+		[key: string]: unknown;
+	};
+
+	type MessageAnnotation = {
+		type?: string;
+		rating?: number;
+		tags?: string[];
+		[key: string]: unknown;
+	};
+
+	type ResponseChatMessage = ChatMessage & {
 		model: string;
 		content: string;
-		output?: OutputItem[];
-		files?: { type: string; url: string }[];
 		timestamp: number;
 		role: string;
-		statusHistory?: {
-			done: boolean;
-			action: string;
-			description: string;
-			urls?: string[];
-			query?: string;
-		}[];
-		status?: {
-			done: boolean;
-			action: string;
-			description: string;
-			urls?: string[];
-			query?: string;
-		};
 		done: boolean;
+		output?: OutputItem[];
+		statusHistory?: MessageStatus[];
+		status?: MessageStatus;
+		sources?: unknown[];
+		citations?: unknown[];
+		followUps?: string[];
+		suggestedFollowups?: string[];
+		selectedModelId?: string;
+		feedbackId?: string;
+		arena?: boolean;
+		annotation?: MessageAnnotation;
+		files?: ChatFile[];
 		usage?: Record<string, unknown>;
-		error?: boolean | { content: string };
-		sources?: string[];
-		code_executions?: {
+		code_executions?: Array<{
 			uuid: string;
 			name: string;
 			code: string;
@@ -107,7 +99,7 @@
 				output?: string;
 				files?: { name: string; url: string }[];
 			};
-		}[];
+		}>;
 		info?: {
 			openai?: boolean;
 			prompt_tokens?: number;
@@ -121,15 +113,83 @@
 			load_duration?: number;
 			usage?: unknown;
 		};
-		annotation?: { type: string; rating: number };
-	}
+	};
+
+	type ResponseMessageSettings = Settings & {
+		showFloatingActionButtons?: boolean;
+		chatFadeStreamingText?: boolean;
+		regenerateMenu?: boolean;
+		keepFollowUpPrompts?: boolean;
+		insertFollowUpPrompt?: boolean;
+	};
+
+	type ModelAction = {
+		id: string;
+		name?: string;
+		icon?: string;
+		[key: string]: unknown;
+	};
+
+	type ModelWithActions = Model & {
+		actions?: ModelAction[];
+	};
+
+	type TtsSettings = {
+		engine?: string;
+		voice?: string;
+		playbackRate?: number;
+		defaultVoice?: string;
+		engineConfig?: { dtype?: string };
+	};
+
+	type FeedbackData = MessageAnnotation & {
+		model_id: string;
+		sibling_model_ids?: string[];
+		tags?: string[];
+	};
+
+	type FeedbackMeta = {
+		arena?: boolean;
+		model_id: string;
+		message_id: string;
+		message_index: number;
+		chat_id: string;
+		base_models?: Record<string, string | null>;
+	};
+
+	const getResponseSettings = (): ResponseMessageSettings => $settings as ResponseMessageSettings;
+
+	const getTtsSettings = (): TtsSettings => ($settings.audio?.tts as TtsSettings | undefined) ?? {};
+
+	const toChatDirection = (
+		direction: string | undefined
+	): 'ltr' | 'rtl' | 'auto' | null | undefined => {
+		if (direction === 'LTR') return 'ltr';
+		if (direction === 'RTL') return 'rtl';
+		if (direction === 'auto') return 'auto';
+		return direction?.toLowerCase() as 'ltr' | 'rtl' | 'auto' | undefined;
+	};
+
+	const getModelActions = (responseModel: Model | undefined): ModelAction[] =>
+		(responseModel as ModelWithActions | undefined)?.actions ?? [];
+
+	const getErrorContent = (msg: ResponseChatMessage): string => {
+		if (typeof msg.error === 'object' && msg.error !== null && 'content' in msg.error) {
+			return msg.error.content ?? msg.content ?? '';
+		}
+		return msg.content ?? '';
+	};
+
+	const getPlaybackRate = (): number => getTtsSettings().playbackRate ?? 1;
 
 	export let chatId = '';
-	export let history;
-	export let messageId;
-	export const selectedModels = [];
+	export let history: ChatHistory;
+	export let messageId: string;
+	export const selectedModels: string[] = [];
 
-	let message: MessageType = structuredClone(history.messages[messageId]);
+	let message: ResponseChatMessage = structuredClone(
+		history.messages[messageId]
+	) as ResponseChatMessage;
 	$: if (history.messages) {
 		const source = history.messages[messageId];
 		if (source) {
@@ -138,17 +198,17 @@
 			if (
 				message.content !== source.content ||
 				message.done !== source.done ||
-				message.output?.length !== source.output?.length
+				message.output?.length !== (source as ResponseChatMessage).output?.length
 			) {
-				message = structuredClone(source);
+				message = structuredClone(source) as ResponseChatMessage;
 			} else if (!equal(message, source)) {
 				// Slow path: full comparison for infrequent changes (sources, annotations, status, etc.)
-				message = structuredClone(source);
+				message = structuredClone(source) as ResponseChatMessage;
 			}
 		}
 	}
 
-	export let siblings;
+	export let siblings: string[];
 
 	export let setInputText: (...args: unknown[]) => unknown = () => {};
 	export let gotoMessage: (...args: unknown[]) => unknown = () => {};
@@ -172,44 +232,46 @@
 	export let readOnly = false;
 	export let editCodeBlock = true;
 	export let topPadding = false;
+	export let autoScroll = true;
 
-	let citationsElement: HTMLDivElement;
+	let citationsElement: Citations | undefined;
 
 	let contentContainerElement: HTMLDivElement;
 	let buttonsContainerElement: HTMLDivElement;
 	let showDeleteConfirm = false;
 
-	let model = null;
+	let model: Model | undefined = undefined;
 	$: model = $models.find((m) => m.id === message.model);
 
-	$: statusEntries = message?.statusHistory ?? [...(message?.status ? [message?.status] : [])];
-	$: hasVisibleStatus =
-		(model?.info?.meta?.capabilities?.status_updates ?? true) &&
-		statusEntries.length > 0 &&
-		!(statusEntries.at(-1)?.hidden ?? false);
 	$: visibleResponseContent = getAssistantVisibleText(message);
 	$: hasResponseContent = Boolean((message.content ?? '').trim() || message.output?.length);
 	$: showRichContent = shouldShowRichContent(message);
 	$: hiddenRichToolNames = getHiddenRichToolNames(message, showRichContent);
-	$: showResponseSkeleton =
-		shouldShowResponseSkeleton(message) && !message.error && !hasVisibleStatus;
+	$: showHoverActions = showHoverActions || $mobile;
+	$: allFollowUps = [
+		...new Set([...(message.followUps ?? []), ...(message.suggestedFollowups ?? [])])
+	];
+	$: followUpVariant =
+		(message.suggestedFollowups ?? []).length > 0 && (message.followUps ?? []).length === 0
+			? 'chips'
+			: 'list';
+	$: showResponseSkeleton = shouldShowMessageResponseSkeleton(message) && !message.error;
 
 	let edit = false;
 	let editedContent = '';
-	let editedOutput: unknown[] | null = null;
+	let editedOutput: OutputItem[] | null = null;
 	let editTextAreaElement: HTMLTextAreaElement;
 
 	let messageIndexEdit = false;
 
 	let speaking = false;
-	let speakingIdx: number | undefined;
 
 	let loadingSpeech = false;
 	let speakAbort: AbortController | null = null;
 
 	let showRateComment = false;
 
-	const copyToClipboard = async (text) => {
+	const copyToClipboard = async (text: string) => {
 		text = removeAllDetails(text);
 
 		if (($config?.ui?.response_watermark ?? '').trim() !== '') {
@@ -234,16 +296,22 @@
 		}
 
 		speaking = false;
-		speakingIdx = undefined;
 		loadingSpeech = false;
 	};
 
 	// Resolve voice: model-specific > user settings > config default
-	const getVoiceId = () =>
-		model?.info?.meta?.tts?.voice ??
-		($settings?.audio?.tts?.defaultVoice === $config.audio.tts.voice
-			? ($settings?.audio?.tts?.voice ?? $config?.audio?.tts?.voice)
-			: $config?.audio?.tts?.voice);
+	const getVoiceId = (): string => {
+		const modelMeta = model?.info?.meta as { tts?: { voice?: string } } | undefined;
+		const configVoice = $config?.audio?.tts?.voice ?? '';
+		const ttsSettings = getTtsSettings();
+
+		return (
+			modelMeta?.tts?.voice ??
+			(ttsSettings.defaultVoice === configVoice
+				? (ttsSettings.voice ?? configVoice)
+				: configVoice)
+		);
+	};
 
 	const speak = async () => {
 		const content = visibleResponseContent;
@@ -258,16 +326,15 @@
 
 		speaking = true;
 
-		if ($config.audio.tts.engine === '') {
-			let voices = [];
+		if (($config?.audio?.tts?.engine ?? '') === '') {
 			const getVoicesLoop = setInterval(() => {
-				voices = speechSynthesis.getVoices();
+				const voices = speechSynthesis.getVoices();
 				if (voices.length > 0) {
 					clearInterval(getVoicesLoop);
 
 					const voice = voices.find((v) => v.voiceURI === getVoiceId());
 					const speech = new SpeechSynthesisUtterance(content);
-					speech.rate = $settings.audio?.tts?.playbackRate ?? 1;
+					speech.rate = getPlaybackRate();
 
 					speech.onend = () => {
 						speaking = false;
@@ -284,11 +351,17 @@
 				}
 			}, 100);
 		} else {
-			$audioQueue.setId(`${message.id}`);
-			$audioQueue.setPlaybackRate($settings.audio?.tts?.playbackRate ?? 1);
-			$audioQueue.onStopped = () => {
+			const queue = $audioQueue;
+			if (!queue) {
 				speaking = false;
-				speakingIdx = undefined;
+				loadingSpeech = false;
+				return;
+			}
+
+			queue.setId(message.id);
+			queue.setPlaybackRate(getPlaybackRate());
+			queue.onStopped = () => {
+				speaking = false;
 			};
 
 			loadingSpeech = true;
@@ -307,23 +380,28 @@
 			const voiceId = getVoiceId();
 			console.debug('Prepared message content for TTS', messageContentParts, 'voice:', voiceId);
 
-			if ($settings.audio?.tts?.engine === 'browser-kokoro') {
-				if (!$TTSWorker) {
-					await TTSWorker.set(
-						new KokoroWorker({
-							dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'
-						})
-					);
-
-					await $TTSWorker.init();
+			if (getTtsSettings().engine === 'browser-kokoro') {
+				const ttsWorkerStore = TTSWorker as Writable<KokoroWorker | null>;
+				let worker = get(ttsWorkerStore);
+				if (!worker) {
+					ttsWorkerStore.set(new KokoroWorker(getTtsSettings().engineConfig?.dtype ?? 'fp32'));
+					worker = get(ttsWorkerStore);
 				}
+
+				if (!worker) {
+					speaking = false;
+					loadingSpeech = false;
+					return;
+				}
+
+				await worker.init();
 
 				for (const [, sentence] of messageContentParts.entries()) {
 					if (signal.aborted) return;
 
-					const url = await $TTSWorker
+					const url = await worker
 						.generate({ text: sentence, voice: voiceId })
-						.catch((error) => {
+						.catch((error: unknown) => {
 							console.error(error);
 							toast.error(`${error}`);
 							speaking = false;
@@ -333,7 +411,7 @@
 					if (signal.aborted) return;
 
 					if (url && speaking) {
-						$audioQueue.enqueue(url);
+						queue.enqueue(url);
 						loadingSpeech = false;
 					}
 				}
@@ -342,7 +420,7 @@
 					if (signal.aborted) return;
 
 					const res = await synthesizeOpenAISpeech(localStorage.token, voiceId, sentence).catch(
-						(error) => {
+						(error: unknown) => {
 							console.error(error);
 							toast.error(`${error}`);
 							speaking = false;
@@ -355,7 +433,7 @@
 					if (res && speaking) {
 						const blob = await res.blob();
 						const url = URL.createObjectURL(blob);
-						$audioQueue.enqueue(url);
+						queue.enqueue(url);
 						loadingSpeech = false;
 					}
 				}
@@ -363,11 +441,11 @@
 		}
 	};
 
-	let preprocessedDetailsCache = [];
+	let preprocessedDetailsCache: string[] = [];
 
 	function preprocessForEditing(content: string): string {
 		// Replace <details>...</details> with unique ID placeholder
-		const detailsBlocks = [];
+		const detailsBlocks: string[] = [];
 		let i = 0;
 
 		content = content.replace(/<details[\s\S]*?<\/details>/gi, (match) => {
@@ -410,7 +488,9 @@
 			editTextAreaElement.style.height = '';
 			editTextAreaElement.style.height = `${editTextAreaElement.scrollHeight}px`;
 
-			if (messagesContainer) messagesContainer.scrollTop = savedScrollTop;
+			if (messagesContainer != null && savedScrollTop != null) {
+				messagesContainer.scrollTop = savedScrollTop;
+			}
 		}
 	};
 
@@ -458,7 +538,7 @@
 		feedbackLoading = true;
 		console.log('Feedback', rating, details);
 
-		const updatedMessage = {
+		const updatedMessage: ResponseChatMessage = {
 			...message,
 			annotation: {
 				...(message?.annotation ?? {}),
@@ -475,17 +555,29 @@
 		}
 
 		const messages = createMessagesList(history, message.id);
+		const parentId = message.parentId;
+		const parentMessage = parentId ? history.messages[parentId] : undefined;
 
-		let feedbackItem = {
+		let feedbackItem: {
+			type: string;
+			data: FeedbackData;
+			meta: FeedbackMeta;
+			snapshot: { chat: typeof chat };
+		} = {
 			type: 'rating',
 			data: {
 				...(updatedMessage?.annotation ? updatedMessage.annotation : {}),
 				model_id: message?.selectedModelId ?? message.model,
-				...(history.messages[message.parentId].childrenIds.length > 1
+				...(parentMessage?.childrenIds && parentMessage.childrenIds.length > 1
 					? {
-							sibling_model_ids: history.messages[message.parentId].childrenIds
-								.filter((id) => id !== message.id)
-								.map((id) => history.messages[id]?.selectedModelId ?? history.messages[id].model)
+							sibling_model_ids: parentMessage.childrenIds
+								.filter((id: string) => id !== message.id)
+								.map(
+									(id: string) =>
+										(history.messages[id] as ResponseChatMessage | undefined)?.selectedModelId ??
+										history.messages[id]?.model ??
+										''
+								)
 						}
 					: {})
 			},
@@ -504,10 +596,10 @@
 		const baseModels = [
 			feedbackItem.data.model_id,
 			...(feedbackItem.data.sibling_model_ids ?? [])
-		].reduce((acc, modelId) => {
-			const model = $models.find((m) => m.id === modelId);
-			if (model) {
-				acc[model.id] = model?.info?.base_model_id ?? null;
+		].reduce<Record<string, string | null>>((acc, modelId) => {
+			const responseModel = $models.find((m) => m.id === modelId);
+			if (responseModel) {
+				acc[responseModel.id] = responseModel?.info?.base_model_id ?? null;
 			} else {
 				// Log or handle cases where corresponding model is not found
 				console.warn(`Model with ID ${modelId} not found`);
@@ -516,7 +608,7 @@
 		}, {});
 		feedbackItem.meta.base_models = baseModels;
 
-		let feedback = null;
+		let feedback: { id: string } | null = null;
 		if (message?.feedbackId) {
 			feedback = await updateFeedbackById(
 				localStorage.token,
@@ -524,10 +616,12 @@
 				feedbackItem
 			).catch((error) => {
 				toast.error(`${error}`);
+				return null;
 			});
 		} else {
 			feedback = await createNewFeedback(localStorage.token, feedbackItem).catch((error) => {
 				toast.error(`${error}`);
+				return null;
 			});
 
 			if (feedback) {
@@ -545,26 +639,33 @@
 
 			if (!updatedMessage.annotation?.tags && (message?.content ?? '') !== '') {
 				// attempt to generate tags
-				const tags = await generateTags(localStorage.token, message.model, messages, chatId).catch(
-					(error) => {
-						console.error(error);
-						return [];
-					}
-				);
+				const tags = await generateTags(
+					localStorage.token,
+					message.model,
+					messages as unknown as string,
+					chatId
+				).catch((error) => {
+					console.error(error);
+					return [];
+				});
 				console.log(tags);
 
 				if (tags) {
-					updatedMessage.annotation.tags = tags;
+					if (updatedMessage.annotation) {
+						updatedMessage.annotation.tags = tags;
+					}
 					feedbackItem.data.tags = tags;
 
 					saveMessage(message.id, updatedMessage);
-					await updateFeedbackById(
-						localStorage.token,
-						updatedMessage.feedbackId,
-						feedbackItem
-					).catch((error) => {
-						toast.error(`${error}`);
-					});
+					if (updatedMessage.feedbackId) {
+						await updateFeedbackById(
+							localStorage.token,
+							updatedMessage.feedbackId,
+							feedbackItem
+						).catch((error) => {
+							toast.error(`${error}`);
+						});
+					}
 				}
 			}
 		}
@@ -598,11 +699,15 @@
 		}
 	};
 
-	const contentCopyHandler = (e) => {
+	const contentCopyHandler = (e: ClipboardEvent) => {
 		if (contentContainerElement) {
 			e.preventDefault();
 			// Get the selected HTML
 			const selection = window.getSelection();
+			if (!selection || selection.rangeCount === 0) {
+				return;
+			}
+
 			const range = selection.getRangeAt(0);
 			const tempDiv = document.createElement('div');
 
@@ -621,9 +726,49 @@
 			});
 
 			// Put cleaned HTML + plain text into clipboard
-			e.clipboardData.setData('text/html', tempDiv.innerHTML);
-			e.clipboardData.setData('text/plain', selection.toString());
+			e.clipboardData?.setData('text/html', tempDiv.innerHTML);
+			e.clipboardData?.setData('text/plain', selection.toString());
 		}
+	};
+
+	const handleTaskClick = async (event: unknown) => {
+		console.log(event);
+	};
+
+	const handleSourceClick = async (id: unknown) => {
+		console.log(id);
+
+		if (citationsElement) {
+			citationsElement.showSourceModal(id);
+		}
+	};
+
+	const handleContentSave = ({
+		raw,
+		oldContent,
+		newContent
+	}: {
+		raw: string;
+		oldContent: string;
+		newContent: string;
+	}) => {
+		const sourceMessage = history.messages[message.id] as ResponseChatMessage;
+		if (sourceMessage.output?.length) {
+			const updatedOutput = replaceOutputMessageText(
+				sourceMessage.output,
+				oldContent,
+				newContent
+			);
+			if (updatedOutput !== sourceMessage.output) {
+				sourceMessage.output = updatedOutput;
+			} else {
+				sourceMessage.content = sourceMessage.content.replace(raw, raw.replace(oldContent, newContent));
+			}
+		} else {
+			sourceMessage.content = sourceMessage.content.replace(raw, raw.replace(oldContent, newContent));
+		}
+
+		updateChat();
 	};
 
 	onMount(async () => {
@@ -647,8 +792,7 @@
 		if (contentContainerElement) {
 			contentContainerElement.removeEventListener('copy', contentCopyHandler);
 		}
-	});
-</script>
+	});</script>
 
 <DeleteConfirmDialog
 	bind:show={showDeleteConfirm}
@@ -662,7 +806,7 @@
 	<div
 		class=" flex w-full message-{message.id}"
 		id="message-{message.id}"
-		dir={$settings.chatDirection}
+		dir={toChatDirection($settings.chatDirection)}
 		style="scroll-margin-top: 3rem;"
 	>
 		<div class={`shrink-0 ltr:mr-3 rtl:ml-3 hidden @lg:flex mt-1 `}>
@@ -697,7 +841,11 @@
 				<div class="chat-{message.role} w-full min-w-full markdown-prose">
 					<div>
 						{#if model?.info?.meta?.capabilities?.status_updates ?? true}
-							<StatusHistory statusHistory={message?.statusHistory} messageDone={message?.done} />
+							<StatusHistory
+								statusHistory={message?.statusHistory}
+								messageDone={message?.done}
+								expand={$settings?.expandDetails ?? false}
+							/>
 						{/if}
 
 						{#if edit === true}
@@ -707,7 +855,7 @@
 									<OutputEditView
 										output={editedOutput}
 										onChange={(updated) => {
-											editedOutput = updated;
+											editedOutput = updated as OutputItem[];
 										}}
 									/>
 								{:else}
@@ -720,11 +868,14 @@
 										on:input={(e) => {
 											const messagesContainer = document.getElementById('messages-container');
 											const savedScrollTop = messagesContainer?.scrollTop;
+											const target = e.currentTarget as HTMLTextAreaElement;
 
-											e.target.style.height = '';
-											e.target.style.height = `${e.target.scrollHeight}px`;
+											target.style.height = '';
+											target.style.height = `${target.scrollHeight}px`;
 
-											if (messagesContainer) messagesContainer.scrollTop = savedScrollTop;
+											if (messagesContainer != null && savedScrollTop != null) {
+												messagesContainer.scrollTop = savedScrollTop;
+											}
 										}}
 										on:keydown={(e) => {
 											if (e.key === 'Escape') {
@@ -785,7 +936,7 @@
 							id="response-content-container"
 						>
 							{#if showResponseSkeleton}
-								<Skeleton />
+								<Skeleton labelled={true} />
 							{:else if hasResponseContent && message.error !== true}
 								<!-- always show message contents even if there's an error -->
 								<!-- unless message.error === true which is legacy error handling, where the error message is stored in message.content -->
@@ -793,57 +944,25 @@
 									id={`${chatId}-${message.id}`}
 									content={message.content}
 									output={message.output}
-									hiddenToolNames={hiddenRichToolNames}
-									sources={message.sources}
+									hiddenToolNames={hiddenRichToolNames as never}
+									sources={message.sources as never}
 									floatingButtons={message?.done &&
 										!readOnly &&
-										($settings?.showFloatingActionButtons ?? true)}
+										(getResponseSettings().showFloatingActionButtons ?? true)}
 									save={!readOnly}
 									preview={!readOnly}
 									{editCodeBlock}
 									{topPadding}
-									done={($settings?.chatFadeStreamingText ?? true)
+									done={(getResponseSettings().chatFadeStreamingText ?? true)
 										? (message?.done ?? false)
 										: true}
-									{model}
-									onTaskClick={async (e) => {
-										console.log(e);
-									}}
-									onSourceClick={async (id) => {
-										console.log(id);
-
-										if (citationsElement) {
-											citationsElement?.showSourceModal(id);
-										}
-									}}
+									model={model as never}
+									onTaskClick={handleTaskClick as unknown as () => void}
+									onSourceClick={handleSourceClick as unknown as () => void}
 									onSetInputText={(text) => {
 										setInputText(text);
 									}}
-									onSave={({ raw, oldContent, newContent }) => {
-										const sourceMessage = history.messages[message.id];
-										if (sourceMessage.output?.length) {
-											const updatedOutput = replaceOutputMessageText(
-												sourceMessage.output,
-												oldContent,
-												newContent
-											);
-											if (updatedOutput !== sourceMessage.output) {
-												sourceMessage.output = updatedOutput;
-											} else {
-												sourceMessage.content = sourceMessage.content.replace(
-													raw,
-													raw.replace(oldContent, newContent)
-												);
-											}
-										} else {
-											sourceMessage.content = sourceMessage.content.replace(
-												raw,
-												raw.replace(oldContent, newContent)
-											);
-										}
-
-										updateChat();
-									}}
+									onSave={handleContentSave as unknown as () => void}
 								/>
 							{/if}
 
@@ -852,11 +971,13 @@
 									{message}
 									assistantText={visibleResponseContent}
 									{isLastMessage}
+									toolSourcePrefix={`${chatId}-${message.id}`}
+									autoScroll={autoScroll && ($settings?.chatResponseAutoScroll ?? true)}
 								/>
 							{/if}
 
 							{#if message?.error}
-								<Error content={message?.error?.content ?? message.content} />
+								<Error content={getErrorContent(message)} />
 							{/if}
 
 							{#if (message?.sources || message?.citations) && (model?.info?.meta?.capabilities?.citations ?? true)}
@@ -918,15 +1039,17 @@
 												min="1"
 												max={siblings.length}
 												on:focus={(e) => {
-													e.target.select();
+													(e.currentTarget as HTMLInputElement).select();
 												}}
 												on:blur={(e) => {
-													gotoMessage(message, e.target.value - 1);
+													const target = e.currentTarget as HTMLInputElement;
+													gotoMessage(message, Number(target.value) - 1);
 													messageIndexEdit = false;
 												}}
 												on:keydown={(e) => {
 													if (e.key === 'Enter') {
-														gotoMessage(message, e.target.value - 1);
+														const target = e.currentTarget as HTMLInputElement;
+														gotoMessage(message, Number(target.value) - 1);
 														messageIndexEdit = false;
 													}
 												}}
@@ -941,7 +1064,9 @@
 												messageIndexEdit = true;
 
 												await tick();
-												const input = document.getElementById(`message-index-input-${message.id}`);
+												const input = document.getElementById(
+													`message-index-input-${message.id}`
+												) as HTMLInputElement | null;
 												if (input) {
 													input.focus();
 													input.select();
@@ -983,7 +1108,7 @@
 										<Tooltip content={$i18n.t('Edit')} placement="bottom">
 											<button
 												aria-label={$i18n.t('Edit')}
-												class="{isLastMessage || ($settings?.highContrastMode ?? false)
+												class="{showHoverActions
 													? 'visible'
 													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 												on:click={() => {
@@ -1012,7 +1137,7 @@
 								<Tooltip content={$i18n.t('Copy')} placement="bottom">
 									<button
 										aria-label={$i18n.t('Copy')}
-										class="{isLastMessage || ($settings?.highContrastMode ?? false)
+										class="{showHoverActions
 											? 'visible'
 											: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition copy-response-button"
 										on:click={() => {
@@ -1041,7 +1166,7 @@
 										<button
 											aria-label={$i18n.t('Read Aloud')}
 											id="speak-button-{message.id}"
-											class="{isLastMessage || ($settings?.highContrastMode ?? false)
+											class="{showHoverActions
 												? 'visible'
 												: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 											on:click={() => {
@@ -1127,7 +1252,7 @@
 										<Tooltip content={$i18n.t('Good Response')} placement="bottom">
 											<button
 												aria-label={$i18n.t('Good Response')}
-												class="{isLastMessage || ($settings?.highContrastMode ?? false)
+												class="{showHoverActions
 													? 'visible'
 													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg {(
 													message?.annotation?.rating ?? ''
@@ -1164,7 +1289,7 @@
 										<Tooltip content={$i18n.t('Bad Response')} placement="bottom">
 											<button
 												aria-label={$i18n.t('Bad Response')}
-												class="{isLastMessage || ($settings?.highContrastMode ?? false)
+												class="{showHoverActions
 													? 'visible'
 													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg {(
 													message?.annotation?.rating ?? ''
@@ -1205,7 +1330,7 @@
 												aria-label={$i18n.t('Continue Response')}
 												type="button"
 												id="continue-response-button"
-												class="{isLastMessage || ($settings?.highContrastMode ?? false)
+												class="{showHoverActions
 													? 'visible'
 													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 												on:click={() => {
@@ -1235,7 +1360,7 @@
 									{/if}
 
 									{#if $user?.role === 'admin' || ($user?.permissions?.chat?.regenerate_response ?? true)}
-										{#if $settings?.regenerateMenu ?? true}
+										{#if getResponseSettings().regenerateMenu ?? true}
 											<button
 												type="button"
 												class="hidden regenerate-response-button"
@@ -1244,7 +1369,7 @@
 													showRateComment = false;
 													regenerateResponse(message);
 
-													(model?.actions ?? []).forEach((action) => {
+													(getModelActions(model)).forEach((action) => {
 														dispatch('action', {
 															id: action.id,
 															event: {
@@ -1263,7 +1388,7 @@
 													showRateComment = false;
 													regenerateResponse(message, prompt);
 
-													(model?.actions ?? []).forEach((action) => {
+													(getModelActions(model)).forEach((action) => {
 														dispatch('action', {
 															id: action.id,
 															event: {
@@ -1277,9 +1402,11 @@
 												}}
 											>
 												<Tooltip content={$i18n.t('Regenerate')} placement="bottom">
-													<div
+													<button
+														type="button"
 														aria-label={$i18n.t('Regenerate')}
-														class="{isLastMessage
+														aria-haspopup="menu"
+														class="{showHoverActions
 															? 'visible'
 															: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 													>
@@ -1297,7 +1424,7 @@
 																stroke-linejoin="round"
 																d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"></path>
 														</svg>
-													</div>
+													</button>
 												</Tooltip>
 											</RegenerateMenu>
 										{:else}
@@ -1312,7 +1439,7 @@
 														showRateComment = false;
 														regenerateResponse(message);
 
-														(model?.actions ?? []).forEach((action) => {
+														(getModelActions(model)).forEach((action) => {
 															dispatch('action', {
 																id: action.id,
 																event: {
@@ -1351,7 +1478,7 @@
 													type="button"
 													aria-label={$i18n.t('Delete')}
 													id="delete-response-button"
-													class="{isLastMessage || ($settings?.highContrastMode ?? false)
+													class="{showHoverActions
 														? 'visible'
 														: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 													on:click={(e) => {
@@ -1381,12 +1508,12 @@
 										{/if}
 									{/if}
 
-									{#each model?.actions ?? [] as action}
+									{#each getModelActions(model) as action}
 										<Tooltip content={action.name} placement="bottom">
 											<button
 												type="button"
 												aria-label={action.name}
-												class="{isLastMessage || ($settings?.highContrastMode ?? false)
+												class="{showHoverActions
 													? 'visible'
 													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 												on:click={() => {
@@ -1428,25 +1555,21 @@
 						/>
 					{/if}
 
-					{#if (isLastMessage || ($settings?.keepFollowUpPrompts ?? false)) && message.done && !readOnly && (message?.followUps ?? []).length > 0}
+					{#if (isLastMessage || (getResponseSettings().keepFollowUpPrompts ?? false)) && message.done && !readOnly && allFollowUps.length > 0}
 						<div class="mt-2.5" in:fade={{ duration: 100 }}>
 							<FollowUps
-								followUps={message?.followUps}
+								followUps={allFollowUps}
+								variant={followUpVariant}
+								disabled={!isLastMessage}
 								onClick={(prompt) => {
-									if ($settings?.insertFollowUpPrompt ?? false) {
-										// Insert the follow-up prompt into the input box
+									if (getResponseSettings().insertFollowUpPrompt ?? false) {
 										setInputText(prompt);
 									} else {
-										// Submit the follow-up prompt directly
 										submitMessage(message?.id, prompt);
 									}
 								}}
 							/>
 						</div>
-					{/if}
-
-					{#if message.done && !readOnly && (message?.suggestedFollowups ?? []).length > 0}
-						<FollowupChips suggestions={message.suggestedFollowups} disabled={!isLastMessage} />
 					{/if}
 				{/if}
 			</div>

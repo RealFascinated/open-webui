@@ -7,7 +7,6 @@
 	import WebSearchResults from '../WebSearchResults.svelte';
 	import MemoriesUsed from '../MemoriesUsed.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
-	import { t } from 'i18next';
 
 	type SearchResultItem = {
 		link?: string;
@@ -88,7 +87,7 @@
 				</div>
 
 				<div class=" flex gap-1 flex-wrap mt-2">
-					{#each status.queries as query, idx (query)}
+					{#each status.queries as query, _idx (query)}
 						<div
 							class="bg-gray-50 dark:bg-gray-850 flex rounded-lg py-1 px-2 items-center gap-1 text-xs"
 						>
@@ -114,7 +113,7 @@
 				</div>
 
 				<div class=" flex gap-1 flex-wrap mt-2">
-					{#each status.queries as query, idx (query)}
+					{#each status.queries as query, _idx (query)}
 						<div
 							class="bg-gray-50 dark:bg-gray-850 flex rounded-lg py-1 px-2 items-center gap-1 text-xs"
 						>
@@ -129,6 +128,16 @@
 					{/each}
 				</div>
 			</div>
+		{:else if status?.action === 'queries_generating'}
+			<div class="flex flex-col justify-center -space-y-0.5">
+				<div
+					class="{(done || status?.done) === false
+						? 'shimmer'
+						: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+				>
+					{$i18n.t('Generating search queries')}
+				</div>
+			</div>
 		{:else if status?.action === 'prompt_urls_extracted' && status?.urls}
 			<div class="flex flex-col justify-center -space-y-0.5">
 				<div
@@ -136,10 +145,18 @@
 						? 'shimmer'
 						: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
 				>
-					{#if status.count === 1}
-						{$i18n.t('Fetching 1 webpage from your message')}
+					{#if (done || status?.done) === false}
+						{#if status.count === 1}
+							{$i18n.t('Fetching 1 webpage from your message')}
+						{:else}
+							{$i18n.t('Fetching {{count}} webpages from your message', {
+								count: status.count ?? status.urls.length
+							})}
+						{/if}
+					{:else if status.count === 1}
+						{$i18n.t('Fetched 1 webpage from your message')}
 					{:else}
-						{$i18n.t('Fetching {{count}} webpages from your message', {
+						{$i18n.t('Fetched {{count}} webpages from your message', {
 							count: status.count ?? status.urls.length
 						})}
 					{/if}
@@ -155,14 +172,16 @@
 					{/each}
 				</div>
 			</div>
-		{:else if status?.action === 'sources_retrieved' && status?.count !== undefined}
+		{:else if status?.action === 'sources_retrieved'}
 			<div class="flex flex-col justify-center -space-y-0.5">
 				<div
 					class="{(done || status?.done) === false
 						? 'shimmer'
 						: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
 				>
-					{#if status.count === 0}
+					{#if (done || status?.done) === false}
+						{$i18n.t('Retrieving sources')}
+					{:else if status.count === 0}
 						{$i18n.t('No sources found')}
 					{:else if status.count === 1}
 						{$i18n.t('Retrieved 1 source')}
@@ -220,6 +239,20 @@
 							attempt: status.attempt ?? 1,
 							max_attempts: status.max_attempts ?? 3
 						})}
+					{/if}
+				</div>
+			</div>
+		{:else if status?.action === 'running_tools'}
+			<div class="flex flex-col justify-center -space-y-0.5">
+				<div
+					class="{(done || status?.done) === false
+						? 'shimmer'
+						: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+				>
+					{#if (done || status?.done) === false}
+						{$i18n.t('Calling tools...')}
+					{:else}
+						{$i18n.t('Tools executed')}
 					{/if}
 				</div>
 			</div>

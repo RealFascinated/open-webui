@@ -1,21 +1,21 @@
 <script lang="ts">
-	import { decode } from 'html-entities';
-	import { onMount, getContext } from 'svelte';
+	import {decode} from 'html-entities';
+	import {getContext} from 'svelte';
 	const i18n = getContext('i18n');
 
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { marked, type Token } from 'marked';
-	import { copyToClipboard, unescapeHtml } from '$lib/utils';
+	import {marked, type Token} from 'marked';
+	import {copyToClipboard, unescapeHtml} from '$lib/utils';
 
-	import { WEBUI_BASE_URL } from '$lib/constants';
-	import { settings } from '$lib/stores';
+	import {WEBUI_BASE_URL} from '$lib/constants';
+	import {settings} from '$lib/stores';
 
 	import CodeBlock from '$lib/components/chat/Messages/CodeBlock.svelte';
 	import MarkdownInlineTokens from '$lib/components/chat/Messages/Markdown/MarkdownInlineTokens.svelte';
 	import KatexRenderer from './KatexRenderer.svelte';
-	import AlertRenderer, { alertComponent } from './AlertRenderer.svelte';
+	import AlertRenderer, {alertComponent} from './AlertRenderer.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 	import ToolCallDisplay from '$lib/components/common/ToolCallDisplay.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -393,6 +393,7 @@
 							attributes={detailToken.attributes}
 							resultContent={getDetailTextContent(detailToken)}
 							grouped={true}
+							messageDone={done}
 							open={$settings?.expandDetails ?? false}
 							className="w-full space-y-1"
 						/>
@@ -442,6 +443,7 @@
 				id={`${id}-${tokenIdx}-tc`}
 				attributes={token.attributes}
 				resultContent={getDetailTextContent(token)}
+				messageDone={done}
 				open={$settings?.expandDetails ?? false}
 				className="w-full space-y-1"
 			/>

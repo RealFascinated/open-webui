@@ -1,25 +1,18 @@
 <script lang="ts">
-	import { getContext, createEventDispatcher, onDestroy } from 'svelte';
-	import { useSvelteFlow, useNodesInitialized, useStore } from '@xyflow/svelte';
+	import {onDestroy} from 'svelte';
+	import {useSvelteFlow, useNodesInitialized, useStore} from '@xyflow/svelte';
+	import {onMount, tick} from 'svelte';
 
-	const dispatch = createEventDispatcher();
-	const i18n = getContext('i18n');
-
-	import { onMount, tick } from 'svelte';
-
-	import { writable } from 'svelte/store';
-	import { models, theme, user } from '$lib/stores';
+	import {writable} from 'svelte/store';
+	import {models, user} from '$lib/stores';
 
 	import '@xyflow/svelte/dist/style.css';
 
 	import CustomNode from './Node.svelte';
 	import Flow from './Flow.svelte';
-	import XMark from '../../icons/XMark.svelte';
-	import ArrowLeft from '../../icons/ArrowLeft.svelte';
+const { width, height } = useStore();
 
-	const { width, height } = useStore();
-
-	const { fitView, getViewport } = useSvelteFlow();
+	const { fitView, _getViewport } = useSvelteFlow();
 	const nodesInitialized = useNodesInitialized();
 
 	export let history;
@@ -65,7 +58,7 @@
 		let positionMap = new Map();
 
 		// Helper function to truncate labels
-		function createLabel(content) {
+		function _createLabel(content) {
 			const maxLength = 100;
 			return content.length > maxLength ? content.substr(0, maxLength) + '...' : content;
 		}
@@ -73,7 +66,7 @@
 		// Create nodes and map children to ensure alignment in width
 		let layerWidths = {}; // Track widths of each layer
 
-		Object.keys(history.messages).forEach((id) => {
+		Object.keys(history.messages).forEach((id: string) => {
 			const message = history.messages[id];
 			if (!message) return;
 
@@ -88,7 +81,7 @@
 		});
 
 		// Adjust positions based on siblings count to centralize vertical spacing
-		Object.keys(history.messages).forEach((id) => {
+		Object.keys(history.messages).forEach((id: string) => {
 			const pos = positionMap.get(id);
 			if (!pos) return;
 
@@ -129,7 +122,7 @@
 		const node = history.messages[nodeId];
 		return (
 			node.childrenIds &&
-			node.childrenIds.some((id) => id === currentId || recurseCheckChild(id, currentId))
+			node.childrenIds.some((id: string) => id === currentId || recurseCheckChild(id, currentId))
 		);
 	};
 
@@ -144,7 +137,7 @@
 		nodesInitialized.subscribe(async (initialized) => {
 			if (initialized) {
 				await tick();
-				const res = await fitView({ nodes: [{ id: history.currentId }] });
+				const _res = await fitView({ nodes: [{ id: history.currentId }] });
 			}
 		});
 

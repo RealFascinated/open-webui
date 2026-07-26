@@ -1,5 +1,9 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
+
 	import { pendingSubmit } from '$lib/stores';
+
+	const i18n = getContext('i18n');
 
 	export let currency: {
 		from?: string;
@@ -39,7 +43,9 @@
 			<div>1 {currency.to} = {currency.inverse_rate} {currency.from}</div>
 		{/if}
 		{#if currency.updated}
-			<div class="pt-1">Rates updated {currency.updated}</div>
+			<div class="pt-1">
+				{$i18n.t('Rates updated {{DATE}}', { DATE: currency.updated })}
+			</div>
 		{/if}
 	</div>
 	{#if otherPairs.length > 0 && currency.from}

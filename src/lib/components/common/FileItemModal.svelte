@@ -206,7 +206,7 @@
 		if (item?.type === 'collection') {
 			loading = true;
 
-			const knowledge = await getKnowledgeById(localStorage.token, item.id).catch((e) => {
+			const knowledge = await getKnowledgeById(localStorage.token, item.id).catch((e: Event) => {
 				console.error('Error fetching knowledge base:', e);
 				return null;
 			});
@@ -218,7 +218,7 @@
 		} else if (item?.type === 'file') {
 			loading = true;
 
-			const file = await getFileById(localStorage.token, item.id).catch((e) => {
+			const file = await getFileById(localStorage.token, item.id).catch((e: Event) => {
 				console.error('Error fetching file:', e);
 				return null;
 			});

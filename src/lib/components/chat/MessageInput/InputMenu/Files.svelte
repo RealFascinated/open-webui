@@ -10,7 +10,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let onSelect = (e) => {};
+	export let onSelect = (_e: Event) => {};
 
 	let loaded = false;
 	let items = [];
@@ -37,7 +37,7 @@
 
 		items = [
 			...items,
-			...(res ?? []).map((file) => ({
+			...(res ?? []).map((file: string) => ({
 				...file,
 				type: file?.meta?.content_type?.startsWith('image/') ? 'image' : 'file',
 				name: file.filename,
@@ -99,7 +99,7 @@
 
 			{#if !allItemsLoaded}
 				<Loader
-					on:visible={(e) => {
+					on:visible={(_e) => {
 						if (!itemsLoading) {
 							loadMoreItems();
 						}

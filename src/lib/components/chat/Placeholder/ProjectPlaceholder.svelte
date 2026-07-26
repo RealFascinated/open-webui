@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { getContext, onMount } from 'svelte';
-	import type { Writable } from 'svelte/store';
+	import {getContext} from 'svelte';
+	import type {Writable} from 'svelte/store';
 
 	const i18n: Writable<unknown> = getContext('i18n');
 
-	import { user } from '$lib/stores';
+	import {user} from '$lib/stores';
 
 	import ChatList from './ChatList.svelte';
 	import ProjectKnowledge from './ProjectKnowledge.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import { getChatListByProjectId } from '$lib/apis/chats';
-	import { getSharedProjectChats } from '$lib/apis/projects';
+	import {getChatListByProjectId} from '$lib/apis/chats';
+	import {getSharedProjectChats} from '$lib/apis/projects';
 
 	export let project: unknown = null;
 

@@ -1,22 +1,15 @@
 <script lang="ts">
-	import { onMount, getContext, tick } from 'svelte';
-	import { toast } from 'svelte-sonner';
-	import { goto } from '$app/navigation';
-	import { WEBUI_NAME, mobile, showSidebar, user } from '$lib/stores';
-	import {
-		getCalendars,
-		getCalendarEvents,
-		deleteCalendar,
-		type CalendarModel,
-		type CalendarEventModel
-	} from '$lib/apis/calendar';
+	import {onMount, getContext, tick} from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {goto} from '$app/navigation';
+	import {WEBUI_NAME, mobile, showSidebar} from '$lib/stores';
+	import {getCalendars, getCalendarEvents, deleteCalendar, type CalendarModel, type CalendarEventModel} from '$lib/apis/calendar';
 	import CalendarView from '$lib/components/calendar/CalendarView.svelte';
 	import CalendarSidebar from '$lib/components/calendar/CalendarSidebar.svelte';
 	import CalendarEventModal from '$lib/components/calendar/CalendarEventModal.svelte';
 	import CreateCalendarModal from '$lib/components/calendar/CreateCalendarModal.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import Plus from '$lib/components/icons/Plus.svelte';
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
+import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import SidebarIcon from '$lib/components/icons/Sidebar.svelte';
 	import Select from '$lib/components/common/Select.svelte';
 	import Check from '$lib/components/icons/Check.svelte';

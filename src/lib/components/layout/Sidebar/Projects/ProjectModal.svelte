@@ -1,22 +1,22 @@
 <script lang="ts">
-	import { getContext, createEventDispatcher, onMount, tick } from 'svelte';
+	import {getContext, tick} from 'svelte';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Modal from '$lib/components/common/Modal.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 
-	import { toast } from 'svelte-sonner';
-	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { user, config } from '$lib/stores';
+	import {toast} from 'svelte-sonner';
+	
+	
+	import {user, config} from '$lib/stores';
 
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import Knowledge from '$lib/components/workspace/Models/Knowledge.svelte';
-	import { getProjectById } from '$lib/apis/projects';
+	import {getProjectById} from '$lib/apis/projects';
 	const i18n = getContext('i18n');
 
 	export let show = false;
-	export let onSubmit: (...args: unknown[]) => unknown = (e) => {};
+	export let onSubmit: (...args: unknown[]) => unknown = (_e: Event) => {};
 
 	export let projectId = null;
 	export let parentId = null;
@@ -37,7 +37,7 @@
 	const submitHandler = async () => {
 		loading = true;
 
-		if ((data?.files ?? []).some((file) => file.status === 'uploading')) {
+		if ((data?.files ?? []).some((file: string) => file.status === 'uploading')) {
 			toast.error($i18n.t('Please wait until all files are uploaded.'));
 			loading = false;
 			return;

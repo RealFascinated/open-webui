@@ -15,7 +15,7 @@
 	export let tools: Tool[] = [];
 	export let selectedToolIds: string[] = [];
 
-	const i18n = getContext('i18n') as unknown;
+	const i18n = getContext('i18n');
 
 	$: selectedTools = tools.filter((tool) => selectedToolIds.includes(tool.id));
 	$: availableTools = tools.filter((tool) => !selectedToolIds.includes(tool.id));
@@ -43,7 +43,7 @@
 			/>
 
 			<div class=" flex items-center flex-wrap">
-				{#each selectedTools as tool, toolIdx}
+				{#each selectedTools as tool, _toolIdx}
 					<div class=" flex items-center gap-2 mr-3">
 						<div class="self-center flex items-center">
 							<Checkbox

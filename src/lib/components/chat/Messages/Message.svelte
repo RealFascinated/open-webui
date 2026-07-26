@@ -1,12 +1,9 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
+	
 
-	import { tick, getContext, onMount, createEventDispatcher } from 'svelte';
-	const dispatch = createEventDispatcher();
-	const i18n = getContext('i18n');
-
-	import { settings } from '$lib/stores';
-	import { copyToClipboard } from '$lib/utils';
+	
+	import {settings} from '$lib/stores';
+	
 
 	import MultiResponseMessages from './MultiResponseMessages.svelte';
 	import ResponseMessage from './ResponseMessage.svelte';
@@ -45,6 +42,7 @@
 	export let readOnly = false;
 	export let editCodeBlock = true;
 	export let topPadding = false;
+	export let autoScroll = true;
 </script>
 
 <div
@@ -102,6 +100,7 @@
 				{readOnly}
 				{editCodeBlock}
 				{topPadding}
+				{autoScroll}
 			/>
 		{:else}
 			{#key messageId}
@@ -127,6 +126,7 @@
 					{readOnly}
 					{editCodeBlock}
 					{topPadding}
+					{autoScroll}
 				/>
 			{/key}
 		{/if}

@@ -1,18 +1,18 @@
 <script lang="ts">
 	import DOMPurify from 'dompurify';
-	import { v4 as uuidv4 } from 'uuid';
+	import {v4 as uuidv4} from 'uuid';
 
-	import { getBackendConfig, getVersionUpdates } from '$lib/apis';
-	import { getAdminConfig, updateAdminConfig } from '$lib/apis/auths';
-	import { getBanners, setBanners } from '$lib/apis/configs';
+	import {getBackendConfig, getVersionUpdates} from '$lib/apis';
+	import {getAdminConfig, updateAdminConfig} from '$lib/apis/auths';
+	import {setBanners} from '$lib/apis/configs';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '$lib/constants';
-	import { banners as _banners, config, showChangelog } from '$lib/stores';
-	import type { Banner } from '$lib/types';
-	import { compareVersion } from '$lib/utils';
-	import { onMount, getContext } from 'svelte';
-	import { toast } from 'svelte-sonner';
+	import {WEBUI_BUILD_HASH, WEBUI_VERSION} from '$lib/constants';
+	import {banners as _banners, config, showChangelog} from '$lib/stores';
+	import type {Banner} from '$lib/types';
+	import {compareVersion} from '$lib/utils';
+	import {onMount, getContext} from 'svelte';
+	import {toast} from 'svelte-sonner';
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import Banners from './Interface/Banners.svelte';
 	import Events from './Events.svelte';
@@ -29,7 +29,7 @@
 		latest: WEBUI_VERSION
 	};
 
-	let adminConfig = null;
+	let adminConfig: Record<string, unknown> = null;
 	let banners: Banner[] = [];
 	let dirty = false;
 	let saving = false;
@@ -54,7 +54,7 @@
 
 	const checkForVersionUpdates = async () => {
 		updateAvailable = null;
-		version = await getVersionUpdates(localStorage.token).catch((error) => {
+		version = await getVersionUpdates(localStorage.token).catch((_error) => {
 			return {
 				current: WEBUI_VERSION,
 				latest: WEBUI_VERSION

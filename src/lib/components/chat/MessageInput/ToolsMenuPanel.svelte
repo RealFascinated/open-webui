@@ -58,7 +58,7 @@
 			}
 		}
 
-		selectedToolIds = selectedToolIds.filter((id) => Object.keys(tools ?? {}).includes(id));
+		selectedToolIds = selectedToolIds.filter((id: string) => Object.keys(tools ?? {}).includes(id));
 	};
 </script>
 

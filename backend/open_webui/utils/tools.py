@@ -48,22 +48,26 @@ from open_webui.tools.builtin import (
     add_memory,
     archive_chat,
     calculate_timestamp,
+    color_convert,
     create_automation,
     create_calendar_event,
     create_project,
     create_tasks,
     currency_convert,
+    define_term,
     delete_automation,
     delete_artifact,
     delete_calendar_event,
     delete_memory,
     delete_note,
+    diff_text,
     edit_image,
     execute_code,
     fetch_url,
     generate_image,
     get_current_timestamp,
     image_search,
+    json_format,
     kb_exec,
     list_automations,
     list_artifacts,
@@ -93,6 +97,8 @@ from open_webui.tools.builtin import (
     sports_scores,
     suggest_followups,
     toggle_automation,
+    timezone_convert,
+    unit_convert,
     update_automation,
     update_artifact,
     update_calendar_event,
@@ -546,7 +552,6 @@ async def get_builtin_tools(
             if 'note' in knowledge_types:
                 builtin_functions.append(view_note)
         if not model_knowledge:
-            builtin_functions.append(query_knowledge_bases)
             builtin_functions.append(search_knowledge_bases)
 
     # Chat-uploaded files: on-demand access for follow-up turns (Claude-style).
@@ -700,6 +705,12 @@ async def get_builtin_tools(
             [
                 weather_fetch,
                 currency_convert,
+                unit_convert,
+                timezone_convert,
+                define_term,
+                json_format,
+                color_convert,
+                diff_text,
                 map_display,
                 sports_scores,
                 present_options,

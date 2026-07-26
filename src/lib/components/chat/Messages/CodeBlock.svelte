@@ -1,39 +1,36 @@
 <script lang="ts">
 	import hljs from 'highlight.js';
-	import { toast } from 'svelte-sonner';
-	import { getContext, onMount, tick, onDestroy } from 'svelte';
-	import { config, mobile, settings, pyodideWorker as pyodideWorkerStore } from '$lib/stores';
+	import {toast} from 'svelte-sonner';
+	import {getContext, onMount, tick, onDestroy} from 'svelte';
+	import {config, pyodideWorker as pyodideWorkerStore} from '$lib/stores';
 
-	import { createPyodideWorker } from '$lib/pyodide/createPyodideWorker';
-	import { executeCode } from '$lib/apis/utils';
-	import {
-		copyToClipboard,
-		initMermaid,
-		renderMermaidDiagram,
-		renderVegaVisualization,
-		unescapeHtml
-	} from '$lib/utils';
+	import {createPyodideWorker} from '$lib/pyodide/createPyodideWorker';
+	import {executeCode} from '$lib/apis/utils';
+	import {copyToClipboard, initMermaid, renderMermaidDiagram, renderVegaVisualization, unescapeHtml} from '$lib/utils';
 
 	import 'highlight.js/styles/github-dark.min.css';
 	import equal from 'fast-deep-equal';
 
 	import CodeEditor from '$lib/components/common/CodeEditor.svelte';
 	import SvgPanZoom from '$lib/components/common/SVGPanZoom.svelte';
-
+	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
 	import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
-	import ChevronUpDown from '$lib/components/icons/ChevronUpDown.svelte';
 	import CommandLine from '$lib/components/icons/CommandLine.svelte';
+	import DocumentDuplicate from '$lib/components/icons/DocumentDuplicate.svelte';
+	import FloppyDisk from '$lib/components/icons/FloppyDisk.svelte';
+	import Check from '$lib/components/icons/Check.svelte';
 	import Cube from '$lib/components/icons/Cube.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
+	import Spinner from '$lib/components/common/Spinner.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let id = '';
 	export let edit = true;
 
-	export let onSave = (e) => {};
-	export let onUpdate = (e) => {};
-	export let onPreview = (e) => {};
+	export let onSave = (_e: Event) => {};
+	export let onUpdate = (_e: Event) => {};
+	export let onPreview = (_e: Event) => {};
 
 	export let save = false;
 	export let run = true;
@@ -66,7 +63,6 @@
 	let renderHTML = null;
 	let renderError = null;
 
-	let highlightedCode = null;
 	let executing = false;
 
 	let stdout = null;
@@ -94,7 +90,13 @@
 		return language === 'svg' ? 'SVG' : 'HTML';
 	};
 
+	$: displayLang = (lang || 'text').toLowerCase();
 	$: artifactTitle = getArtifactTitle(code, lang);
+	$: isPythonRunnable =
+		($config?.features?.enable_code_execution ?? true) &&
+		(displayLang === 'python' ||
+			displayLang === 'py' ||
+			(lang === '' && checkPythonCode(code)));
 
 	const collapseCodeBlock = () => {
 		collapsed = !collapsed;
@@ -177,7 +179,7 @@
 					stdout = output['stdout'];
 					const stdoutLines = stdout.split('\n');
 
-					for (const [idx, line] of stdoutLines.entries()) {
+					for (const [_idx, line] of stdoutLines.entries()) {
 						if (line.startsWith('data:image/png;base64')) {
 							if (files) {
 								files.push({
@@ -206,7 +208,7 @@
 					result = output['result'];
 					const resultLines = result.split('\n');
 
-					for (const [idx, line] of resultLines.entries()) {
+					for (const [_idx, line] of resultLines.entries()) {
 						if (line.startsWith('data:image/png;base64')) {
 							if (files) {
 								files.push({
@@ -287,7 +289,7 @@
 			}
 		}, 60000);
 
-		const handler = (event) => {
+		const handler = (event: Event) => {
 			// Ignore messages from other requests on the shared worker
 			if (event.data?.id !== id) return;
 
@@ -300,7 +302,7 @@
 				stdout = data['stdout'];
 				const stdoutLines = stdout.split('\n');
 
-				for (const [idx, line] of stdoutLines.entries()) {
+				for (const [_idx, line] of stdoutLines.entries()) {
 					if (line.startsWith('data:image/png;base64')) {
 						if (files) {
 							files.push({
@@ -329,7 +331,7 @@
 				result = data['result'];
 				const resultLines = result.split('\n');
 
-				for (const [idx, line] of resultLines.entries()) {
+				for (const [_idx, line] of resultLines.entries()) {
 					if (line.startsWith('data:image/png;base64')) {
 						if (files) {
 							files.push({
@@ -367,7 +369,7 @@
 
 		worker.addEventListener('message', handler);
 
-		worker.onerror = (event) => {
+		worker.onerror = (event: Event) => {
 			console.log('pyodideWorker.onerror', event);
 			clearTimeout(timeoutId);
 			worker.removeEventListener('message', handler);
@@ -453,10 +455,7 @@
 </script>
 
 <div>
-	<div
-		class="relative {className} flex flex-col {showInlinePreview ? '' : 'rounded-2xl border border-gray-100/30 dark:border-gray-850/30 my-0.5'}"
-		dir="ltr"
-	>
+	<div class="relative {className} flex flex-col" dir="ltr">
 		{#if ['mermaid', 'vega', 'vega-lite'].includes(lang)}
 			{#if renderHTML}
 				<SvgPanZoom
@@ -507,91 +506,99 @@
 		</div>
 	{:else}
 		<div
-			class="sticky {stickyButtonsClassName} left-0 right-0 py-1.5 px-3.5 gap-2 flex items-center justify-end w-full z-10 text-xs text-black dark:text-white bg-white dark:bg-black rounded-t-2xl"
+			class="code-block my-1.5 rounded-xl border border-gray-200/90 bg-[#f6f8fa] dark:border-gray-800 dark:bg-[#0d1117] {editorClassName}"
 		>
-			<div class="flex-1 truncate">
-				<Tooltip content={lang} placement="top-start">
-					<span class=" truncate text-ellipsis">
-						{lang}
+			<div
+				class="flex items-center justify-between gap-3 border-b border-gray-200/80 bg-[#eef1f4] px-3 py-2 dark:border-gray-800/80 dark:bg-[#161b22]"
+			>
+				<Tooltip content={displayLang} placement="top-start">
+					<span
+						class="max-w-[10rem] truncate rounded-md border border-gray-200/80 bg-white/80 px-2 py-0.5 font-mono text-[11px] font-medium uppercase tracking-wide text-gray-600 dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-300"
+					>
+						{displayLang}
 					</span>
 				</Tooltip>
-			</div>
 
-				<div class="flex items-center gap-0.5 shrink-0">
-					<button
-						class="flex gap-1 items-center bg-none border-none transition rounded-md px-1.5 py-0.5 bg-white dark:bg-black"
-						on:click={collapseCodeBlock}
-					>
-						<div class=" -translate-y-[0.5px]">
-							<ChevronUpDown className="size-3" />
-						</div>
+				<div class="flex shrink-0 items-center gap-0.5">
+					<Tooltip content={collapsed ? $i18n.t('Expand') : $i18n.t('Collapse')}>
+						<button
+							class="code-block-action"
+							aria-label={collapsed ? $i18n.t('Expand') : $i18n.t('Collapse')}
+							on:click={collapseCodeBlock}
+						>
+							{#if collapsed}
+								<ChevronDown className="size-3.5" strokeWidth="2" />
+							{:else}
+								<ChevronUp className="size-3.5" strokeWidth="2" />
+							{/if}
+						</button>
+					</Tooltip>
 
-						<div>
-							{collapsed ? $i18n.t('Expand') : $i18n.t('Collapse')}
-						</div>
-					</button>
-
-					{#if ($config?.features?.enable_code_execution ?? true) && (lang.toLowerCase() === 'python' || lang.toLowerCase() === 'py' || (lang === '' && checkPythonCode(code)))}
+					{#if isPythonRunnable}
 						{#if executing}
-							<div
-								class="run-code-button bg-none border-none p-0.5 cursor-not-allowed bg-white dark:bg-black"
-							>
-								{$i18n.t('Running')}
-							</div>
+							<span class="code-block-action cursor-not-allowed opacity-60" aria-live="polite">
+								<Spinner className="size-3.5" />
+							</span>
 						{:else if run}
-							<button
-								class="flex gap-1 items-center run-code-button bg-none border-none transition rounded-md px-1.5 py-0.5 bg-white dark:bg-black"
-								on:click={async () => {
-									code = _code;
-									await tick();
-									executePython(code);
-								}}
-							>
-								<div>
-									{$i18n.t('Run')}
-								</div>
-							</button>
+							<Tooltip content={$i18n.t('Run')}>
+								<button
+									class="code-block-action code-block-action-run"
+									aria-label={$i18n.t('Run')}
+									on:click={async () => {
+										code = _code;
+										await tick();
+										executePython(code);
+									}}
+								>
+									<CommandLine className="size-3.5" strokeWidth="2" />
+								</button>
+							</Tooltip>
 						{/if}
 					{/if}
 
 					{#if save}
-						<button
-							class="save-code-button bg-none border-none transition rounded-md px-1.5 py-0.5 bg-white dark:bg-black"
-							on:click={saveCode}
-						>
-							{saved ? $i18n.t('Saved') : $i18n.t('Save')}
-						</button>
+						<Tooltip content={saved ? $i18n.t('Saved') : $i18n.t('Save')}>
+							<button
+								class="code-block-action"
+								aria-label={saved ? $i18n.t('Saved') : $i18n.t('Save')}
+								on:click={saveCode}
+							>
+								{#if saved}
+									<Check className="size-3.5 text-emerald-500" strokeWidth="2" />
+								{:else}
+									<FloppyDisk className="size-3.5" strokeWidth="2" />
+								{/if}
+							</button>
+						</Tooltip>
 					{/if}
-
-					<button
-						class="copy-code-button bg-none border-none transition rounded-md px-1.5 py-0.5 bg-white dark:bg-black"
-						on:click={copyCode}>{copied ? $i18n.t('Copied') : $i18n.t('Copy')}</button
-					>
 
 					{#if preview && ['html', 'svg'].includes(lang)}
-						<button
-							class="flex gap-1 items-center run-code-button bg-none border-none transition rounded-md px-1.5 py-0.5 bg-white dark:bg-black"
-							on:click={previewCode}
-						>
-							<div>
-								{$i18n.t('Preview')}
-							</div>
-						</button>
+						<Tooltip content={$i18n.t('Preview')}>
+							<button
+								class="code-block-action"
+								aria-label={$i18n.t('Preview')}
+								on:click={previewCode}
+							>
+								<Cube className="size-3.5" />
+							</button>
+						</Tooltip>
 					{/if}
+
+					<Tooltip content={copied ? $i18n.t('Copied') : $i18n.t('Copy')}>
+						<button class="code-block-action" aria-label={$i18n.t('Copy')} on:click={copyCode}>
+							{#if copied}
+								<Check className="size-3.5 text-emerald-500" strokeWidth="2" />
+							{:else}
+								<DocumentDuplicate className="size-3.5" strokeWidth="2" />
+							{/if}
+						</button>
+					</Tooltip>
 				</div>
 			</div>
 
-			<div
-				class="language-{lang} rounded-t-2xl -mt-8 {editorClassName
-					? editorClassName
-					: executing || stdout || stderr || result
-						? ''
-						: 'rounded-b-2xl'} overflow-hidden"
-			>
-				<div class=" pt-6.5 bg-white dark:bg-black"></div>
-
-				{#if !collapsed}
-					{#if edit}
+			{#if !collapsed}
+				{#if edit}
+					<div class="code-block-editor">
 						<CodeEditor
 							value={code}
 							{id}
@@ -603,78 +610,77 @@
 								_code = value;
 							}}
 						/>
-					{:else}
-						<pre
-							class=" hljs p-4 px-5 overflow-x-auto"
-							style="border-top-left-radius: 0px; border-top-right-radius: 0px; {(executing ||
-								stdout ||
-								stderr ||
-								result) &&
-								'border-bottom-left-radius: 0px; border-bottom-right-radius: 0px;'}"
-						><code class="language-{lang} rounded-t-none whitespace-pre text-sm">
-								{#if !done}
-									{code}
-								{:else if lang && hljs.getLanguage(lang)}
-									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-									{@html hljs.highlight(code, {
-										language: lang,
-										ignoreIllegals: true
-									}).value}
-								{:else}
-									{code}
-								{/if}</code></pre>
-					{/if}
-				{:else}
-					<div
-						class="bg-white dark:bg-black dark:text-white rounded-b-2xl! pt-1 pb-2 px-4 flex flex-col gap-2 text-xs"
-					>
-						<span class="text-gray-500 italic">
-							{$i18n.t('{{COUNT}} hidden lines', {
-								COUNT: code.split('\n').length
-							})}
-						</span>
 					</div>
+				{:else}
+					<pre
+						class="code-block-pre hljs m-0 overflow-x-auto px-4 py-3.5 text-sm leading-6"
+						class:code-block-pre-output={executing || stdout || stderr || result}
+					><code class="language-{lang} whitespace-pre">
+							{#if !done}
+								{code}
+							{:else if lang && hljs.getLanguage(lang)}
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+								{@html hljs.highlight(code, {
+									language: lang,
+									ignoreIllegals: true
+								}).value}
+							{:else}
+								{code}
+							{/if}</code></pre>
 				{/if}
-			</div>
+			{:else}
+				<div class="px-4 py-3 text-xs italic text-gray-500 dark:text-gray-400">
+					{$i18n.t('{{COUNT}} hidden lines', {
+						COUNT: code.split('\n').length
+					})}
+				</div>
+			{/if}
 
 			{#if !collapsed}
 				<div
 					id="plt-canvas-{id}"
-					class="bg-gray-50 dark:bg-black dark:text-white max-w-full overflow-x-auto scrollbar-hidden"></div>
+					class="max-w-full overflow-x-auto border-t border-gray-200/80 scrollbar-hidden dark:border-gray-800/80"
+				></div>
 
 				{#if executing || stdout || stderr || result || files}
 					<div
-						class="bg-gray-50 dark:bg-black dark:text-white rounded-b-2xl! pt-2 pb-3 px-3.5 flex flex-col gap-2"
+						class="flex flex-col gap-2 border-t border-gray-200/80 bg-[#eef1f4] px-4 py-3 text-sm dark:border-gray-800/80 dark:bg-[#161b22]"
 					>
 						{#if executing}
-							<div class=" ">
-								<div class=" text-gray-500 text-xs mb-1">{$i18n.t('STDOUT/STDERR')}</div>
-								<div class="text-sm">{$i18n.t('Running...')}</div>
+							<div>
+								<div class="mb-1 text-[10px] font-medium uppercase tracking-wider text-gray-500">
+									{$i18n.t('STDOUT/STDERR')}
+								</div>
+								<div class="text-sm text-gray-700 dark:text-gray-300">{$i18n.t('Running...')}</div>
 							</div>
 						{:else}
 							{#if stdout || stderr}
-								<div class=" ">
-									<div class=" text-gray-500 text-xs mb-1">{$i18n.t('STDOUT/STDERR')}</div>
+								<div>
+									<div class="mb-1 text-[10px] font-medium uppercase tracking-wider text-gray-500">
+										{$i18n.t('STDOUT/STDERR')}
+									</div>
 									<div
-										class="text-sm font-mono whitespace-pre-wrap {stdout?.split('\n')?.length > 100
-											? `max-h-96`
-											: ''}  overflow-y-auto"
+										class="overflow-y-auto whitespace-pre-wrap font-mono text-xs text-gray-800 dark:text-gray-200 {stdout?.split('\n')?.length > 100
+											? 'max-h-96'
+											: ''}"
 									>
 										{stdout || stderr}
 									</div>
 								</div>
 							{/if}
 							{#if result || files}
-								<div class=" ">
-									<div class=" text-gray-500 text-xs mb-1">{$i18n.t('RESULT')}</div>
+								<div>
+									<div class="mb-1 text-[10px] font-medium uppercase tracking-wider text-gray-500">
+										{$i18n.t('RESULT')}
+									</div>
 									{#if result}
-										<div class="text-sm">{`${JSON.stringify(result)}`}</div>
+										<div class="font-mono text-xs text-gray-800 dark:text-gray-200">{`${JSON.stringify(result)}`}</div>
 									{/if}
 									{#if files}
 										<div class="flex flex-col gap-2">
 											{#each files as file}
 												{#if file.type.startsWith('image')}
-													<img src={file.data} alt="Output" class=" w-full max-w-[36rem]" />
+													<img src={file.data} alt="Output" class="max-w-[36rem] w-full" />
 												{/if}
 											{/each}
 										</div>
@@ -685,6 +691,64 @@
 					</div>
 				{/if}
 			{/if}
+		</div>
 		{/if}
 	</div>
 </div>
+
+<style>
+	.code-block-action {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.5rem;
+		padding: 0.375rem;
+		color: rgb(107 114 128);
+		transition:
+			color 150ms ease,
+			background-color 150ms ease;
+	}
+
+	:global(.dark) .code-block-action {
+		color: rgb(156 163 175);
+	}
+
+	.code-block-action:hover {
+		background-color: rgb(229 231 235 / 0.7);
+		color: rgb(31 41 55);
+	}
+
+	:global(.dark) .code-block-action:hover {
+		background-color: rgb(55 65 81 / 0.7);
+		color: rgb(243 244 246);
+	}
+
+	.code-block-action-run:hover {
+		background-color: rgb(209 250 229 / 0.8);
+		color: rgb(4 120 87);
+	}
+
+	:global(.dark) .code-block-action-run:hover {
+		background-color: rgb(6 78 59 / 0.45);
+		color: rgb(110 231 183);
+	}
+
+	.code-block :global(pre.hljs),
+	.code-block-pre {
+		background: transparent !important;
+	}
+
+	.code-block-editor :global(.cm-editor) {
+		background: transparent !important;
+	}
+
+	.code-block-editor :global(.cm-scroller) {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+			'Courier New', monospace;
+	}
+
+	.code-block-pre-output {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
+	}
+</style>

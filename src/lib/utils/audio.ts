@@ -35,18 +35,14 @@ export class AudioQueue {
 
 	enqueue(url: string) {
 		this.queue.push(url);
-
-		// Auto-play if nothing is currently playing or loaded
-		if (this.audio.paused && !this.current) {
-			this.next();
-		}
+		this.#ensurePlayback();
 	}
 
 	play() {
 		if (!this.current && this.queue.length > 0) {
 			this.next();
 		} else {
-			this.audio.play();
+			void this.#playCurrent();
 		}
 	}
 
@@ -54,8 +50,7 @@ export class AudioQueue {
 		this.current = this.queue.shift() ?? null;
 
 		if (this.current) {
-			this.audio.src = this.current;
-			this.audio.play();
+			void this.#playCurrent();
 		} else {
 			this.#halt();
 			this.onStopped?.({ event: 'empty-queue', id: this.id });
@@ -65,6 +60,10 @@ export class AudioQueue {
 	stop() {
 		this.#halt();
 		this.onStopped?.({ event: 'stop', id: this.id });
+	}
+
+	isActive(): boolean {
+		return Boolean(this.current) || this.queue.length > 0 || !this.audio.paused;
 	}
 
 	destroy() {
@@ -80,9 +79,58 @@ export class AudioQueue {
 	#halt() {
 		this.audio.pause();
 		this.audio.currentTime = 0;
+		this.audio.muted = false;
 		this.audio.removeAttribute('src');
 		this.audio.load();
 		this.queue = [];
 		this.current = null;
+	}
+
+	#ensurePlayback() {
+		if (!this.audio.paused) {
+			return;
+		}
+
+		if (!this.current) {
+			this.next();
+			return;
+		}
+
+		// Recover from a failed play() that left a stale current item.
+		if (this.audio.ended || this.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+			this.current = null;
+			this.next();
+		}
+	}
+
+	#playCurrent() {
+		if (!this.current) {
+			return;
+		}
+
+		const url = this.current;
+		this.audio.src = url;
+		// Muted autoplay unlock: required for TTS after async streaming delays.
+		this.audio.muted = true;
+
+		const playPromise = this.audio.play();
+		if (!playPromise) {
+			this.audio.muted = false;
+			return;
+		}
+
+		playPromise
+			.then(() => {
+				if (this.current === url) {
+					this.audio.muted = false;
+				}
+			})
+			.catch((error) => {
+				console.error('Audio playback failed:', error);
+				if (this.current === url) {
+					this.current = null;
+					this.next();
+				}
+			});
 	}
 }

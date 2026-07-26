@@ -1576,11 +1576,22 @@ async def chat_completion(
             if not assistant_message_id:
                 continue
 
+            # Resolve the model object for this specific model
+            resolved_model = request.app.state.MODELS.get(target_model_id, model)
+
+            # Merge model-attached default tools with request tool_ids for multi-model fan-out
+            base_tool_ids = list(form_data.get('tool_ids') or metadata.get('tool_ids') or [])
+            model_meta = (resolved_model or {}).get('info', {}).get('meta', {}) or {}
+            model_tool_ids = model_meta.get('toolIds') or []
+            merged_tool_ids = list(dict.fromkeys([*base_tool_ids, *model_tool_ids])) or None
+
             # Per-model metadata: own message_id + model
             per_model_metadata = {
                 **metadata,
                 'message_id': assistant_message_id,
             }
+            if merged_tool_ids:
+                per_model_metadata['tool_ids'] = merged_tool_ids
 
             # Per-model form_data: own model
             model_form_data = {
@@ -1588,9 +1599,8 @@ async def chat_completion(
                 'model': target_model_id,
                 'metadata': per_model_metadata,
             }
-
-            # Resolve the model object for this specific model
-            resolved_model = request.app.state.MODELS.get(target_model_id, model)
+            if merged_tool_ids:
+                model_form_data['tool_ids'] = merged_tool_ids
 
             # Only the first model runs chat-level background tasks;
             # subsequent models only run follow-ups.

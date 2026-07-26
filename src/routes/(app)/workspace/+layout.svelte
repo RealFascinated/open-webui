@@ -1,17 +1,8 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
-	import {
-		WEBUI_NAME,
-		showSidebar,
-		functions,
-		user,
-		mobile,
-		models,
-		knowledge,
-		tools
-	} from '$lib/stores';
-	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
+	import {onMount, getContext} from 'svelte';
+	import {WEBUI_NAME, showSidebar, user, mobile} from '$lib/stores';
+	import {page} from '$app/stores';
+	import {goto} from '$app/navigation';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Sidebar from '$lib/components/icons/Sidebar.svelte';
 

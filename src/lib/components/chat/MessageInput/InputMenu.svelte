@@ -1,22 +1,18 @@
 <script lang="ts">
-	import { getContext, onMount, tick } from 'svelte';
-	import { fly } from 'svelte/transition';
+	import {getContext, tick} from 'svelte';
+	import {fly} from 'svelte/transition';
 
-	import { config, user, tools as _tools, skills, toolServers, mobile, knowledge, selectedTerminalId, settings, terminalServers } from '$lib/stores';
-	import { getKnowledgeBases } from '$lib/apis/knowledge';
+	import {config, user, tools as _tools, skills, toolServers, selectedTerminalId, settings, terminalServers} from '$lib/stores';
+	
 
-	import { createPicker } from '$lib/utils/google-drive-picker';
+	
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import DocumentArrowUp from '$lib/components/icons/DocumentArrowUp.svelte';
 	import Camera from '$lib/components/icons/Camera.svelte';
-	import Note from '$lib/components/icons/Note.svelte';
-	import Clip from '$lib/components/icons/Clip.svelte';
-	import ChatBubbleOval from '$lib/components/icons/ChatBubbleOval.svelte';
-	import Refresh from '$lib/components/icons/Refresh.svelte';
-	import Agile from '$lib/components/icons/Agile.svelte';
-	import ClockRotateRight from '$lib/components/icons/ClockRotateRight.svelte';
+import Clip from '$lib/components/icons/Clip.svelte';
+import ClockRotateRight from '$lib/components/icons/ClockRotateRight.svelte';
 	import Database from '$lib/components/icons/Database.svelte';
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 	import ChevronLeft from '$lib/components/icons/ChevronLeft.svelte';
@@ -153,7 +149,7 @@
 		return /android|iphone|ipad|ipod|windows phone/i.test(userAgent);
 	};
 
-	const handleFileChange = (event) => {
+	const handleFileChange = (event: Event) => {
 		const inputFiles = Array.from(event.target?.files);
 		if (inputFiles && inputFiles.length > 0) {
 			console.log(inputFiles);

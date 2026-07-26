@@ -1,5 +1,9 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
+
 	import { weatherCodeToEmoji } from '$lib/utils/weatherIcons';
+
+	const i18n = getContext('i18n');
 
 	export let weather: {
 		location?: string;
@@ -15,6 +19,7 @@
 	} = {};
 
 	$: weatherEmoji = weatherCodeToEmoji(weather.weather_code);
+	$: temperatureUnit = weather.temperature_unit ?? '°C';
 </script>
 
 <div
@@ -23,27 +28,32 @@
 	<div class="px-4 py-3.5">
 		<div class="text-xs text-gray-500 dark:text-gray-400 mb-1">{weather.location}</div>
 		<div class="flex items-end gap-3">
-			<div
-				class="text-3xl leading-none"
-				aria-hidden="true"
-				title={weather.description}
-			>
+			<div class="text-3xl leading-none" aria-hidden="true" title={weather.description}>
 				{weatherEmoji}
 			</div>
 			<div class="text-3xl font-semibold text-gray-900 dark:text-gray-100 leading-none">
-				{weather.temperature ?? '—'}{weather.temperature_unit ?? '°C'}
+				{weather.temperature ?? '—'}{temperatureUnit}
 			</div>
 			<div class="text-sm text-gray-600 dark:text-gray-300 pb-0.5">{weather.description}</div>
 		</div>
 		<div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
 			{#if weather.feels_like != null}
-				<span>Feels like {weather.feels_like}{weather.temperature_unit ?? '°C'}</span>
+				<span
+					>{$i18n.t('Feels like {{TEMP}}', {
+						TEMP: `${weather.feels_like}${temperatureUnit}`
+					})}</span
+				>
 			{/if}
 			{#if weather.humidity != null}
-				<span>Humidity {weather.humidity}%</span>
+				<span>{$i18n.t('Humidity {{VALUE}}%', { VALUE: weather.humidity })}</span>
 			{/if}
 			{#if weather.wind_speed != null}
-				<span>Wind {weather.wind_speed} {weather.wind_speed_unit ?? 'km/h'}</span>
+				<span
+					>{$i18n.t('Wind {{SPEED}} {{UNIT}}', {
+						SPEED: weather.wind_speed,
+						UNIT: weather.wind_speed_unit ?? 'km/h'
+					})}</span
+				>
 			{/if}
 		</div>
 	</div>

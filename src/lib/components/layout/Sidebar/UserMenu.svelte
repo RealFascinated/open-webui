@@ -1,23 +1,15 @@
 <script lang="ts">
-	import { createEventDispatcher, getContext, onMount, tick } from 'svelte';
+	import {createEventDispatcher, getContext, tick} from 'svelte';
 
-	import { goto } from '$app/navigation';
-	import { fade, slide } from 'svelte/transition';
+	import {goto} from '$app/navigation';
+	
 
-	import { getUsage } from '$lib/apis';
-	import { getSessionUser, userSignOut } from '$lib/apis/auths';
+	import {getUsage} from '$lib/apis';
+	import {getSessionUser, userSignOut} from '$lib/apis/auths';
 
-	import {
-		showSettings,
-		mobile,
-		showSidebar,
-		showShortcuts,
-		user,
-		config,
-		settings
-	} from '$lib/stores';
+	import {showSettings, mobile, showSidebar, showShortcuts, user, config, settings} from '$lib/stores';
 
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -37,8 +29,8 @@
 	import Note from '$lib/components/icons/Note.svelte';
 	import Pin from '$lib/components/icons/Pin.svelte';
 	import PinSlash from '$lib/components/icons/PinSlash.svelte';
-	import { updateUserStatus, updateUserSettings } from '$lib/apis/users';
-	import { toast } from 'svelte-sonner';
+	import {updateUserStatus, updateUserSettings} from '$lib/apis/users';
+	import {toast} from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
 

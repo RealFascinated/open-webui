@@ -1,10 +1,16 @@
 import { getOutputText, type OutputItem } from '$lib/components/chat/Messages/structuredOutput';
 import { removeAllDetails } from '$lib/utils';
 
+export type StatusHistoryEntry = {
+	done?: boolean;
+	hidden?: boolean;
+};
+
 export type MessageRichFields = {
 	content?: string | null;
 	output?: OutputItem[] | null;
 	done?: boolean;
+	statusHistory?: StatusHistoryEntry[] | null;
 	files?: { type?: string; url?: string; content_type?: string }[] | null;
 	embeds?: string[] | null;
 	weather?: unknown;
@@ -53,7 +59,7 @@ export const getAssistantVisibleText = (message: MessageRichFields): string => {
 	return removeAllDetails(message.content ?? '').trim();
 };
 
-/** Hide tool chrome once the matching rich card is visible to the user. */
+/** Compact tool rows once the matching rich card is visible to the user. */
 export const getHiddenRichToolNames = (
 	message: MessageRichFields,
 	showRichContent: boolean
@@ -86,6 +92,29 @@ export const shouldShowResponseSkeleton = (message: MessageRichFields): boolean 
 	if (message.done || message.error) return false;
 	if (hasReasoningOutput(message.output)) return false;
 	return !getAssistantVisibleText(message).trim();
+};
+
+export const hasActiveStatusHistory = (
+	statusHistory?: StatusHistoryEntry[] | null,
+	messageDone = false
+): boolean => {
+	if (messageDone) return false;
+
+	const entries = statusHistory ?? [];
+	if (entries.length === 0) return false;
+
+	const lastStatus = entries.at(-1);
+	if (!lastStatus || lastStatus.hidden) return false;
+
+	return !lastStatus.done;
+};
+
+export const shouldShowMessageResponseSkeleton = (message: MessageRichFields): boolean => {
+	if (!shouldShowResponseSkeleton(message)) return false;
+	// Once any status history exists (active or completed), the status
+	// indicators replace the skeleton to prevent flickering.
+	if ((message.statusHistory ?? []).length > 0) return false;
+	return !hasActiveStatusHistory(message.statusHistory, message.done);
 };
 
 const normalizeComparableText = (value: string): string =>

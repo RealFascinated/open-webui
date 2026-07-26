@@ -13,7 +13,7 @@
 	export let skills: Skill[] = [];
 	export let selectedSkillIds: string[] = [];
 
-	const i18n = getContext('i18n') as unknown;
+	const i18n = getContext('i18n');
 
 	$: selectedSkills = skills.filter((skill) => selectedSkillIds.includes(skill.id));
 	$: availableSkills = skills.filter((skill) => !selectedSkillIds.includes(skill.id));
@@ -41,7 +41,7 @@
 			/>
 
 			<div class=" flex items-center flex-wrap">
-				{#each selectedSkills as skill, skillIdx}
+				{#each selectedSkills as skill, _skillIdx}
 					<div class=" flex items-center gap-2 mr-3">
 						<div class="self-center flex items-center">
 							<Checkbox

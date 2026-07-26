@@ -157,7 +157,7 @@
 
 	let onPointerDown;
 	onMount(() => {
-		onPointerDown = (e) => handleWindowPointerDown(e);
+		onPointerDown = (e: Event) => handleWindowPointerDown(e);
 		document.addEventListener('pointerdown', onPointerDown, true);
 	});
 	onDestroy(() => {

@@ -91,8 +91,6 @@
 		saving = false;
 	};
 
-	$: isTextFile = fileContent !== null && fileImageUrl === null && filePdfData === null;
-
 	const MD_EXTS = new Set(['md', 'markdown', 'mdx']);
 	const CSV_EXTS = new Set(['csv', 'tsv']);
 	const HTML_EXTS = new Set(['html', 'htm']);

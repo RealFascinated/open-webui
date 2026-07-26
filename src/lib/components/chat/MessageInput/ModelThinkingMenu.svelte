@@ -18,7 +18,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let selectedModels = [''];
+	export let selectedModels: string[] = [''];
 	export let disabled = false;
 
 	const PANEL_WIDTH = 320;
@@ -146,8 +146,7 @@
 	$: currentEffort = getThinkingEffort(resolvedThink);
 	$: effortSuffix = thinkingEnabled ? effortLabel(currentEffort) : '';
 
-	const onModelChange = (event: CustomEvent<string>) => {
-		const id = event.detail;
+	const onModelChange = (id: string) => {
 		if (!id || selectedModels[0] === id) return;
 		selectedModels = [id, ...selectedModels.slice(1)];
 	};
@@ -159,6 +158,7 @@
 	const effortLabel = (effort: string) => {
 		if (effort === 'low') return $i18n.t('Low');
 		if (effort === 'high') return $i18n.t('High');
+		if (effort === 'max') return $i18n.t('Max');
 		return $i18n.t('Medium');
 	};
 
@@ -181,7 +181,7 @@
 		id="chat-composer"
 		{disabled}
 		value={modelId}
-		on:change={onModelChange}
+		onChange={onModelChange}
 		placeholder={$i18n.t('Select a model')}
 		className="w-[22rem]"
 		containerClassName="relative {$mobile ? 'w-full min-w-0' : 'w-fit'}"

@@ -132,7 +132,13 @@ async def compact_messages_for_request(
         raise
 
     chat_id = metadata.get('chat_id')
-    checkpoint_message_id = metadata.get('user_message_id') or metadata.get('message_id')
+    # Anchor to the first retained message, not the current turn: reconstruction
+    # keeps messages from the marker forward (else the retained window is lost).
+    checkpoint_message_id = (
+        _retained_checkpoint_message_id(recent_messages)
+        or metadata.get('user_message_id')
+        or metadata.get('message_id')
+    )
     if chat_id and checkpoint_message_id and not chat_id.startswith(('local:', 'channel:')):
         await Chats.upsert_message_to_chat_by_id_and_message_id(
             chat_id,
@@ -310,6 +316,15 @@ def _get_model_context_length(model_id: str, models: dict, metadata: dict) -> in
     return None
 
 
+def _retained_checkpoint_message_id(recent_messages: list[dict]) -> str | None:
+    """Id of the first retained message that has one — where the checkpoint belongs."""
+    for message in recent_messages:
+        message_id = message.get('id')
+        if isinstance(message_id, str) and message_id:
+            return message_id
+    return None
+
+
 def _apply_latest_summary_checkpoint(messages: list[dict]) -> tuple[list[dict], str | None]:
     summary = None
     summary_idx = None
@@ -331,13 +346,16 @@ def _exceeds_token_threshold(messages: list[dict], system_prompt: str, summary: 
 
     for idx in range(len(messages) - 1, -1, -1):
         usage = messages[idx].get('usage') or (messages[idx].get('info') or {}).get('usage')
-        if isinstance(usage, dict) and (usage.get('input_tokens') or usage.get('cache_n')):
-            # llama.cpp reports cached prefix tokens separately (timings.cache_n), excluded from prompt_n
-            total = (
-                int(usage.get('input_tokens') or 0)
-                + int(usage.get('output_tokens') or 0)
-                + int(usage.get('cache_n') or 0)
-            )
+        if isinstance(usage, dict) and (
+            usage.get('last_input_tokens') or usage.get('input_tokens') or usage.get('cache_n')
+        ):
+            # Last call's real context, not merge_usage's additive tool-loop total.
+            context_input = int(usage.get('last_input_tokens') or usage.get('input_tokens') or 0)
+            if not usage.get('last_input_tokens') and usage.get('cache_n'):
+                # llama.cpp: cache_n is separate from prompt_n when last_input is unset
+                context_input += int(usage.get('cache_n') or 0)
+            context_output = int(usage.get('last_output_tokens') or usage.get('output_tokens') or 0)
+            total = context_input + context_output
             return total + _estimate_messages_tokens(messages[idx + 1 :]) > threshold
 
     estimated = _estimate_tokens(system_prompt) + _estimate_tokens(summary or '') + _estimate_messages_tokens(messages)
@@ -348,15 +366,18 @@ def _find_compaction_boundary(messages: list[dict]) -> int:
     keep_count = max(2, len(messages) * 2 // 5)
     split = max(1, len(messages) - keep_count)
 
-    while split < len(messages) - 1:
-        previous = messages[split - 1] if split > 0 else {}
-        current = messages[split]
-        if current.get('role') == 'tool' or previous.get('tool_calls') or previous.get('output'):
-            split += 1
-            continue
-        break
+    turn_starts = [
+        idx
+        for idx, message in enumerate(messages)
+        if message.get('role') == 'user' and idx <= len(messages) - 2
+    ]
+    for turn_start in turn_starts:
+        if turn_start >= split:
+            return turn_start
 
-    return min(split, len(messages) - 2)
+    if turn_starts:
+        return turn_starts[-1]
+    return 0
 
 
 async def _generate_summary(

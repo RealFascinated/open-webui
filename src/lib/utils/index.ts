@@ -1,8 +1,10 @@
 import type { Writable } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
-import sha256 from 'js-sha256';
+import { sha256 } from 'js-sha256';
 import DOMPurify from 'dompurify';
 import { WEBUI_BASE_URL } from '$lib/constants';
+import type { ChatHistory, ChatMessage, ChatRecord } from '$lib/types/chat';
+import type { MarkedExtension } from 'marked';
 
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -31,6 +33,82 @@ import { decode } from 'html-entities';
 // house falls. Let the quiet work here hold.
 //////////////////////////
 
+type JsonSchema = {
+	type?: string;
+	description?: string;
+	properties?: Record<string, JsonSchema>;
+	required?: string[];
+	items?: JsonSchema;
+	oneOf?: JsonSchema[];
+	anyOf?: JsonSchema[];
+	allOf?: JsonSchema[];
+	enum?: unknown[];
+	[key: string]: unknown;
+};
+
+type OpenApiComponents = {
+	schemas?: Record<string, JsonSchema>;
+};
+
+type OpenApiSpec = {
+	paths?: Record<string, Record<string, unknown>>;
+	components?: OpenApiComponents;
+};
+
+type ToolParameterSchema = {
+	type: string;
+	properties: Record<string, unknown>;
+	required: string[];
+};
+
+type ToolPayload = {
+	name: string;
+	description: string;
+	parameters: ToolParameterSchema;
+};
+
+type CodeBlock = { lang: string; code: string };
+type HtmlGroup = { html: string; css: string; js: string };
+
+export type CodeBlockContents = {
+	codeBlocks: CodeBlock[];
+	html: string;
+	css: string;
+	js: string;
+	htmlGroups: HtmlGroup[];
+};
+
+type CurlyBraceMatch = {
+	word: string;
+	startIndex: number;
+	endIndex: number;
+};
+
+type SupportedLanguage = { code: string };
+
+type OpenAIMessageNode = {
+	id: string;
+	parentId: string | null;
+	childrenIds: string[];
+	role: string;
+	content: string;
+	model: string;
+	done: boolean;
+	context: null;
+	timestamp?: number;
+};
+
+type OpenAIConvertedChat = {
+	history: ChatHistory;
+	models: string[];
+	messages: OpenAIMessageNode[];
+	options: Record<string, unknown>;
+	timestamp: unknown;
+	title: string;
+};
+
+type WindowWithPdfjs = Window & { pdfjsLib?: typeof import('pdfjs-dist') };
+
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const formatNumber = (num: number): string => {
@@ -53,19 +131,22 @@ export const replaceOutsideCode = (content: string, replacer: (str: string) => s
 		.join('');
 };
 
-export const replaceTokens = (content, char, user) => {
+export const replaceTokens = (content: string, char: string, user: string): string => {
 	if (!content.includes('{{')) return content;
-	const tokens = [
+	const tokens: Array<{
+		regex: RegExp;
+		replacement: string | ((substring: string, fileId: string) => string);
+	}> = [
 		{ regex: /{{char}}/gi, replacement: char },
 		{ regex: /{{user}}/gi, replacement: user },
 		{
 			regex: /{{VIDEO_FILE_ID_([a-f0-9-]+)}}/gi,
-			replacement: (_, fileId) =>
+			replacement: (_: string, fileId: string) =>
 				`<video src="${WEBUI_BASE_URL}/api/v1/files/${fileId}/content" controls></video>`
 		},
 		{
 			regex: /{{HTML_FILE_ID_([a-f0-9-]+)}}/gi,
-			replacement: (_, fileId) => `<file type="html" id="${fileId}" />`
+			replacement: (_: string, fileId: string) => `<file type="html" id="${fileId}" />`
 		}
 	];
 
@@ -73,7 +154,11 @@ export const replaceTokens = (content, char, user) => {
 	content = replaceOutsideCode(content, (segment) => {
 		tokens.forEach(({ regex, replacement }) => {
 			if (replacement !== undefined && replacement !== null) {
-				segment = segment.replace(regex, replacement);
+				if (typeof replacement === 'function') {
+					segment = segment.replace(regex, replacement);
+				} else {
+					segment = segment.replace(regex, replacement);
+				}
 			}
 		});
 
@@ -174,11 +259,11 @@ export function unescapeHtml(html: string): string {
 	return decode(html);
 }
 
-export const capitalizeFirstLetter = (string) => {
+export const capitalizeFirstLetter = (string: string): string => {
 	return string.charAt(0).toUpperCase() + string.slice(1);
 };
 
-export const splitStream = (splitOn) => {
+export const splitStream = (splitOn: string | RegExp): TransformStream<string, string> => {
 	let buffer = '';
 	return new TransformStream({
 		transform(chunk, controller) {
@@ -193,23 +278,23 @@ export const splitStream = (splitOn) => {
 	});
 };
 
-export const convertMessagesToHistory = (messages) => {
-	const history = {
+export const convertMessagesToHistory = (
+	messages: Array<Partial<ChatMessage> & Record<string, unknown>>
+): ChatHistory => {
+	const history: ChatHistory = {
 		messages: {},
 		currentId: null
 	};
 
-	let parentMessageId = null;
-	let messageId = null;
+	let parentMessageId: string | null = null;
+	let messageId: string | null = null;
 
 	for (const message of messages) {
 		messageId = uuidv4();
 
 		if (parentMessageId !== null) {
-			history.messages[parentMessageId].childrenIds = [
-				...history.messages[parentMessageId].childrenIds,
-				messageId
-			];
+			const parentMessage = history.messages[parentMessageId];
+			parentMessage.childrenIds = [...(parentMessage.childrenIds ?? []), messageId];
 		}
 
 		history.messages[messageId] = {
@@ -230,7 +315,7 @@ export const convertMessagesToHistory = (messages) => {
 // A lost assistant placeholder may exist under its map key with only
 // completion fields (content/done/error), missing id/role/parentId.
 // Reconstruct graph fields so already-corrupted chats recover on open.
-export const sanitizeHistory = (history) => {
+export const sanitizeHistory = (history: ChatHistory | null | undefined): void => {
 	if (!history?.messages || typeof history.messages !== 'object') return;
 
 	// Purge entries that aren't usable objects
@@ -247,22 +332,25 @@ export const sanitizeHistory = (history) => {
 	}
 
 	// Build reverse lookup: parent, indexed by child id
-	const parentByChildId = {};
+	const parentByChildId: Record<string, string> = {};
 	for (const [id, message] of Object.entries(history.messages)) {
-		for (const childId of message.childrenIds) {
+		for (const childId of message.childrenIds ?? []) {
 			parentByChildId[childId] = id;
 		}
 	}
 
 	// Recover currentId before role reconstruction can make a malformed node
 	// look valid.
-	const currentMessage = history.messages?.[history.currentId];
+	const currentMessage = history.messages?.[history.currentId ?? ''];
 	if (!currentMessage?.id || !currentMessage?.role) {
-		let latestLeafId = null;
+		let latestLeafId: string | null = null;
 		let latestTimestamp = -1;
 
 		for (const [id, message] of Object.entries(history.messages)) {
-			if (message.childrenIds.length === 0 && (message.timestamp ?? 0) > latestTimestamp) {
+			if (
+				(message.childrenIds?.length ?? 0) === 0 &&
+				(message.timestamp ?? 0) > latestTimestamp
+			) {
 				latestLeafId = id;
 				latestTimestamp = message.timestamp ?? 0;
 			}
@@ -295,11 +383,13 @@ export const sanitizeHistory = (history) => {
 
 	// Prune childrenIds referencing deleted/missing nodes
 	for (const message of Object.values(history.messages)) {
-		message.childrenIds = message.childrenIds.filter((childId) => history.messages[childId]);
+		message.childrenIds = (message.childrenIds ?? []).filter(
+			(childId: string) => history.messages[childId]
+		);
 	}
 };
 
-export const getGravatarURL = (email) => {
+export const getGravatarURL = (email: string): string => {
 	// Trim leading and trailing whitespace from
 	// an email address and force all characters
 	// to lower case
@@ -312,11 +402,12 @@ export const getGravatarURL = (email) => {
 	return `https://www.gravatar.com/avatar/${hash}`;
 };
 
-export const canvasPixelTest = () => {
+export const canvasPixelTest = (): boolean => {
 	// Test a 1x1 pixel to potentially identify browser/plugin fingerprint blocking or spoofing
 	// Inspiration: https://github.com/kkapsner/CanvasBlocker/blob/master/test/detectionTest.js
 	const canvas = document.createElement('canvas');
 	const ctx = canvas.getContext('2d');
+	if (!ctx) return false;
 	canvas.height = 1;
 	canvas.width = 1;
 	const imageData = new ImageData(canvas.width, canvas.height);
@@ -393,7 +484,11 @@ async function resizeImageToDataURL(
 	return Promise.resolve(toDataURL());
 }
 
-export const compressImage = async (imageUrl, maxWidth, maxHeight) => {
+export const compressImage = async (
+	imageUrl: string,
+	maxWidth?: number,
+	maxHeight?: number
+): Promise<string> => {
 	return new Promise((resolve, reject) => {
 		const img = new Image();
 		img.onload = async () => {
@@ -446,7 +541,7 @@ export const compressImage = async (imageUrl, maxWidth, maxHeight) => {
 		img.src = imageUrl;
 	});
 };
-export const generateInitialsImage = (name) => {
+export const generateInitialsImage = (name: string): string => {
 	const canvas = document.createElement('canvas');
 	const ctx = canvas.getContext('2d');
 	canvas.width = 100;
@@ -456,6 +551,10 @@ export const generateInitialsImage = (name) => {
 		console.log(
 			'generateInitialsImage: failed pixel test, fingerprint evasion is likely. Using default image.'
 		);
+		return `${WEBUI_BASE_URL}/user.png`;
+	}
+
+	if (!ctx) {
 		return `${WEBUI_BASE_URL}/user.png`;
 	}
 
@@ -481,7 +580,7 @@ export const generateInitialsImage = (name) => {
 	return canvas.toDataURL();
 };
 
-export const formatDate = (inputDate) => {
+export const formatDate = (inputDate: string | number | Date): string => {
 	const date = dayjs(inputDate);
 
 	if (date.isToday()) {
@@ -493,19 +592,23 @@ export const formatDate = (inputDate) => {
 	}
 };
 
-export const copyToClipboard = async (text, html = null, formatted = false) => {
+export const copyToClipboard = async (
+	text: string,
+	html: string | null = null,
+	formatted = false
+): Promise<boolean> => {
 	if (formatted) {
 		let styledHtml = '';
 		if (!html) {
 			const options = {
 				throwOnError: false,
-				highlight: function (code, lang) {
+				highlight: function (code: string, lang: string) {
 					const language = hljs.getLanguage(lang) ? lang : 'plaintext';
 					return hljs.highlight(code, { language }).value;
 				}
 			};
-			marked.use(markedKatexExtension(options));
-			marked.use(markedExtension(options));
+			marked.use(markedKatexExtension(options) as MarkedExtension);
+			marked.use(markedExtension(options) as MarkedExtension);
 			// DEVELOPER NOTE: Go to `$lib/components/chat/Messages/Markdown.svelte` to add extra markdown extensions for rendering.
 
 			const htmlContent = marked.parse(text);
@@ -629,7 +732,7 @@ export const copyToClipboard = async (text, html = null, formatted = false) => {
 	}
 };
 
-export const compareVersion = (latest, current) => {
+export const compareVersion = (latest: string, current: string): boolean => {
 	return current === '0.0.0'
 		? false
 		: current.localeCompare(latest, undefined, {
@@ -639,10 +742,10 @@ export const compareVersion = (latest, current) => {
 			}) < 0;
 };
 
-export const extractCurlyBraceWords = (text) => {
+export const extractCurlyBraceWords = (text: string): CurlyBraceMatch[] => {
 	const regex = /\{\{([^}]+)\}\}/g;
-	const matches = [];
-	let match;
+	const matches: CurlyBraceMatch[] = [];
+	let match: RegExpExecArray | null;
 
 	while ((match = regex.exec(text)) !== null) {
 		matches.push({
@@ -655,13 +758,13 @@ export const extractCurlyBraceWords = (text) => {
 	return matches;
 };
 
-export const removeLastWordFromString = (inputString, wordString) => {
+export const removeLastWordFromString = (inputString: string, wordString: string): string => {
 	console.log('inputString', inputString);
 	// Split the string by newline characters to handle lines separately
 	const lines = inputString.split('\n');
 
 	// Take the last line to operate only on it
-	const lastLine = lines.pop();
+	const lastLine = lines.pop() ?? '';
 
 	// Split the last line into an array of words
 	const words = lastLine.split(' ');
@@ -688,12 +791,12 @@ export const removeLastWordFromString = (inputString, wordString) => {
 	return resultString;
 };
 
-export const removeFirstHashWord = (inputString) => {
+export const removeFirstHashWord = (inputString: string): string => {
 	// Split the string into an array of words
 	const words = inputString.split(' ');
 
 	// Find the index of the first word that starts with #
-	const index = words.findIndex((word) => word.startsWith('#'));
+	const index = words.findIndex((word: string) => word.startsWith('#'));
 
 	// Remove the first word with #
 	if (index !== -1) {
@@ -706,7 +809,7 @@ export const removeFirstHashWord = (inputString) => {
 	return resultString;
 };
 
-export const transformFileName = (fileName) => {
+export const transformFileName = (fileName: string): string => {
 	// Convert to lowercase
 	const lowerCaseFileName = fileName.toLowerCase();
 
@@ -719,13 +822,13 @@ export const transformFileName = (fileName) => {
 	return finalFileName;
 };
 
-export const calculateSHA256 = async (file) => {
+export const calculateSHA256 = async (file: Blob): Promise<string> => {
 	// Create a FileReader to read the file asynchronously
 	const reader = new FileReader();
 
 	// Define a promise to handle the file reading
-	const readFile = new Promise((resolve, reject) => {
-		reader.onload = () => resolve(reader.result);
+	const readFile = new Promise<ArrayBuffer>((resolve, reject) => {
+		reader.onload = () => resolve(reader.result as ArrayBuffer);
 		reader.onerror = reject;
 	});
 
@@ -753,7 +856,7 @@ export const calculateSHA256 = async (file) => {
 	}
 };
 
-export const getImportOrigin = (_chats) => {
+export const getImportOrigin = (_chats: Record<string, unknown>[]): 'openai' | 'webui' => {
 	// Check what external service chat imports are from
 	// ChatGPT exports may include folder/project metadata entries without 'mapping',
 	// so we check if ANY item has a 'mapping' key instead of only the first one.
@@ -763,9 +866,11 @@ export const getImportOrigin = (_chats) => {
 	return 'webui';
 };
 
-export const getUserPosition = async (raw = false) => {
+export const getUserPosition = async (
+	raw = false
+): Promise<string | { latitude: number; longitude: number }> => {
 	// Get the user's location using the Geolocation API
-	const position = await new Promise((resolve, reject) => {
+	const position = await new Promise<GeolocationPosition>((resolve, reject) => {
 		navigator.geolocation.getCurrentPosition(resolve, reject);
 	}).catch((error) => {
 		console.error('Error getting user location:', error);
@@ -786,59 +891,64 @@ export const getUserPosition = async (raw = false) => {
 	}
 };
 
-const extractOpenAIMessageContent = (message): string => {
+const extractOpenAIMessageContent = (message: Record<string, unknown> | null | undefined): string => {
 	// Extract text content from a ChatGPT message, handling various content formats
 	// (string parts, object parts like DALL-E images, text field fallback)
 	try {
-		const parts = message?.['content']?.['parts'];
+		const content = message?.['content'] as Record<string, unknown> | undefined;
+		const parts = content?.['parts'];
 		if (Array.isArray(parts)) {
-			const textParts = parts.filter((p) => typeof p === 'string');
+			const textParts = parts.filter((p): p is string => typeof p === 'string');
 			if (textParts.length > 0) return textParts.join('\n');
 		}
-		return message?.['content']?.['text'] || '';
+		const text = content?.['text'];
+		return typeof text === 'string' ? text : '';
 	} catch {
 		return '';
 	}
 };
 
-const convertOpenAIMessages = (convo) => {
+const convertOpenAIMessages = (convo: Record<string, unknown>): OpenAIConvertedChat => {
 	// Parse OpenAI chat messages and create chat dictionary for creating new chats
-	const mapping = convo['mapping'];
-	const messages = [];
+	const mapping = convo['mapping'] as Record<string, Record<string, unknown>>;
+	const messages: OpenAIMessageNode[] = [];
 	let currentId = '';
-	let lastId = null;
+	let lastId: string | null = null;
 	const uniqueModels = new Set<string>();
 
 	for (const message_id in mapping) {
 		const message = mapping[message_id];
 		currentId = message_id;
 		try {
+			const msg = message['message'] as Record<string, unknown> | null | undefined;
+			const msgContent = msg?.['content'] as Record<string, unknown> | undefined;
+			const parts = msgContent?.['parts'] as unknown[] | undefined;
 			if (
 				messages.length == 0 &&
-				(message['message'] == null ||
-					(message['message']['content']['parts']?.[0] == '' &&
-						message['message']['content']['text'] == null))
+				(msg == null ||
+					(parts?.[0] == '' && msgContent?.['text'] == null))
 			) {
 				// Skip chat messages with no content
 				continue;
 			} else {
-				const role = message['message']?.['author']?.['role'];
+				const author = msg?.['author'] as Record<string, unknown> | undefined;
+				const role = author?.['role'] as string | undefined;
 				// Skip system and tool messages — they don't map to user/assistant
 				if (role === 'system' || role === 'tool') {
 					continue;
 				}
 
-				const model = message['message']?.['metadata']?.['model_slug'] || 'gpt-3.5-turbo';
-				const timestamp = message['message']?.['create_time']
-					? Math.floor(message['message']['create_time'])
-					: undefined;
+				const metadata = msg?.['metadata'] as Record<string, unknown> | undefined;
+				const model = (metadata?.['model_slug'] as string) || 'gpt-3.5-turbo';
+				const createTime = msg?.['create_time'] as number | undefined;
+				const timestamp = createTime ? Math.floor(createTime) : undefined;
 
-				const new_chat: Record<string, unknown> = {
+				const new_chat: OpenAIMessageNode = {
 					id: message_id,
 					parentId: lastId,
-					childrenIds: message['children'] || [],
+					childrenIds: (message['children'] as string[]) || [],
 					role: role !== 'user' ? 'assistant' : 'user',
-					content: extractOpenAIMessageContent(message['message']),
+					content: extractOpenAIMessageContent(msg),
 					model,
 					done: true,
 					context: null,
@@ -863,24 +973,24 @@ const convertOpenAIMessages = (convo) => {
 		messages[messages.length - 1].childrenIds = [];
 	}
 
-	const history: Record<PropertyKey, (typeof messages)[number]> = {};
+	const history: Record<string, OpenAIMessageNode> = {};
 	messages.forEach((obj) => (history[obj.id] = obj));
 
-	const chat = {
+	const chat: OpenAIConvertedChat = {
 		history: {
 			currentId: currentId,
-			messages: history // Need to convert this to not a list and instead a json object
+			messages: history
 		},
 		models: uniqueModels.size > 0 ? [...uniqueModels] : ['gpt-3.5-turbo'],
 		messages: messages,
 		options: {},
 		timestamp: convo['create_time'],
-		title: convo['title'] ?? 'New Chat'
+		title: (convo['title'] as string) ?? 'New Chat'
 	};
 	return chat;
 };
 
-const validateChat = (chat) => {
+const validateChat = (chat: OpenAIConvertedChat): boolean => {
 	// Because ChatGPT sometimes has features we can't use like DALL-E or might have corrupted messages, need to validate
 	const messages = chat.messages;
 
@@ -899,9 +1009,9 @@ const validateChat = (chat) => {
 	return true;
 };
 
-export const convertOpenAIChats = (_chats) => {
+export const convertOpenAIChats = (_chats: Record<string, unknown>[]): ChatRecord[] => {
 	// Create a list of dictionaries with each conversation from import
-	const chats = [];
+	const chats: ChatRecord[] = [];
 	let failed = 0;
 	let skipped = 0;
 	for (const convo of _chats) {
@@ -920,15 +1030,17 @@ export const convertOpenAIChats = (_chats) => {
 		if (validateChat(chat)) {
 			// Use created_at/updated_at keys so importChatsHandler passes them
 			// to the backend correctly (previously used 'timestamp' which was ignored)
-			const createdAt = convo['create_time'] ? Math.floor(convo['create_time']) : null;
-			const updatedAt = convo['update_time'] ? Math.floor(convo['update_time']) : createdAt;
+			const createTime = convo['create_time'];
+			const updateTime = convo['update_time'];
+			const createdAt = typeof createTime === 'number' ? Math.floor(createTime) : null;
+			const updatedAt = typeof updateTime === 'number' ? Math.floor(updateTime) : createdAt;
 			chats.push({
-				id: convo['id'],
+				id: convo['id'] as string,
 				user_id: '',
-				title: convo['title'],
+				title: convo['title'] as string,
 				chat: chat,
-				created_at: createdAt,
-				updated_at: updatedAt
+				created_at: createdAt ?? undefined,
+				updated_at: updatedAt ?? undefined
 			});
 		} else {
 			failed++;
@@ -1007,7 +1119,7 @@ export const cleanText = (content: string) => {
 	return removeFormattings(removeEmojis(content.trim()));
 };
 
-export const removeDetails = (content, types) => {
+export const removeDetails = (content: string, types: string[]): string => {
 	return replaceOutsideCode(content, (segment) => {
 		for (const type of types) {
 			segment = segment.replace(
@@ -1019,7 +1131,7 @@ export const removeDetails = (content, types) => {
 	}).trim();
 };
 
-export const removeAllDetails = (content) => {
+export const removeAllDetails = (content: string): string => {
 	// First pass: strip <details> blocks on the full string before code-fence
 	// splitting, so blocks whose body contains triple backticks are caught.
 	// (replaceOutsideCode splits on ``` fences, which breaks the <details>
@@ -1031,7 +1143,7 @@ export const removeAllDetails = (content) => {
 	}).trim();
 };
 
-export const processDetails = (content) => {
+export const processDetails = (content: string): string => {
 	content = removeDetails(content, ['reasoning', 'code_interpreter']);
 
 	// This regex matches <details> tags with type="tool_calls" and captures their attributes to convert them to a string
@@ -1040,8 +1152,8 @@ export const processDetails = (content) => {
 	if (matches) {
 		for (const match of matches) {
 			const attributesRegex = /(\w+)="([^"]*)"/g;
-			const attributes = {};
-			let attributeMatch;
+			const attributes: Record<string, string> = {};
+			let attributeMatch: RegExpExecArray | null;
 			while ((attributeMatch = attributesRegex.exec(match)) !== null) {
 				attributes[attributeMatch[1]] = attributeMatch[2];
 			}
@@ -1136,6 +1248,39 @@ export const extractSentencesForAudio = (text: string) => {
 	}, [] as string[]);
 };
 
+
+
+export const extractClausesForAudio = (text: string) => {
+	const sentences = extractSentences(text);
+	const clauses: string[] = [];
+
+	for (const sentence of sentences) {
+		const parts = sentence.split(/(?<=[,;:])\s+/);
+		for (const part of parts) {
+			const cleaned = cleanText(part);
+			if (cleaned) {
+				clauses.push(cleaned);
+			}
+		}
+	}
+
+	return clauses.reduce((mergedTexts, currentText) => {
+		const lastIndex = mergedTexts.length - 1;
+		if (lastIndex >= 0) {
+			const previousText = mergedTexts[lastIndex];
+			const wordCount = previousText.split(/\s+/).length;
+			if (wordCount < 3) {
+				mergedTexts[lastIndex] = `${previousText} ${currentText}`;
+			} else {
+				mergedTexts.push(currentText);
+			}
+		} else {
+			mergedTexts.push(currentText);
+		}
+		return mergedTexts;
+	}, [] as string[]);
+};
+
 export const getMessageContentParts = (content: string, splitOn: string = 'punctuation') => {
 	// Strip <details> blocks directly on the full string before any
 	// code-block-aware processing. removeAllDetails (which callers use)
@@ -1157,6 +1302,9 @@ export const getMessageContentParts = (content: string, splitOn: string = 'punct
 		case TTS_RESPONSE_SPLIT.PARAGRAPHS:
 			messageContentParts.push(...extractParagraphsForAudio(content));
 			break;
+		case TTS_RESPONSE_SPLIT.CLAUSES:
+			messageContentParts.push(...extractClausesForAudio(content));
+			break;
 		case TTS_RESPONSE_SPLIT.NONE:
 			messageContentParts.push(cleanText(content));
 			break;
@@ -1165,13 +1313,17 @@ export const getMessageContentParts = (content: string, splitOn: string = 'punct
 	return messageContentParts;
 };
 
-export const blobToFile = (blob, fileName) => {
+export const blobToFile = (blob: Blob, fileName: string): File => {
 	// Create a new File object from the Blob
 	const file = new File([blob], fileName, { type: blob.type });
 	return file;
 };
 
-export const getPromptVariables = (user_name, user_location, user_email = '') => {
+export const getPromptVariables = (
+	user_name: string,
+	user_location: string,
+	user_email = ''
+): Record<string, string> => {
 	return {
 		'{{USER_NAME}}': user_name,
 		'{{USER_EMAIL}}': user_email || 'Unknown',
@@ -1260,7 +1412,7 @@ const MONTH_NAMES = [
 	'December'
 ];
 
-export const getTimeRange = (timestamp) => {
+export const getTimeRange = (timestamp: number): string => {
 	const now = new Date();
 	const date = new Date(timestamp * 1000); // Convert Unix timestamp to milliseconds
 
@@ -1296,8 +1448,8 @@ export const getTimeRange = (timestamp) => {
  * @param content {string} - The content string with potential frontmatter.
  * @returns {Object} - The extracted frontmatter as a dictionary.
  */
-export const extractFrontmatter = (content) => {
-	const frontmatter = {};
+export const extractFrontmatter = (content: string): Record<string, string> => {
+	const frontmatter: Record<string, string> = {};
 	let frontmatterStarted = false;
 	let frontmatterEnded = false;
 	const frontmatterPattern = /^\s*([a-z_]+):\s*(.*)\s*$/i;
@@ -1335,11 +1487,15 @@ export const extractFrontmatter = (content) => {
 };
 
 // Function to determine the best matching language
-export const bestMatchingLanguage = (supportedLanguages, preferredLanguages, defaultLocale) => {
-	const languages = supportedLanguages.map((lang) => lang.code);
+export const bestMatchingLanguage = (
+	supportedLanguages: SupportedLanguage[],
+	preferredLanguages: string[],
+	defaultLocale: string
+): string => {
+	const languages = supportedLanguages.map((lang: SupportedLanguage) => lang.code);
 
 	const match = preferredLanguages
-		.map((prefLang) => languages.find((lang) => lang.startsWith(prefLang)))
+		.map((prefLang: string) => languages.find((lang: string) => lang.startsWith(prefLang)))
 		.find(Boolean);
 
 	return match || defaultLocale;
@@ -1377,8 +1533,11 @@ export const getWeekday = () => {
 	return weekdays[date.getDay()];
 };
 
-export const createMessagesList = (history, messageId) => {
-	const list = [];
+export const createMessagesList = (
+	history: ChatHistory,
+	messageId: string | null | undefined
+): ChatMessage[] => {
+	const list: ChatMessage[] = [];
 	let currentId = messageId;
 
 	while (currentId !== null && currentId !== undefined) {
@@ -1393,7 +1552,7 @@ export const createMessagesList = (history, messageId) => {
 	return list.reverse();
 };
 
-export const formatFileSize = (size) => {
+export const formatFileSize = (size: number | null | undefined): string => {
 	if (size == null) return 'Unknown size';
 	if (typeof size !== 'number' || size < 0) return 'Invalid size';
 	if (size === 0) return '0 B';
@@ -1407,30 +1566,34 @@ export const formatFileSize = (size) => {
 	return `${size.toFixed(1)} ${units[unitIndex]}`;
 };
 
-export const getLineCount = (text) => {
+export const getLineCount = (text: string | null | undefined): number => {
 	console.log(typeof text);
 	return text ? text.split('\n').length : 0;
 };
 
 // Helper function to recursively resolve OpenAPI schema into JSON schema format
-function resolveSchema(schemaRef, components, resolvedSchemas = new Set()) {
+function resolveSchema(
+	schemaRef: JsonSchema | undefined,
+	components: OpenApiComponents,
+	resolvedSchemas: Set<string> = new Set()
+): JsonSchema {
 	if (!schemaRef) return {};
 
 	if (schemaRef['$ref']) {
-		const refPath = schemaRef['$ref'];
+		const refPath = schemaRef['$ref'] as string;
 		const schemaName = refPath.split('/').pop();
 
-		if (resolvedSchemas.has(schemaName)) {
+		if (!schemaName || resolvedSchemas.has(schemaName)) {
 			// Avoid infinite recursion on circular references
 			return {};
 		}
 		resolvedSchemas.add(schemaName);
-		const referencedSchema = components.schemas[schemaName];
+		const referencedSchema = components.schemas?.[schemaName];
 		return resolveSchema(referencedSchema, components, resolvedSchemas);
 	}
 
 	if (schemaRef.type) {
-		const schemaObj = { type: schemaRef.type };
+		const schemaObj: JsonSchema = { type: schemaRef.type };
 
 		if (schemaRef.description) {
 			schemaObj.description = schemaRef.description;
@@ -1455,9 +1618,9 @@ function resolveSchema(schemaRef, components, resolvedSchemas = new Set()) {
 		}
 
 		// Resolve composition keywords (oneOf, anyOf, allOf) which may contain $ref
-		for (const keyword of ['oneOf', 'anyOf', 'allOf']) {
+		for (const keyword of ['oneOf', 'anyOf', 'allOf'] as const) {
 			if (Array.isArray(schemaRef[keyword])) {
-				schemaObj[keyword] = schemaRef[keyword].map((inner) =>
+				schemaObj[keyword] = schemaRef[keyword]!.map((inner) =>
 					resolveSchema(inner, components, resolvedSchemas)
 				);
 			}
@@ -1467,11 +1630,11 @@ function resolveSchema(schemaRef, components, resolvedSchemas = new Set()) {
 	}
 
 	// Handle schemas that only have composition keywords without an explicit type
-	const compositionObj: Record<string, unknown> = {};
+	const compositionObj: JsonSchema = {};
 	let hasComposition = false;
-	for (const keyword of ['oneOf', 'anyOf', 'allOf']) {
+	for (const keyword of ['oneOf', 'anyOf', 'allOf'] as const) {
 		if (Array.isArray(schemaRef[keyword])) {
-			compositionObj[keyword] = schemaRef[keyword].map((inner) =>
+			compositionObj[keyword] = schemaRef[keyword]!.map((inner) =>
 				resolveSchema(inner, components, resolvedSchemas)
 			);
 			hasComposition = true;
@@ -1500,13 +1663,15 @@ const OPENAPI_HTTP_METHODS = new Set([
 ]);
 
 // Main conversion function
-export const convertOpenApiToToolPayload = (openApiSpec) => {
-	const toolPayload = [];
+export const convertOpenApiToToolPayload = (openApiSpec: OpenApiSpec): ToolPayload[] => {
+	const toolPayload: ToolPayload[] = [];
 
 	// Guard against invalid or non-OpenAPI specs (e.g., MCP-style configs)
 	if (!openApiSpec || !openApiSpec.paths) {
 		return toolPayload;
 	}
+
+	const components = openApiSpec.components ?? {};
 
 	for (const [, methods] of Object.entries(openApiSpec.paths)) {
 		if (!methods || typeof methods !== 'object') continue;
@@ -1542,7 +1707,7 @@ export const convertOpenApiToToolPayload = (openApiSpec) => {
 				const opParams = Array.isArray(operationRecord.parameters)
 					? (operationRecord.parameters as Record<string, unknown>[])
 					: [];
-				const mergedParams = new Map();
+				const mergedParams = new Map<string, Record<string, unknown>>();
 				for (const param of pathLevelParams) {
 					if (param?.name) mergedParams.set(`${param.name}:${param.in ?? ''}`, param);
 				}
@@ -1552,10 +1717,10 @@ export const convertOpenApiToToolPayload = (openApiSpec) => {
 
 				// Extract path and query parameters
 				for (const param of mergedParams.values()) {
-					const paramName = param?.name;
+					const paramName = param?.name as string | undefined;
 					if (!paramName) continue;
-					const paramSchema = param?.schema ?? {};
-					let description = paramSchema.description || param.description || '';
+					const paramSchema = (param?.schema ?? {}) as JsonSchema;
+					let description = paramSchema.description || (param.description as string) || '';
 					if (paramSchema.enum && Array.isArray(paramSchema.enum)) {
 						description += `. Possible values: ${paramSchema.enum.join(', ')}`;
 					}
@@ -1572,10 +1737,10 @@ export const convertOpenApiToToolPayload = (openApiSpec) => {
 				// Extract and recursively resolve requestBody if available
 				if (operationRecord.requestBody) {
 					const requestBody = operationRecord.requestBody as Record<string, unknown>;
-					const content = requestBody.content as Record<string, Record<string, { schema?: unknown }>>;
+					const content = requestBody.content as Record<string, Record<string, { schema?: JsonSchema }>>;
 					if (content && content['application/json']) {
 						const requestSchema = content['application/json'].schema;
-						const resolvedRequestSchema = resolveSchema(requestSchema, openApiSpec.components);
+						const resolvedRequestSchema = resolveSchema(requestSchema, components);
 
 						if (resolvedRequestSchema.properties) {
 							tool.parameters.properties = {
@@ -1589,7 +1754,7 @@ export const convertOpenApiToToolPayload = (openApiSpec) => {
 								];
 							}
 						} else if (resolvedRequestSchema.type === 'array') {
-							tool.parameters = resolvedRequestSchema; // special case when root schema is an array
+							tool.parameters = resolvedRequestSchema as ToolParameterSchema;
 						}
 					}
 				}
@@ -1803,14 +1968,13 @@ function ensureReadableStreamAsyncIterator() {
 
 async function ensurePDFjsLoaded() {
 	ensureReadableStreamAsyncIterator();
-	if (!window.pdfjsLib) {
+	const win = window as WindowWithPdfjs;
+	if (!win.pdfjsLib) {
 		const pdfjs = await import('pdfjs-dist');
 		pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-		if (!window.pdfjsLib) {
-			throw new Error('pdfjsLib is required for PDF extraction');
-		}
+		win.pdfjsLib = pdfjs;
 	}
-	return window.pdfjsLib;
+	return win.pdfjsLib;
 }
 
 export const extractContentFromFile = async (file: File) => {
@@ -1844,7 +2008,7 @@ export const extractContentFromFile = async (file: File) => {
 		for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
 			const page = await pdf.getPage(pageNum);
 			const content = await page.getTextContent();
-			const strings = content.items.map((item: { str?: string }) => item.str ?? '');
+			const strings = content.items.map((item) => ('str' in item ? (item.str ?? '') : ''));
 			allText += strings.join(' ') + '\n';
 		}
 		return allText;
@@ -1898,7 +2062,7 @@ export const extractContentFromFile = async (file: File) => {
 	}
 };
 
-export const getAge = (birthDate) => {
+export const getAge = (birthDate: string | Date): string => {
 	const today = new Date();
 	const bDate = new Date(birthDate);
 	let age = today.getFullYear() - bDate.getFullYear();
@@ -2028,12 +2192,29 @@ export const renderVegaVisualization = async (spec: string, lang: string = '') =
 		const vegaLite = await import('vega-lite');
 		vegaSpec = vegaLite.compile(parsedSpec).spec;
 	}
-	const view = new vega.View(vega.parse(vegaSpec), { renderer: 'none' });
+	const view = new vega.View(vega.parse(vegaSpec), {
+		loader: (() => {
+			// Chat content is untrusted: block Vega from fetching external resources.
+			const loader = vega.loader();
+			loader.load = async () => {
+				throw new Error('External resource loading is disabled for rendered visualizations');
+			};
+			const sanitize = loader.sanitize.bind(loader);
+			loader.sanitize = async (uri: string, options: unknown) => {
+				if (/^(https?:|\/\/)/i.test(uri)) {
+					throw new Error('External resource loading is disabled for rendered visualizations');
+				}
+				return sanitize(uri, options);
+			};
+			return loader;
+		})(),
+		renderer: 'none'
+	});
 	const svg = await view.toSVG();
 	return svg;
 };
 
-	export type { AntArtifact } from './ant-artifact';
+export type { AntArtifact } from './ant-artifact';
 export {
 	parseAntArtifacts,
 	parseAntArtifactsForStream,
@@ -2049,21 +2230,21 @@ export {
 	mapMimeToArtifactType
 } from './ant-artifact';
 
-export const getCodeBlockContents = (content: string): object => {
+export const getCodeBlockContents = (content: string): CodeBlockContents => {
 	// Strip thinking/reasoning and other detail blocks before extracting code
 	// to prevent code inside <details type="reasoning"> from being treated as artifacts
 	content = removeAllDetails(content);
 
 	const codeBlockContents = content.match(/```[\s\S]*?```/g);
 
-	const codeBlocks = [];
+	const codeBlocks: CodeBlock[] = [];
 
 	// Groups of related HTML/CSS/JS blocks. Each HTML block starts a new group;
 	// CSS and JS blocks attach to the current (most recent) group.
 	// This preserves the existing behaviour for "dumb" models that output
 	// separate html/css/js blocks meant to form a single page, while also
 	// allowing multiple distinct HTML blocks to produce separate artifacts.
-	const htmlGroups: Array<{ html: string; css: string; js: string }> = [];
+	const htmlGroups: HtmlGroup[] = [];
 
 	const initDefaultGroup = () => {
 		if (htmlGroups.length === 0) {
@@ -2142,11 +2323,11 @@ export const getCodeBlockContents = (content: string): object => {
 			}))
 	};
 };
-export const parseFrontmatter = (content) => {
+export const parseFrontmatter = (content: string): Record<string, string> => {
 	const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
 	if (match) {
-		const frontmatter = {};
-		match[1].split('\n').forEach((line) => {
+		const frontmatter: Record<string, string> = {};
+		match[1].split('\n').forEach((line: string) => {
 			const [key, ...value] = line.split(':');
 			if (key && value) {
 				frontmatter[key.trim()] = value
@@ -2160,8 +2341,17 @@ export const parseFrontmatter = (content) => {
 	return {};
 };
 
-export const formatSkillName = (name) => {
-	return name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const formatIdentifierName = (name: string) =>
+	name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+export const formatSkillName = (name: string): string => formatIdentifierName(name);
+
+export const formatToolName = (name: string) => {
+	if (!name) return '';
+	return name
+		.split('/')
+		.map((segment) => formatIdentifierName(segment.trim()))
+		.join(' / ');
 };
 
 /**

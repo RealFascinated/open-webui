@@ -1,35 +1,23 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { getContext, tick } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {getContext, tick} from 'svelte';
 
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { downloadChatAsPDF } from '$lib/apis/utils';
-	import { copyToClipboard, createMessagesList } from '$lib/utils';
-	import { getOutputText } from '$lib/components/chat/Messages/structuredOutput';
+	
+	import {copyToClipboard, createMessagesList} from '$lib/utils';
+	import {getOutputText} from '$lib/components/chat/Messages/structuredOutput';
 
-	import {
-		showControls,
-		showArtifacts,
-		mobile,
-		temporaryChatEnabled,
-		theme,
-		user,
-		settings,
-		projects,
-		showEmbeds,
-		artifactContents
-	} from '$lib/stores';
+	import {showControls, showArtifacts, temporaryChatEnabled, user, settings, projects, showEmbeds, artifactContents} from '$lib/stores';
 
-	import { getChatById } from '$lib/apis/chats';
+	import {getChatById} from '$lib/apis/chats';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import DropdownSub from '$lib/components/common/DropdownSub.svelte';
 	import Tags from '$lib/components/chat/Tags.svelte';
 	import Clipboard from '$lib/components/icons/Clipboard.svelte';
-	import AdjustmentsHorizontal from '$lib/components/icons/AdjustmentsHorizontal.svelte';
-	import Cube from '$lib/components/icons/Cube.svelte';
+import Cube from '$lib/components/icons/Cube.svelte';
 	import Folder from '$lib/components/icons/Folder.svelte';
 	import Share from '$lib/components/icons/Share.svelte';
 	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
@@ -59,7 +47,7 @@
 	const getChatAsText = async () => {
 		const history = chat.chat.history;
 		const messages = createMessagesList(history, history.currentId);
-		const chatText = messages.reduce((a, message, i, arr) => {
+		const chatText = messages.reduce((a, message, _i, _arr) => {
 			const content = getOutputText(message.output) || message.content || '';
 			return `${a}### ${message.role.toUpperCase()}\n${content}\n\n`;
 		}, '');
@@ -127,7 +115,7 @@
 
 					// Convert page height in mm to px on canvas scale for cropping
 					// Get canvas DPI scale:
-					const pxPerMM = canvas.width / virtualWidth; // width in px / width in px?
+					const _pxPerMM = canvas.width / virtualWidth; // width in px / width in px?
 					// Since 1 page width is 210 mm, but canvas width is 800 px at scale 2
 					// Assume 1 mm = px / (pageWidthMM scaled)
 					// Actually better: Calculate scale factor from px/mm:
@@ -205,7 +193,6 @@
 			const pageWidth = doc.internal.pageSize.getWidth();
 			const pageHeight = doc.internal.pageSize.getHeight();
 			const usableWidth = pageWidth - left - right;
-			const usableHeight = pageHeight - top - bottom;
 
 			// Font size and line height
 			const fontSize = 8;
@@ -455,7 +442,7 @@
 							<div class="flex items-center">{$i18n.t('Move')}</div>
 						</button>
 						{#each $projects.sort((a, b) => b.updated_at - a.updated_at) as folder}
-							{#if project?.id}
+							{#if folder?.id}
 								<button
 									draggable="false"
 									class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl overflow-hidden w-full"

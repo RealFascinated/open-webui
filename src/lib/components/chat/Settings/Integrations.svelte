@@ -1,12 +1,10 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { createEventDispatcher, onMount, getContext } from 'svelte';
-	import { getToolServersData } from '$lib/apis';
-
-	const dispatch = createEventDispatcher();
+	import {toast} from 'svelte-sonner';
+	import {onMount, getContext} from 'svelte';
+	import {getToolServersData} from '$lib/apis';
 	const i18n = getContext('i18n');
 
-	import { settings, toolServers, terminalServers } from '$lib/stores';
+	import {settings, toolServers, terminalServers} from '$lib/stores';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';

@@ -16,6 +16,17 @@ from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL
 
 log = logging.getLogger(__name__)
 
+LLAMACPP_CONVERSATION_ID_HEADER = 'X-Conversation-Id'
+
+REASONING_EFFORT_TOKEN_BUDGETS: dict[str, int] = {
+    'low': 512,
+    'medium': 2048,
+    'high': 8192,
+    'max': -1,
+}
+
+DEFAULT_THINKING_EFFORT = 'medium'
+
 BREAKDOWN_TIMEOUT_SECONDS = 2.0
 CAPABILITY_CACHE_TTL_SECONDS = 600
 
@@ -23,6 +34,144 @@ _capability_cache: dict[str, tuple[bool, float]] = {}
 _layer_count_cache: dict[str, tuple[dict, float]] = {}
 
 TOOL_SOURCE_KEYS = ('user', 'builtin', 'mcp', 'external', 'terminal')
+
+
+def llamacpp_conversation_id(chat_id: str | None, model_id: str | None = None) -> str | None:
+    if not chat_id or chat_id.startswith('local:') or chat_id.startswith('channel:'):
+        return None
+    if model_id:
+        return f'{chat_id}::{model_id}'
+    return chat_id
+
+
+def reasoning_effort_to_budget_tokens(effort: str | None) -> int | None:
+    if effort is None:
+        return None
+    normalized = str(effort).strip().lower()
+    if normalized in ('', 'none', 'off', 'false'):
+        return 0
+    if normalized in REASONING_EFFORT_TOKEN_BUDGETS:
+        return REASONING_EFFORT_TOKEN_BUDGETS[normalized]
+    return None
+
+
+def openrouter_reasoning_payload(form_data: dict) -> dict | bool | None:
+    kwargs = dict(form_data.get('chat_template_kwargs') or {})
+    enable_thinking = kwargs.get('enable_thinking')
+    effort = form_data.get('reasoning_effort')
+
+    if enable_thinking is False:
+        return {'enabled': False, 'effort': 'none'}
+
+    if effort is not None:
+        normalized = str(effort).strip().lower()
+        if normalized in ('', 'none', 'off', 'false'):
+            return {'enabled': False, 'effort': 'none'}
+        return {'enabled': True, 'effort': normalized}
+
+    if enable_thinking is True:
+        return {'enabled': True, 'effort': 'medium'}
+
+    return None
+
+
+def _set_thinking_budget(form_data: dict, budget: int) -> None:
+    form_data['thinking_budget_tokens'] = budget
+    form_data['reasoning_budget_tokens'] = budget
+
+
+def _explicit_thinking_budget(form_data: dict) -> int | None:
+    for key in ('thinking_budget_tokens', 'reasoning_budget_tokens'):
+        value = form_data.get(key)
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def apply_llamacpp_reasoning_params(form_data: dict, model: dict) -> None:
+    if model.get('provider') != 'llama.cpp':
+        return
+
+    kwargs = dict(form_data.get('chat_template_kwargs') or {})
+    enable_thinking = kwargs.get('enable_thinking')
+    effort = form_data.get('reasoning_effort')
+
+    if enable_thinking is False:
+        _set_thinking_budget(form_data, 0)
+        form_data['reasoning'] = {'enabled': False, 'effort': 'none'}
+        return
+
+    if effort is not None:
+        if enable_thinking is None:
+            kwargs['enable_thinking'] = True
+            form_data['chat_template_kwargs'] = kwargs
+        budget = reasoning_effort_to_budget_tokens(str(effort))
+        if budget is not None:
+            _set_thinking_budget(form_data, budget)
+        reasoning = openrouter_reasoning_payload(form_data)
+        if reasoning is not None:
+            form_data['reasoning'] = reasoning
+        return
+
+    if enable_thinking is True:
+        _set_thinking_budget(form_data, REASONING_EFFORT_TOKEN_BUDGETS[DEFAULT_THINKING_EFFORT])
+        form_data['reasoning'] = {'enabled': True, 'effort': DEFAULT_THINKING_EFFORT}
+        return
+
+    explicit_budget = _explicit_thinking_budget(form_data)
+    if explicit_budget is not None:
+        _set_thinking_budget(form_data, explicit_budget)
+        if explicit_budget == 0:
+            kwargs['enable_thinking'] = False
+            form_data['chat_template_kwargs'] = kwargs
+            form_data['reasoning'] = {'enabled': False, 'effort': 'none'}
+        elif enable_thinking is None:
+            kwargs['enable_thinking'] = True
+            form_data['chat_template_kwargs'] = kwargs
+
+
+def disable_thinking(form_data: dict) -> None:
+    params = dict(form_data.get('params') or {})
+    params['think'] = False
+    form_data['params'] = params
+    form_data['think'] = False
+    chat_template_kwargs = dict(form_data.get('chat_template_kwargs') or {})
+    chat_template_kwargs['enable_thinking'] = False
+    form_data['chat_template_kwargs'] = chat_template_kwargs
+    form_data.pop('reasoning_effort', None)
+    _set_thinking_budget(form_data, 0)
+    form_data['reasoning'] = {'enabled': False, 'effort': 'none'}
+
+
+def apply_task_thinking_policy(
+    form_data: dict,
+    metadata: dict | None,
+    *,
+    model: dict | None = None,
+    api_config: dict | None = None,
+) -> None:
+    if not metadata:
+        return
+
+    features = metadata.get('features') or {}
+    if not metadata.get('task') and not features.get('voice'):
+        return
+
+    disable_thinking(form_data)
+
+    provider = (model or {}).get('provider') or (api_config or {}).get('provider')
+    if provider == 'llama.cpp':
+        apply_llamacpp_reasoning_params(form_data, {'provider': 'llama.cpp'})
+
+
+def apply_llamacpp_provider_payload(payload: dict) -> None:
+    tools = payload.get('tools')
+    if isinstance(tools, list) and len(tools) >= 2 and 'parallel_tool_calls' not in payload:
+        payload['parallel_tool_calls'] = True
 
 
 def normalize_llamacpp_base(url: str) -> str:

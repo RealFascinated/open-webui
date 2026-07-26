@@ -8,20 +8,15 @@
 
 	export let show = false;
 	export let shareUsers = true;
-	export let onAdd = (payload: { userIds: string[]; groupIds: string[] }) => {};
+	export let onAdd = (_payload: { userIds: string[]; groupIds: string[] }) => {};
 
 	let userIds: string[] = [];
 	let groupIds: string[] = [];
-	let loading = false;
-
 	const submitHandler = () => {
-		loading = true;
 		onAdd({ userIds, groupIds });
 		show = false;
-
 		userIds = [];
 		groupIds = [];
-		loading = false;
 	};
 </script>
 

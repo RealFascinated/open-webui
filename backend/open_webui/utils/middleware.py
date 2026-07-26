@@ -129,7 +129,11 @@ from open_webui.utils.misc import (
 from open_webui.utils.payload import apply_system_prompt_to_body, resolve_system_prompt
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.response import augment_provider_usage, merge_usage, normalize_usage
-from open_webui.utils.llamacpp_tokens import collect_tool_specs_by_source, snapshot_messages
+from open_webui.utils.llamacpp_tokens import (
+    apply_llamacpp_reasoning_params,
+    collect_tool_specs_by_source,
+    snapshot_messages,
+)
 from open_webui.utils.sanitize import sanitize_code
 from open_webui.utils.task import (
     get_task_model_id,
@@ -292,8 +296,8 @@ def get_citation_source_from_tool_result(
 
     Returns a list of sources (usually one, but query_knowledge_files may return multiple).
     """
-    _EXPECTS_LIST = {'search_web', 'query_knowledge_files'}
-    _EXPECTS_DICT = {'view_knowledge_file', 'view_file'}
+    _EXPECTS_LIST = {'search_web'}
+    _EXPECTS_DICT = {'view_knowledge_file', 'view_file', 'fetch_url', 'query_knowledge_files'}
 
     try:
         try:
@@ -305,22 +309,84 @@ def get_citation_source_from_tool_result(
 
         # Validate tool_result type based on what the branch expects
         if tool_name in _EXPECTS_LIST and not isinstance(tool_result, list):
-            return []
+            if not (tool_name == 'search_web' and isinstance(tool_result, dict) and 'results' in tool_result):
+                return []
         elif tool_name in _EXPECTS_DICT and not isinstance(tool_result, dict):
             return []
 
         if tool_name == 'search_web':
-            # Parse JSON array: [{"title": "...", "link": "...", "snippet": "..."}]
-            results = tool_result
+            # SearXNG returns a rich object; other engines return a JSON array.
+            if isinstance(tool_result, dict):
+                results = tool_result.get('results') or []
+                direct_answers = tool_result.get('direct_answers') or []
+                infoboxes = tool_result.get('infoboxes') or []
+                overview = tool_result.get('overview')
+            else:
+                results = tool_result
+                direct_answers = []
+                infoboxes = []
+                overview = None
+
             documents = []
             metadata = []
 
+            if overview:
+                documents.append(overview)
+                metadata.append(
+                    {
+                        'source': 'overview',
+                        'name': 'Search overview',
+                        'url': None,
+                    }
+                )
+
+            for answer in direct_answers:
+                if not isinstance(answer, dict):
+                    continue
+                answer_text = answer.get('answer', '')
+                if not answer_text:
+                    continue
+                link = answer.get('url', '')
+                documents.append(answer_text)
+                metadata.append(
+                    {
+                        'source': link or 'direct_answer',
+                        'name': 'Direct answer',
+                        'url': link or None,
+                    }
+                )
+
+            for box in infoboxes:
+                if not isinstance(box, dict):
+                    continue
+                title = box.get('title') or 'Infobox'
+                parts = [title]
+                if box.get('content'):
+                    parts.append(box['content'])
+                for attr in box.get('attributes') or []:
+                    if isinstance(attr, dict) and attr.get('label') and attr.get('value'):
+                        parts.append(f"{attr['label']}: {attr['value']}")
+                documents.append('\n'.join(parts))
+                link = ''
+                urls = box.get('urls') or []
+                if urls and isinstance(urls[0], dict):
+                    link = urls[0].get('url', '')
+                metadata.append(
+                    {
+                        'source': link or 'infobox',
+                        'name': title,
+                        'url': link or None,
+                    }
+                )
+
             for result in results:
+                if not isinstance(result, dict):
+                    continue
                 title = result.get('title', '')
                 link = result.get('link', '')
                 snippet = result.get('snippet', '')
 
-                documents.append(f'{title}\n{snippet}')
+                documents.append(f'{title}\n{snippet}'.strip())
                 metadata.append(
                     {
                         'source': link,
@@ -328,6 +394,9 @@ def get_citation_source_from_tool_result(
                         'url': link,
                     }
                 )
+
+            if not documents:
+                return []
 
             return [
                 {
@@ -363,26 +432,88 @@ def get_citation_source_from_tool_result(
             ]
 
         elif tool_name == 'fetch_url':
-            url = tool_params.get('url', '')
-            content = tool_result if isinstance(tool_result, str) else str(tool_result)
-            snippet = content[:500] + ('...' if len(content) > 500 else '')
+            documents = []
+            metadata = []
+
+            if isinstance(tool_result, dict) and tool_result.get('results'):
+                for entry in tool_result.get('results') or []:
+                    if not isinstance(entry, dict):
+                        continue
+                    url = entry.get('url', '')
+                    title = entry.get('title') or url
+                    content = entry.get('content', '')
+                    snippet = content[:500] + ('...' if len(content) > 500 else '')
+                    documents.append(f'{title}\n{snippet}'.strip())
+                    metadata.append({'source': url, 'name': title, 'url': url})
+            elif isinstance(tool_result, dict):
+                url = tool_result.get('url') or tool_params.get('url', '')
+                title = tool_result.get('title') or url
+                content = tool_result.get('content', '')
+                snippet = content[:500] + ('...' if len(content) > 500 else '')
+                documents.append(f'{title}\n{snippet}'.strip() if title or snippet else str(tool_result))
+                metadata.append({'source': url, 'name': title or url, 'url': url})
+            else:
+                url = tool_params.get('url', '')
+                content = tool_result if isinstance(tool_result, str) else str(tool_result)
+                snippet = content[:500] + ('...' if len(content) > 500 else '')
+                documents.append(snippet)
+                metadata.append({'source': url, 'name': url, 'url': url})
+
+            if not documents:
+                return []
 
             return [
                 {
-                    'source': {'name': url or 'fetch_url', 'id': url or 'fetch_url'},
-                    'document': [snippet],
-                    'metadata': [
-                        {
-                            'source': url,
-                            'name': url,
-                            'url': url,
-                        }
-                    ],
+                    'source': {'name': metadata[0].get('url') or 'fetch_url', 'id': metadata[0].get('url') or 'fetch_url'},
+                    'document': documents,
+                    'metadata': metadata,
                 }
             ]
 
         elif tool_name == 'query_knowledge_files':
-            chunks = tool_result
+            if isinstance(tool_result, dict) and tool_result.get('sources') is not None:
+                overview = tool_result.get('overview')
+                sources_by_file = {}
+                if overview:
+                    sources_by_file['overview'] = {
+                        'source': {'id': 'knowledge_overview', 'name': 'Knowledge overview', 'type': 'overview'},
+                        'document': [overview],
+                        'metadata': [{'source': 'knowledge_overview', 'name': 'Knowledge overview'}],
+                    }
+                for source_entry in tool_result.get('sources') or []:
+                    source_name = source_entry.get('source', 'Unknown')
+                    file_id = source_entry.get('file_id') or ''
+                    note_id = source_entry.get('note_id') or ''
+                    chunk_type = source_entry.get('type', 'file')
+                    key = file_id or note_id or source_name
+                    grouped = sources_by_file.setdefault(
+                        key,
+                        {
+                            'source': {
+                                'id': file_id or note_id,
+                                'name': source_name,
+                                'type': chunk_type,
+                            },
+                            'document': [],
+                            'metadata': [],
+                        },
+                    )
+                    for chunk in source_entry.get('chunks') or []:
+                        content = chunk.get('content', '')
+                        grouped['document'].append(content)
+                        grouped['metadata'].append(
+                            {
+                                'file_id': file_id,
+                                'name': source_name,
+                                'source': source_name,
+                                **({'note_id': note_id} if note_id else {}),
+                            }
+                        )
+                if sources_by_file:
+                    return list(sources_by_file.values())
+                return []
+
+            chunks = tool_result if isinstance(tool_result, list) else []
 
             # Group chunks by source for better citation display
             # Each unique source becomes a separate source entry
@@ -1626,16 +1757,17 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
     if not chat_id or not isinstance(chat_id, str) or not __event_emitter__:
         return form_data
 
+    await __event_emitter__(
+        {
+            'type': 'status',
+            'data': {'description': 'Creating image', 'done': False},
+        }
+    )
+
     if chat_id.startswith('local:') or chat_id.startswith('channel:'):
         message_list = form_data.get('messages', [])
     else:
         chat = await Chats.get_chat_by_id_and_user_id(chat_id, user.id)
-        await __event_emitter__(
-            {
-                'type': 'status',
-                'data': {'description': 'Creating image', 'done': False},
-            }
-        )
 
         messages_map = chat.chat.get('history', {}).get('messages', {})
         message_id = chat.chat.get('history', {}).get('currentId')
@@ -1831,6 +1963,16 @@ async def chat_completion_files_handler(
 
         queries = []
         if not all_full_context:
+            await __event_emitter__(
+                {
+                    'type': 'status',
+                    'data': {
+                        'action': 'queries_generating',
+                        'done': False,
+                    },
+                }
+            )
+
             try:
                 queries_response = await generate_queries(
                     request,
@@ -1873,6 +2015,16 @@ async def chat_completion_files_handler(
 
         if len(queries) == 0:
             queries = [get_last_user_message(body['messages']) or '']
+
+        await __event_emitter__(
+            {
+                'type': 'status',
+                'data': {
+                    'action': 'sources_retrieved',
+                    'done': False,
+                },
+            }
+        )
 
         try:
             # Directly await async get_sources_from_items (no thread needed - fully async now)
@@ -1926,6 +2078,19 @@ async def chat_completion_files_handler(
                 },
             }
         )
+
+        if prompt_url_info := body.get('metadata', {}).get('prompt_url_extraction'):
+            await __event_emitter__(
+                {
+                    'type': 'status',
+                    'data': {
+                        'action': 'prompt_urls_extracted',
+                        'urls': prompt_url_info.get('urls', []),
+                        'count': prompt_url_info.get('count', 0),
+                        'done': True,
+                    },
+                }
+            )
 
     return body, {'sources': sources}
 
@@ -1985,8 +2150,7 @@ def apply_params_to_form_data(form_data, model):
                 chat_template_kwargs = dict(form_data.get('chat_template_kwargs') or {})
                 chat_template_kwargs['enable_thinking'] = True
                 form_data['chat_template_kwargs'] = chat_template_kwargs
-                if isinstance(think, str):
-                    form_data['reasoning_effort'] = think
+                form_data['reasoning_effort'] = think if isinstance(think, str) else 'medium'
 
         if isinstance(params, dict):
             for key, value in params.items():
@@ -2001,6 +2165,8 @@ def apply_params_to_form_data(form_data, model):
                     form_data['logit_bias'] = json.loads(logit_bias)
             except Exception as e:
                 log.exception(f'Error parsing logit_bias: {e}')
+
+    apply_llamacpp_reasoning_params(form_data, model)
 
     return form_data
 
@@ -2058,8 +2224,9 @@ async def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[
     if not db_messages:
         return None
 
+    # 'id' is an internal handle for context compaction; stripped before the LLM.
     return [
-        {k: v for k, v in msg.items() if k in ('role', 'content', 'output', 'files', 'contextSummary', 'usage')}
+        {k: v for k, v in msg.items() if k in ('id', 'role', 'content', 'output', 'files', 'contextSummary', 'usage')}
         for msg in db_messages
     ]
 
@@ -2123,6 +2290,7 @@ def strip_compaction_fields(messages: list[dict]) -> list[dict]:
         clean.pop('contextSummary', None)
         clean.pop('context_summary', None)
         clean.pop('usage', None)
+        clean.pop('id', None)  # internal compaction handle; never sent to providers
         stripped.append(clean)
     return stripped
 
@@ -2306,6 +2474,10 @@ async def attach_prompt_urls_to_files(
         return files
 
     if event_emitter:
+        metadata['prompt_url_extraction'] = {
+            'urls': valid_urls,
+            'count': len(valid_urls),
+        }
         await event_emitter(
             {
                 'type': 'status',
@@ -2313,7 +2485,7 @@ async def attach_prompt_urls_to_files(
                     'action': 'prompt_urls_extracted',
                     'urls': valid_urls,
                     'count': len(valid_urls),
-                    'done': True,
+                    'done': False,
                 },
             }
         )
@@ -2389,7 +2561,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         {
                             k: v
                             for k, v in assistant_message.items()
-                            if k in ('role', 'content', 'output', 'files', 'contextSummary', 'usage')
+                            if k in ('id', 'role', 'content', 'output', 'files', 'contextSummary', 'usage')
                         }
                     )
 
@@ -2621,16 +2793,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             )
             if used_memories:
                 metadata['memory_context'] = used_memories
-                await event_emitter(
-                    {
-                        'type': 'status',
-                        'data': {
-                            'action': 'memory_context',
-                            'memories': used_memories,
-                            'done': True,
-                        },
-                    }
-                )
             if track_context:
                 _record_context_snapshot(metadata, 'post_memory', form_data.get('messages', []))
 
@@ -2708,7 +2870,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         from open_webui.models.skills import Skills as SkillsModel
 
         accessible_skill_ids = {s.id for s in await SkillsModel.get_skills_by_user_id(user.id, 'read')}
-        for sid in skill_ids:
+        for sid in sorted(skill_ids):
             if sid in accessible_skill_ids:
                 s = await SkillsModel.get_skill_by_id(sid)
                 if s and s.is_active:
@@ -4948,6 +5110,28 @@ async def streaming_chat_response_handler(response, ctx):
                                     }
                                 )
 
+                        # Emit an active status so the frontend shows a visible
+                        # loading indicator (skeleton or shimmer) while tools run.
+                        tool_names = [
+                            tc.get('function', {}).get('name', '')
+                            for tc in response_tool_calls
+                            if tc.get('function', {}).get('name')
+                        ]
+                        await event_emitter(
+                            {
+                                'type': 'status',
+                                'data': {
+                                    'action': 'running_tools',
+                                    'description': (
+                                        f'Calling tool: {tool_names[0]}'
+                                        if len(tool_names) == 1
+                                        else f'Calling {len(tool_names)} tools'
+                                    ),
+                                    'done': False,
+                                },
+                            }
+                        )
+
                         await event_emitter(
                             {
                                 'type': 'chat:completion',
@@ -5228,6 +5412,17 @@ async def streaming_chat_response_handler(response, ctx):
                             }
                         )
 
+                        # Mark tools status as done now that execution is complete
+                        await event_emitter(
+                            {
+                                'type': 'status',
+                                'data': {
+                                    'action': 'running_tools',
+                                    'done': True,
+                                },
+                            }
+                        )
+
                         try:
                             _raise_if_cancelled(chat_id)
                             new_form_data = {
@@ -5315,7 +5510,25 @@ async def streaming_chat_response_handler(response, ctx):
                             else:
                                 break
                         except Exception as e:
-                            log.debug(e)
+                            # Surface a failed/stalled continuation instead of swallowing it;
+                            # a bare break leaves an empty chat with no visible output.
+                            log.exception('Tool-call continuation failed: %s', e)
+                            error_content = f'Generation failed after tool execution: {e}'
+                            if not metadata.get('chat_id', '').startswith('channel:'):
+                                try:
+                                    await Chats.upsert_message_to_chat_by_id_and_message_id(
+                                        metadata['chat_id'],
+                                        metadata['message_id'],
+                                        {'error': {'content': error_content}},
+                                    )
+                                except Exception:
+                                    pass
+                            await event_emitter(
+                                {
+                                    'type': 'chat:message:error',
+                                    'data': {'error': {'content': error_content}},
+                                }
+                            )
                             break
 
                     if (

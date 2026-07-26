@@ -1,7 +1,6 @@
 <script context="module">
 	// Persists across mount/unmount cycles (module-level, not per-instance)
-	const fileNavState = { savedPath: '/' };
-</script>
+	const fileNavState = { savedPath: '/' };</script>
 
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
@@ -227,7 +226,6 @@
 	// ── Delete confirmation ──────────────────────────────────────────────
 	let deleteTarget: { path: string; name: string } | null = null;
 	let showDeleteConfirm = false;
-	let shiftKey = false;
 
 	// ── Terminal resolution ──────────────────────────────────────────────
 	let selectedTerminal: { url: string; key: string } | null = null;
@@ -720,7 +718,7 @@
 
 	const selectAll = () => {
 		selectedEntries = new Set(
-			entries.map((e) => {
+			entries.map((e: Event) => {
 				const p = `${currentPath}${e.name}`;
 				return e.type === 'directory' ? p + '/' : p;
 			})
@@ -849,7 +847,7 @@
 			await loadDir(dir);
 			await tick();
 
-			const entry = entries.find((e) => e.name === fileName);
+			const entry = entries.find((e: Event) => e.name === fileName);
 			if (entry) {
 				await openEntry(entry);
 			} else {
@@ -899,31 +897,17 @@
 
 		mounted = true;
 
-		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Shift') shiftKey = true;
-		};
-		const onKeyUp = (e: KeyboardEvent) => {
-			if (e.key === 'Shift') shiftKey = false;
-		};
-		const onBlur = () => (shiftKey = false);
-
 		const onVisibilityChange = () => {
 			if (document.visibilityState === 'visible' && !selectedFile && selectedTerminal && !loading) {
 				loadDir(currentPath);
 			}
 		};
 
-		window.addEventListener('keydown', onKeyDown);
-		window.addEventListener('keyup', onKeyUp);
-		window.addEventListener('blur', onBlur);
 		document.addEventListener('visibilitychange', onVisibilityChange);
 
 		return () => {
 			unsubFileNav();
 			unsubFileNavDir();
-			window.removeEventListener('keydown', onKeyDown);
-			window.removeEventListener('keyup', onKeyUp);
-			window.removeEventListener('blur', onBlur);
 			document.removeEventListener('visibilitychange', onVisibilityChange);
 		};
 	});

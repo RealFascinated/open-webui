@@ -1,47 +1,25 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { onMount, tick, getContext } from 'svelte';
-	import { openDB, deleteDB } from 'idb';
+	import {toast} from 'svelte-sonner';
+	import {onMount, tick, getContext} from 'svelte';
+	import {openDB, deleteDB} from 'idb';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { fade } from 'svelte/transition';
+	import {goto} from '$app/navigation';
+	import {page} from '$app/stores';
+	import {fade} from 'svelte/transition';
 
-	import { getModels, getToolServersData, getVersionUpdates } from '$lib/apis';
-	import { getTools } from '$lib/apis/tools';
-	import { getBanners } from '$lib/apis/configs';
-	import { getTerminalServers } from '$lib/apis/terminal';
-	import { getUserSettings } from '$lib/apis/users';
-	import { setTextScale } from '$lib/utils/text-scale';
+	import {getModels, getToolServersData, getVersionUpdates} from '$lib/apis';
+	import {getTools} from '$lib/apis/tools';
+	import {getBanners} from '$lib/apis/configs';
+	import {getTerminalServers} from '$lib/apis/terminal';
+	import {getUserSettings} from '$lib/apis/users';
+	import {setTextScale} from '$lib/utils/text-scale';
 
-	import { WEBUI_VERSION, WEBUI_API_BASE_URL } from '$lib/constants';
-	import { compareVersion } from '$lib/utils';
+	import {WEBUI_VERSION, WEBUI_API_BASE_URL} from '$lib/constants';
+	import {compareVersion} from '$lib/utils';
 
-	import {
-		config,
-		user,
-		settings,
-		models,
-		knowledge,
-		tools,
-		functions,
-		tags,
-		banners,
-		showSettings,
-		showShortcuts,
-		showChangelog,
-		temporaryChatEnabled,
-		toolServers,
-		terminalServers,
-		terminalServersLoaded,
-		selectedTerminalId,
-		showSearch,
-		showSidebar,
-		showControls,
-		mobile
-	} from '$lib/stores';
+	import {config, user, settings, models, tools, banners, showSettings, showShortcuts, showChangelog, temporaryChatEnabled, toolServers, terminalServers, terminalServersLoaded, selectedTerminalId, showSearch, showSidebar, showControls, mobile} from '$lib/stores';
 
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import SettingsModal from '$lib/components/chat/SettingsModal.svelte';
@@ -49,7 +27,7 @@
 	import AccountPending from '$lib/components/layout/Overlay/AccountPending.svelte';
 	import UpdateInfoToast from '$lib/components/layout/UpdateInfoToast.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import { Shortcut, shortcuts } from '$lib/shortcuts';
+	import {Shortcut, shortcuts} from '$lib/shortcuts';
 
 	const i18n = getContext('i18n');
 
@@ -83,7 +61,7 @@
 			if (localDBChats.length === 0) {
 				await deleteDB('Chats');
 			}
-		} catch (error) {
+		} catch (_error) {
 			// IndexedDB Not Found
 		}
 	};
@@ -210,15 +188,15 @@
 		clearChatInputStorage();
 		await Promise.all([
 			checkLocalDBChats(),
-			setBanners().catch((e) => console.error('Failed to load banners:', e)),
-			setTools().catch((e) => console.error('Failed to load tools:', e)),
+			setBanners().catch((e: Event) => console.error('Failed to load banners:', e)),
+			setTools().catch((e: Event) => console.error('Failed to load tools:', e)),
 			setUserSettings(async () => {
-				await setModels().catch((e) => console.error('Failed to load models:', e));
-			}).catch((e) => console.error('Failed to load user settings:', e))
+				await setModels().catch((e: Event) => console.error('Failed to load models:', e));
+			}).catch((e: Event) => console.error('Failed to load user settings:', e))
 		]);
 
 		// Tool servers can be slow or unreachable; they are not needed to initialize chat.
-		setToolServers().catch((e) => console.error('Failed to load tool servers:', e));
+		setToolServers().catch((e: Event) => console.error('Failed to load tool servers:', e));
 
 		// Helper function to check if the pressed keys match the shortcut definition
 		const isShortcutMatch = (event: KeyboardEvent, shortcut): boolean => {
@@ -248,7 +226,7 @@
 		};
 
 		const setupKeyboardShortcuts = () => {
-			document.addEventListener('keydown', async (event) => {
+			document.addEventListener('keydown', async (event: Event) => {
 				if (isShortcutMatch(event, shortcuts[Shortcut.SEARCH])) {
 					console.log('Shortcut triggered: SEARCH');
 					event.preventDefault();
@@ -373,7 +351,7 @@
 	});
 
 	const checkForVersionUpdates = async () => {
-		version = await getVersionUpdates(localStorage.token).catch((error) => {
+		version = await getVersionUpdates(localStorage.token).catch((_error) => {
 			return {
 				current: WEBUI_VERSION,
 				latest: WEBUI_VERSION
@@ -485,7 +463,5 @@
 			clip-path: inset(0 -1ch 0 0);
 		}
 	}
-
-
 
 </style>

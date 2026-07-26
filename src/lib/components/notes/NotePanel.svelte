@@ -1,11 +1,9 @@
 <script lang="ts">
-	import { onDestroy, onMount, tick } from 'svelte';
-	import { Pane, PaneResizer } from 'paneforge';
+	import {onDestroy, onMount} from 'svelte';
+	import {Pane, PaneResizer} from 'paneforge';
 
 	import Drawer from '../common/Drawer.svelte';
-	import EllipsisVertical from '../icons/EllipsisVertical.svelte';
-
-	export let show = false;
+export let show = false;
 	export let pane = null;
 
 	export let containerId = 'note-container';
@@ -15,7 +13,7 @@
 
 	let minSize = 0;
 
-	const handleMediaQuery = async (e) => {
+	const handleMediaQuery = async (e: Event) => {
 		if (e.matches) {
 			largeScreen = true;
 		} else {

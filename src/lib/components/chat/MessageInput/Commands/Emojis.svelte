@@ -1,14 +1,12 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
+	import {getContext} from 'svelte';
 
-	import { WEBUI_BASE_URL } from '$lib/constants';
+	import {WEBUI_BASE_URL} from '$lib/constants';
 	import emojiShortCodes from '$lib/emoji-shortcodes.json';
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
-
-	const i18n = getContext('i18n');
+const i18n = getContext('i18n');
 
 	export let query = '';
-	export let onSelect = (e) => {};
+	export let onSelect = (_e: Event) => {};
 
 	let selectedIdx = 0;
 	export let filteredItems = [];

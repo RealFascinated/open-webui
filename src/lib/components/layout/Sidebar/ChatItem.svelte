@@ -2,39 +2,14 @@
 	/** Shared 1×1 transparent drag preview; avoids one Image per sidebar row */
 	const invisibleDragImage = new Image();
 	invisibleDragImage.src =
-		'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-</script>
+		'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';</script>
 
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { goto, invalidate, invalidateAll } from '$app/navigation';
-	import { onMount, getContext, createEventDispatcher, tick } from 'svelte';
-	import {
-		archiveChatById,
-		cloneChatById,
-		deleteChatById,
-		getAllTags,
-		getChatById,
-		getChatList,
-		getChatListByTagName,
-		getPinnedChatList,
-		updateChatById,
-		updateChatProjectIdById
-	} from '$lib/apis/chats';
-	import {
-		chatId,
-		chatTitle as _chatTitle,
-		chats,
-		mobile,
-		pinnedChats,
-		showSidebar,
-		currentChatPage,
-		tags,
-		selectedProject,
-		activeChatIds,
-		settings,
-		user
-	} from '$lib/stores';
+	import {toast} from 'svelte-sonner';
+	import {goto} from '$app/navigation';
+	import {onMount, getContext, createEventDispatcher, tick} from 'svelte';
+	import {archiveChatById, cloneChatById, deleteChatById, getAllTags, getChatById, getChatList, getPinnedChatList, updateChatById, updateChatProjectIdById} from '$lib/apis/chats';
+	import {chatId, chatTitle as _chatTitle, chats, mobile, pinnedChats, showSidebar, currentChatPage, tags, selectedProject, activeChatIds, settings, user} from '$lib/stores';
 
 	import ChatMenu from './ChatMenu.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
@@ -43,14 +18,12 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
 	import DragGhost from '$lib/components/common/DragGhost.svelte';
-	import Check from '$lib/components/icons/Check.svelte';
-	import XMark from '$lib/components/icons/XMark.svelte';
-	import Document from '$lib/components/icons/Document.svelte';
+import Document from '$lib/components/icons/Document.svelte';
 	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import { generateTitle } from '$lib/apis';
-	import { createMessagesList } from '$lib/utils';
-	import { getOutputText } from '$lib/components/chat/Messages/structuredOutput';
+	import {generateTitle} from '$lib/apis';
+	import {createMessagesList} from '$lib/utils';
+	import {getOutputText} from '$lib/components/chat/Messages/structuredOutput';
 
 	const i18n = getContext('i18n');
 
@@ -92,7 +65,7 @@
 		return $i18n.t('1m', { context: 'time_ago' });
 	}
 
-	let chat = null;
+	let chat: import('$lib/types/chat').ChatRecord | null = null;
 
 	let mouseOver = false;
 
@@ -112,11 +85,9 @@
 		!$activeChatIds.has(id) &&
 		(effectiveReadAt === null || (updatedAt !== null && updatedAt > effectiveReadAt));
 
-	const loadChat = async () => {
+	const _loadChat = async () => {
 		if (!chat) {
-			draggable = false;
 			chat = await getChatById(localStorage.token, id);
-			draggable = true;
 		}
 	};
 
@@ -124,7 +95,6 @@
 	let confirmEdit = false;
 
 	let chatTitle = title;
-	let draggable = true;
 
 	const editChatTitle = async (id, title) => {
 		if (title === '') {
@@ -146,7 +116,7 @@
 		}
 	};
 
-	const cloneChatHandler = async (id) => {
+	const cloneChatHandler = async (id: string) => {
 		if (!($user?.role === 'admin' || ($user?.permissions?.chat?.import ?? true))) {
 			toast.error($i18n.t('Access prohibited'));
 			return;
@@ -174,7 +144,7 @@
 
 	let deleting = false;
 
-	const deleteChatHandler = async (id) => {
+	const deleteChatHandler = async (id: string) => {
 		if (deleting) return;
 		deleting = true;
 
@@ -200,7 +170,7 @@
 
 	let archiving = false;
 
-	const archiveChatHandler = async (id) => {
+	const archiveChatHandler = async (id: string) => {
 		if (archiving) return;
 		archiving = true;
 
@@ -249,14 +219,14 @@
 
 	let generating = false;
 
-	let ignoreBlur = false;
+	let _ignoreBlur = false;
 	let doubleClicked = false;
 
 	let dragged = false;
 	let x = 0;
 	let y = 0;
 
-	const onDragStart = (event) => {
+	const onDragStart = (event: Event) => {
 		event.stopPropagation();
 
 		event.dataTransfer.setDragImage(invisibleDragImage, 0, 0);
@@ -275,14 +245,14 @@
 		itemElement.style.opacity = '0.5'; // Optional: Visual cue to show it's being dragged
 	};
 
-	const onDrag = (event) => {
+	const onDrag = (event: Event) => {
 		event.stopPropagation();
 
 		x = event.clientX;
 		y = event.clientY;
 	};
 
-	const onDragEndHandler = (event) => {
+	const onDragEndHandler = (event: Event) => {
 		event.stopPropagation();
 
 		itemElement.style.opacity = '1'; // Reset visual cue after drag
@@ -291,7 +261,7 @@
 		onDragEnd(event);
 	};
 
-	const onClickOutside = (event) => {
+	const onClickOutside = (event: Event) => {
 		if (!itemElement.contains(event.target)) {
 			if (confirmEdit) {
 				if (chatTitle !== title) {
@@ -323,7 +293,7 @@
 
 	let showDeleteConfirm = false;
 
-	const chatTitleInputKeydownHandler = (e) => {
+	const chatTitleInputKeydownHandler = (e: Event) => {
 		if (e.key === 'Enter') {
 			e.preventDefault();
 			setTimeout(() => {
@@ -540,13 +510,13 @@
 				doubleClicked = true;
 				renameHandler();
 			}}
-			on:mouseenter={(e) => {
+			on:mouseenter={(_e) => {
 				mouseOver = true;
 			}}
-			on:mouseleave={(e) => {
+			on:mouseleave={(_e) => {
 				mouseOver = false;
 			}}
-			on:focus={(e) => {}}
+			on:focus={(_e) => {}}
 			draggable="false"
 		>
 			{#if ownerUserId}
@@ -610,10 +580,10 @@
 				: 'right-1'} top-[4px] py-1 pr-0.5 mr-1.5 pl-5 bg-linear-to-l from-80%
 
               to-transparent"
-			on:mouseenter={(e) => {
+			on:mouseenter={(_e) => {
 				mouseOver = true;
 			}}
-			on:mouseleave={(e) => {
+			on:mouseleave={(_e) => {
 				mouseOver = false;
 			}}
 		>

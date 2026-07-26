@@ -80,7 +80,7 @@
 				}
 			]),
 			indentUnit.of('    '),
-			EditorView.updateListener.of((e) => {
+			EditorView.updateListener.of((e: Event) => {
 				if (e.docChanged) {
 					internalValue = e.state.doc.toString();
 					value = internalValue;

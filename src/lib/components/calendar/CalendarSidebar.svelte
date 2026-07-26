@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
-	import type { CalendarModel } from '$lib/apis/calendar';
+	import {getContext} from 'svelte';
+	import type {CalendarModel} from '$lib/apis/calendar';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 
 	const i18n = getContext('i18n');
@@ -72,10 +72,6 @@
 
 	function isToday(d: Date): boolean {
 		return d.toDateString() === new Date().toDateString();
-	}
-
-	function isSelected(d: Date): boolean {
-		return d.toDateString() === currentDate.toDateString();
 	}
 
 	function navigateMini(delta: number) {

@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { getContext, onMount } from 'svelte';
-	const i18n = getContext<unknown>('i18n');
+	import {toast} from 'svelte-sonner';
+	import {getContext} from 'svelte';
+	const i18n = getContext('i18n');
 
-	import { settings } from '$lib/stores';
+	import {settings} from '$lib/stores';
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
@@ -12,14 +12,8 @@
 	import LockClosed from '$lib/components/icons/LockClosed.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
-	import {
-		detectTerminalServerType,
-		verifyTerminalServerConnection,
-		putOrchestratorPolicy,
-		putOrchestratorLifecycle,
-		refreshOrchestratorTerminals
-	} from '$lib/apis/configs';
-	import { getTerminalConfig } from '$lib/apis/terminal';
+	import {verifyTerminalServerConnection, putOrchestratorPolicy, putOrchestratorLifecycle, refreshOrchestratorTerminals} from '$lib/apis/configs';
+	import {getTerminalConfig} from '$lib/apis/terminal';
 
 	export let show = false;
 	export let edit = false;

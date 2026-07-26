@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { config, models, settings, user } from '$lib/stores';
-	import { createEventDispatcher, onMount, onDestroy, getContext } from 'svelte';
-	import { toast } from 'svelte-sonner';
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import { updateUserInfo } from '$lib/apis/users';
-	import { getUserPosition } from '$lib/utils';
-	import { setTextScale } from '$lib/utils/text-scale';
+	import {config, settings, user} from '$lib/stores';
+	import {createEventDispatcher, onMount, getContext} from 'svelte';
+	import {toast} from 'svelte-sonner';
+import {updateUserInfo} from '$lib/apis/users';
+	import {getUserPosition} from '$lib/utils';
+	import {setTextScale} from '$lib/utils/text-scale';
 
 	import Minus from '$lib/components/icons/Minus.svelte';
 	import Plus from '$lib/components/icons/Plus.svelte';
@@ -20,7 +19,7 @@
 	export let saveSettings: (...args: unknown[]) => unknown;
 
 	let backgroundImageUrl = null;
-	let inputFiles = null;
+	let inputFiles: File[] | undefined = null;
 	let filesInputElement;
 
 	// Addons
@@ -30,8 +29,8 @@
 
 	let responseAutoCopy = false;
 	let widescreenMode = false;
-	let splitLargeChunks = false;
 	let scrollOnBranchChange = true;
+	let chatResponseAutoScroll = true;
 	let showFilesOnTerminalSelect = true;
 	let userLocation = false;
 
@@ -94,6 +93,9 @@
 
 	let showEmojiInCall = false;
 	let voiceInterruption = false;
+	let voiceSilenceTimeoutMs = 2000;
+	let voiceVadSensitivity = 'medium';
+	let voiceStreamingStt = true;
 	let hapticFeedback = false;
 
 	let webSearch = null;
@@ -213,6 +215,9 @@
 
 		showEmojiInCall = $settings?.showEmojiInCall ?? false;
 		voiceInterruption = $settings?.voiceInterruption ?? false;
+		voiceSilenceTimeoutMs = $settings?.voiceSilenceTimeoutMs ?? 2000;
+		voiceVadSensitivity = $settings?.voiceVadSensitivity ?? 'medium';
+		voiceStreamingStt = $settings?.voiceStreamingStt ?? true;
 
 		displayMultiModelResponsesInTabs = $settings?.displayMultiModelResponsesInTabs ?? false;
 		chatFadeStreamingText = $settings?.chatFadeStreamingText ?? true;
@@ -241,8 +246,8 @@
 		landingPageMode = $settings?.landingPageMode ?? '';
 		chatBubble = $settings?.chatBubble ?? true;
 		widescreenMode = $settings?.widescreenMode ?? false;
-		splitLargeChunks = $settings?.splitLargeChunks ?? false;
 		scrollOnBranchChange = $settings?.scrollOnBranchChange ?? true;
+		chatResponseAutoScroll = $settings?.chatResponseAutoScroll ?? true;
 		showFilesOnTerminalSelect = $settings?.showFilesOnTerminalSelect ?? true;
 
 		temporaryChatByDefault = $settings?.temporaryChatByDefault ?? false;
@@ -277,8 +282,7 @@
 		webSearch = $settings?.webSearch ?? null;
 
 		textScale = $settings?.textScale ?? null;
-	});
-</script>
+	});</script>
 
 <ManageFloatingActionButtonsModal
 	bind:show={showManageFloatingActionButtonsModal}
@@ -1048,6 +1052,25 @@
 
 			<div>
 				<div class=" py-0.5 flex w-full justify-between">
+					<div id="chat-response-auto-scroll-label" class=" self-center text-xs">
+						{$i18n.t('Auto-scroll Responses')}
+					</div>
+
+					<div class="flex items-center gap-2 p-1">
+						<Switch
+							ariaLabelledbyId="chat-response-auto-scroll-label"
+							tooltip={true}
+							bind:state={chatResponseAutoScroll}
+							on:change={() => {
+								saveSettings({ chatResponseAutoScroll });
+							}}
+						/>
+					</div>
+				</div>
+			</div>
+
+			<div>
+				<div class=" py-0.5 flex w-full justify-between">
 					<div id="scroll-on-branch-change-label" class=" self-center text-xs">
 						{$i18n.t('Scroll On Branch Change')}
 					</div>
@@ -1354,6 +1377,64 @@
 							on:change={() => {
 								saveSettings({ showEmojiInCall });
 							}}
+						/>
+					</div>
+				</div>
+			</div>
+
+			<div>
+				<div class=" py-0.5 flex w-full justify-between">
+					<div class=" self-center text-xs" id="voice-silence-timeout-label">
+						{$i18n.t('Silence timeout (ms)')}
+					</div>
+					<div class="flex items-center gap-2 p-1">
+						<input
+							id="voice-silence-timeout"
+							aria-labelledby="voice-silence-timeout-label"
+							type="number"
+							min="500"
+							max="10000"
+							step="100"
+							bind:value={voiceSilenceTimeoutMs}
+							on:change={() => saveSettings({ voiceSilenceTimeoutMs })}
+							class="w-24 text-xs bg-transparent outline-hidden text-right"
+						/>
+					</div>
+				</div>
+			</div>
+
+			<div>
+				<div class=" py-0.5 flex w-full justify-between">
+					<div class=" self-center text-xs" id="voice-vad-sensitivity-label">
+						{$i18n.t('Voice detection sensitivity')}
+					</div>
+					<div class="flex items-center gap-2 p-1">
+						<select
+							id="voice-vad-sensitivity"
+							aria-labelledby="voice-vad-sensitivity-label"
+							bind:value={voiceVadSensitivity}
+							on:change={() => saveSettings({ voiceVadSensitivity })}
+							class="text-xs bg-transparent outline-hidden"
+						>
+							<option value="low">{$i18n.t('Low')}</option>
+							<option value="medium">{$i18n.t('Medium')}</option>
+							<option value="high">{$i18n.t('High')}</option>
+						</select>
+					</div>
+				</div>
+			</div>
+
+			<div>
+				<div class=" py-0.5 flex w-full justify-between">
+					<div class=" self-center text-xs" id="voice-streaming-stt-label">
+						{$i18n.t('Live speech transcription in call')}
+					</div>
+					<div class="flex items-center gap-2 p-1">
+						<Switch
+							ariaLabelledbyId="voice-streaming-stt-label"
+							tooltip={true}
+							bind:state={voiceStreamingStt}
+							on:change={() => saveSettings({ voiceStreamingStt })}
 						/>
 					</div>
 				</div>

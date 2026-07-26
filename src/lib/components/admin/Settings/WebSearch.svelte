@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { getRAGConfig, updateRAGConfig } from '$lib/apis/retrieval';
+	import {getRAGConfig, updateRAGConfig} from '$lib/apis/retrieval';
 	import Switch from '$lib/components/common/Switch.svelte';
 
-	import { models } from '$lib/stores';
-	import { onMount, getContext } from 'svelte';
-	import { toast } from 'svelte-sonner';
+	
+	import {onMount, getContext} from 'svelte';
+	import {toast} from 'svelte-sonner';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
@@ -350,6 +350,131 @@
 											/>
 										</div>
 									</div>
+								</div>
+								<div class="mb-2.5 flex w-full flex-col">
+									<div class=" self-left text-xs font-medium mb-1">
+										SearXNG time range (day, week, month, year)
+									</div>
+									<div class="flex w-full">
+										<div class="flex-1">
+											<input
+												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+												type="text"
+												placeholder="Leave empty for all time"
+												bind:value={webConfig.SEARXNG_TIME_RANGE}
+												autocomplete="off"
+											/>
+										</div>
+									</div>
+								</div>
+								<div class="mb-2.5 flex w-full flex-col">
+									<div class=" self-left text-xs font-medium mb-1">
+										SearXNG categories (general, news, science, it, images)
+									</div>
+									<div class="flex w-full">
+										<div class="flex-1">
+											<input
+												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+												type="text"
+												placeholder="Leave empty for general"
+												bind:value={webConfig.SEARXNG_CATEGORIES}
+												autocomplete="off"
+											/>
+										</div>
+									</div>
+								</div>
+								<div class="mb-2.5 flex w-full flex-col">
+									<div class=" self-left text-xs font-medium mb-1">
+										SearXNG safesearch (0, 1, 2)
+									</div>
+									<div class="flex w-full">
+										<div class="flex-1">
+											<input
+												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+												type="text"
+												placeholder="1"
+												bind:value={webConfig.SEARXNG_SAFESEARCH}
+												autocomplete="off"
+											/>
+										</div>
+									</div>
+								</div>
+								<div class="mb-2.5 flex w-full flex-col">
+									<div class=" self-left text-xs font-medium mb-1">
+										SearXNG engines (comma-separated, optional)
+									</div>
+									<div class="flex w-full">
+										<div class="flex-1">
+											<input
+												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+												type="text"
+												placeholder="google,duckduckgo"
+												bind:value={webConfig.SEARXNG_ENGINES}
+												autocomplete="off"
+											/>
+										</div>
+									</div>
+								</div>
+								<div class="mb-2.5 flex w-full flex-col">
+									<div class=" self-left text-xs font-medium mb-1">
+										Search result cache TTL (seconds, 0 to disable)
+									</div>
+									<div class="flex w-full">
+										<div class="flex-1">
+											<input
+												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+												type="number"
+												min="0"
+												placeholder="60"
+												bind:value={webConfig.WEB_SEARCH_CACHE_TTL}
+												autocomplete="off"
+											/>
+										</div>
+									</div>
+								</div>
+								<div class="mb-2.5 flex w-full flex-col">
+									<div class=" self-left text-xs font-medium mb-1">
+										Min score ratio / absolute / max per domain
+									</div>
+									<div class="flex w-full gap-2">
+										<input
+											class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											type="number"
+											step="0.01"
+											min="0"
+											max="1"
+											placeholder="0.05"
+											bind:value={webConfig.SEARXNG_MIN_SCORE_RATIO}
+											autocomplete="off"
+										/>
+										<input
+											class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											type="number"
+											step="0.01"
+											min="0"
+											placeholder="0.15"
+											bind:value={webConfig.SEARXNG_MIN_ABSOLUTE_SCORE}
+											autocomplete="off"
+										/>
+										<input
+											class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											type="number"
+											min="1"
+											placeholder="2"
+											bind:value={webConfig.SEARXNG_MAX_RESULTS_PER_DOMAIN}
+											autocomplete="off"
+										/>
+									</div>
+								</div>
+								<div class="mb-2.5 flex w-full flex-col gap-2">
+									<label class="flex items-center gap-2 text-sm">
+										<Switch bind:state={webConfig.SEARXNG_AUTO_SPELLING_CORRECTION} />
+										<span>Auto-retry with SearXNG spelling corrections</span>
+									</label>
+									<label class="flex items-center gap-2 text-sm">
+										<Switch bind:state={webConfig.SEARXNG_FETCH_PAGE_2} />
+										<span>Fetch page 2 when results are weak</span>
+									</label>
 								</div>
 							</div>
 						{:else if webConfig.WEB_SEARCH_ENGINE === 'yacy'}

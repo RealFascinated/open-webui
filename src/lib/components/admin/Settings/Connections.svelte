@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { onMount, getContext, tick } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {onMount, getContext} from 'svelte';
 
-	import { getOllamaConfig, updateOllamaConfig, verifyOllamaConnection } from '$lib/apis/ollama';
-	import { getOpenAIConfig, updateOpenAIConfig, getOpenAIModels, verifyOpenAIConnection } from '$lib/apis/openai';
-	import { getModels as _getModels, getBackendConfig } from '$lib/apis';
-	import { getConnectionsConfig, setConnectionsConfig } from '$lib/apis/configs';
+	import {getOllamaConfig, updateOllamaConfig, verifyOllamaConnection} from '$lib/apis/ollama';
+	import {getOpenAIConfig, updateOpenAIConfig, getOpenAIModels, verifyOpenAIConnection} from '$lib/apis/openai';
+	import {getModels as _getModels, getBackendConfig} from '$lib/apis';
+	import {getConnectionsConfig, setConnectionsConfig} from '$lib/apis/configs';
 
-	import { config, models, settings, user } from '$lib/stores';
+	import {config, models, user} from '$lib/stores';
 
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -359,7 +359,7 @@
 
 							<div class="flex w-full gap-1.5">
 								<div class="flex-1 flex flex-col gap-1.5 mt-1.5">
-									{#each OLLAMA_BASE_URLS as url, idx}
+									{#each OLLAMA_BASE_URLS as _url, idx}
 										<OllamaConnection
 											bind:url={OLLAMA_BASE_URLS[idx]}
 											bind:config={OLLAMA_API_CONFIGS[idx]}

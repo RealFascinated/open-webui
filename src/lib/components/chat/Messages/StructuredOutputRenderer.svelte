@@ -73,6 +73,9 @@
 							attributes={detailToken.attributes}
 							resultContent={detailToken.text}
 							grouped={true}
+							compact={detailToken.attributes?.compact === 'true'}
+							toolSourceId={`${id}-${detailToken.attributes?.name ?? ''}`}
+							messageDone={done}
 							open={$settings?.expandDetails ?? false}
 							className="w-full space-y-1"
 						/>
@@ -113,6 +116,9 @@
 				id={`${id}-${displayItem.id}-tool-call`}
 				attributes={detailToken.attributes}
 				resultContent={detailToken.text}
+				compact={detailToken.attributes?.compact === 'true'}
+				toolSourceId={`${id}-${detailToken.attributes?.name ?? ''}`}
+				messageDone={done}
 				open={$settings?.expandDetails ?? false}
 				className="w-full space-y-1"
 			/>

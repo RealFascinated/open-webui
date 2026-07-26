@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { shortcuts } from '$lib/shortcuts';
-	import { settings } from '$lib/stores';
+	import {onMount} from 'svelte';
+	import {shortcuts} from '$lib/shortcuts';
+	
 
 	export let name: string;
 	export let className = '';
@@ -30,7 +30,7 @@
 
 {#if mounted && isVisible}
 	<div
-		class="hidden md:flex items-center self-center text-xs text-gray-400 dark:text-gray-600 {className}"
+		class="hidden md:flex items-center self-center whitespace-nowrap text-xs text-gray-400 dark:text-gray-600 {className}"
 	>
 		<span>{keys.map(formatKey).join(isMac ? '' : '+')}</span>
 	</div>

@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { getContext, onMount, tick } from 'svelte';
-	import { toast } from 'svelte-sonner';
-	import { config, models, settings, user } from '$lib/stores';
-	import { updateUserSettings } from '$lib/apis/users';
-	import { getModels as _getModels } from '$lib/apis';
-	import { goto } from '$app/navigation';
+	import {getContext, onMount, tick} from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {config, models, settings, user} from '$lib/stores';
+	import {updateUserSettings} from '$lib/apis/users';
+	import {getModels as _getModels} from '$lib/apis';
+	import {goto} from '$app/navigation';
 
 	import Modal from '../common/Modal.svelte';
 	import Account from './Settings/Account.svelte';
@@ -18,8 +18,7 @@
 	import Search from '../icons/Search.svelte';
 	import DatabaseSettings from '../icons/DatabaseSettings.svelte';
 	import SettingsAlt from '../icons/SettingsAlt.svelte';
-	import Link from '../icons/Link.svelte';
-	import UserCircle from '../icons/UserCircle.svelte';
+import UserCircle from '../icons/UserCircle.svelte';
 	import SoundHigh from '../icons/SoundHigh.svelte';
 	import InfoCircle from '../icons/InfoCircle.svelte';
 	import WrenchAlt from '../icons/WrenchAlt.svelte';
@@ -532,7 +531,7 @@
 	let selectedTab = 'general';
 
 	// Function to handle sideways scrolling
-	const scrollHandler = (event) => {
+	const scrollHandler = (event: Event) => {
 		const settingsTabsContainer = document.getElementById('settings-tabs-container');
 		if (settingsTabsContainer) {
 			event.preventDefault(); // Prevent default vertical scrolling
@@ -560,7 +559,7 @@
 		availableSettings = getAvailableSettings();
 		setFilteredSettings();
 
-		config.subscribe((configData) => {
+		config.subscribe((_configData) => {
 			availableSettings = getAvailableSettings();
 			setFilteredSettings();
 		});

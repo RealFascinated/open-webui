@@ -1,7 +1,17 @@
 <script lang="ts">
-	import { marked } from 'marked';
+	import {marked} from 'marked';
 	import DOMPurify from 'dompurify';
 	import equal from 'fast-deep-equal';
+	import type {Socket} from 'socket.io-client';
+	import type {SessionUser} from '$lib/stores';
+	import type {LanguageFn} from 'lowlight';
+	import type {Node as ProseMirrorNode} from 'prosemirror-model';
+	import {Fragment, DOMParser, Slice} from 'prosemirror-model';
+	import type {EditorState, Transaction} from 'prosemirror-state';
+	import {Plugin, PluginKey, TextSelection, Selection} from 'prosemirror-state';
+	import {Decoration, DecorationSet} from 'prosemirror-view';
+	import {Editor, Extension, markInputRule, getHTMLFromFragment} from '@tiptap/core';
+	import type {Content, EditorEvents, JSONContent} from '@tiptap/core';
 
 	marked.use({
 		breaks: true,
@@ -30,7 +40,7 @@
 	});
 
 	import TurndownService from 'turndown';
-	import { gfm } from '@joplin/turndown-plugin-gfm';
+	import {gfm} from '@joplin/turndown-plugin-gfm';
 	const turndownService = new TurndownService({
 		codeBlockStyle: 'fenced',
 		headingStyle: 'atx'
@@ -55,7 +65,7 @@
 	// Add custom table header rule before using GFM plugin
 	turndownService.addRule('tableHeaders', {
 		filter: 'th',
-		replacement: function (content, node) {
+		replacement: function (content, _node) {
 			return content;
 		}
 	});
@@ -118,18 +128,13 @@
 		}
 	});
 
-	import { onMount, onDestroy, tick, getContext } from 'svelte';
-	import { createEventDispatcher } from 'svelte';
+	import {onMount, onDestroy, tick, getContext} from 'svelte';
+	import {createEventDispatcher} from 'svelte';
 
 	const i18n = getContext('i18n');
 	const eventDispatch = createEventDispatcher();
 
-	import { Fragment, DOMParser } from 'prosemirror-model';
-	import { EditorState, Plugin, PluginKey, TextSelection, Selection } from 'prosemirror-state';
-	import { Decoration, DecorationSet } from 'prosemirror-view';
-	import { Editor, Extension, markInputRule, mergeAttributes } from '@tiptap/core';
-
-	import { AIAutocompletion } from './RichTextInput/AutoCompletion.js';
+	import {AIAutocompletion} from './RichTextInput/AutoCompletion.js';
 
 	import StarterKit from '@tiptap/starter-kit';
 
@@ -138,17 +143,16 @@
 	import BubbleMenu from '@tiptap/extension-bubble-menu';
 	import FloatingMenu from '@tiptap/extension-floating-menu';
 
-	import { TableKit } from '@tiptap/extension-table';
-	import { ListKit } from '@tiptap/extension-list';
-	import { Placeholder, CharacterCount } from '@tiptap/extensions';
+	import {TableKit} from '@tiptap/extension-table';
+	import {ListKit} from '@tiptap/extension-list';
+	import {Placeholder, CharacterCount} from '@tiptap/extensions';
 
 	import Image from './RichTextInput/Image/index.js';
 	// import TiptapImage from '@tiptap/extension-image';
 
 	import FileHandler from '@tiptap/extension-file-handler';
 	import Typography from '@tiptap/extension-typography';
-	import Highlight from '@tiptap/extension-highlight';
-	import Code from '@tiptap/extension-code';
+import Code from '@tiptap/extension-code';
 	import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 
 	// WORKAROUND: TipTap's default Code mark input rule regex captures the
@@ -171,32 +175,61 @@
 	import Mention from '@tiptap/extension-mention';
 	import FormattingButtons from './RichTextInput/FormattingButtons.svelte';
 
-	import { PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
-	import { createLowlight } from 'lowlight';
+	import {PASTED_TEXT_CHARACTER_LIMIT} from '$lib/constants';
+	import {createLowlight} from 'lowlight';
 	import hljs from 'highlight.js';
 
-	import type { SocketIOCollaborationProvider } from './RichTextInput/Collaboration';
+	import type {SocketIOCollaborationProvider} from './RichTextInput/Collaboration';
 
-	export let oncompositionstart = (e) => {};
-	export let oncompositionend = (e) => {};
-	export let onChange = (e) => {};
+	type RichTextInputChangePayload = {
+		html: string;
+		json: JSONContent;
+		md: string;
+	};
+
+	type FloatingMenuPlacement =
+		| 'left'
+		| 'right'
+		| 'bottom'
+		| 'top'
+		| 'top-start'
+		| 'top-end'
+		| 'bottom-start'
+		| 'bottom-end'
+		| 'right-start'
+		| 'right-end'
+		| 'left-start'
+		| 'left-end';
+
+	type TemplateRange = {
+		from: number;
+		to: number;
+	};
+
+	type RichTextEditorStorage = {
+		files?: unknown[];
+	};
+
+	export let oncompositionstart = (_e: Event) => {};
+	export let oncompositionend = (_e: Event) => {};
+	export let onChange = (_content: RichTextInputChangePayload) => {};
 
 	// create a lowlight instance with all languages loaded
 	const lowlight = createLowlight(
-		hljs.listLanguages().reduce(
+		hljs.listLanguages().reduce<Record<string, LanguageFn>>(
 			(obj, lang) => {
-				obj[lang] = () => hljs.getLanguage(lang);
+				obj[lang] = () => hljs.getLanguage(lang)!;
 				return obj;
 			},
-			{} as Record<string, unknown>
+			{}
 		)
 	);
 
 	export let editor: Editor | null = null;
 
-	export let socket = null;
-	export let user = null;
-	export let files = [];
+	export let socket: Socket | null = null;
+	export let user: SessionUser | null = null;
+	export let files: unknown[] = [];
 
 	export let documentId = '';
 
@@ -220,10 +253,10 @@
 	export let link = false;
 	export let image = false;
 	export let fileHandler = false;
-	export let suggestions = null;
+	export let suggestions: unknown = null;
 
-	export let onFileDrop = (currentEditor, files, pos) => {
-		files.forEach((file) => {
+	export let onFileDrop = (currentEditor: Editor, droppedFiles: File[], pos: number) => {
+		droppedFiles.forEach((file) => {
 			const fileReader = new FileReader();
 
 			fileReader.readAsDataURL(file);
@@ -233,7 +266,7 @@
 					.insertContentAt(pos, {
 						type: 'image',
 						attrs: {
-							src: fileReader.result
+							src: fileReader.result as string
 						}
 					})
 					.focus()
@@ -242,8 +275,8 @@
 		});
 	};
 
-	export let onFilePaste = (currentEditor, files, htmlContent) => {
-		files.forEach((file) => {
+	export let onFilePaste = (currentEditor: Editor, pastedFiles: File[], htmlContent?: string) => {
+		pastedFiles.forEach((file) => {
 			if (htmlContent) {
 				// if there is htmlContent, stop manual insertion & let other extensions handle insertion via inputRule
 				// you could extract the pasted file from this url string and upload it to a server for example
@@ -260,7 +293,7 @@
 					.insertContentAt(currentEditor.state.selection.anchor, {
 						type: 'image',
 						attrs: {
-							src: fileReader.result
+							src: fileReader.result as string
 						}
 					})
 					.focus()
@@ -269,42 +302,43 @@
 		});
 	};
 
-	export let onSelectionUpdate = (e) => {};
+	export let onSelectionUpdate: (props: EditorEvents['selectionUpdate']) => void = () => {};
 
 	export let id = '';
-	export let value = '';
+	export let value: string | JSONContent = '';
 	export let html = '';
 
 	export let json = false;
 	export let raw = false;
 	export let editable = true;
+	export let autofocusEnabled = true;
 	export let collaboration = false;
 
 	export let showFormattingToolbar = true;
 
 	export let preserveBreaks = false;
-	export let generateAutoCompletion: (...args: unknown[]) => unknown = async () => null;
+	export let generateAutoCompletion: (text: string) => Promise<string | null> = async () => null;
 	export let autocomplete = false;
 	export let messageInput = false;
 	export let shiftEnter = false;
 	export let largeTextAsFile = false;
 	export let insertPromptAsRichText = false;
-	export let floatingMenuPlacement = 'bottom-start';
+	export let floatingMenuPlacement: FloatingMenuPlacement = 'bottom-start';
 
-	let content = null;
+	let content: string | JSONContent | null = null;
 	let htmlValue = '';
-	let jsonValue = '';
+	let jsonValue: JSONContent | string = '';
 	let mdValue = '';
 
 	let provider: SocketIOCollaborationProvider | null = null;
 
-	let floatingMenuElement: Element | null = null;
-	let bubbleMenuElement: Element | null = null;
-	let element: Element | null = null;
+	let floatingMenuElement: HTMLElement | null = null;
+	let bubbleMenuElement: HTMLElement | null = null;
+	let element: HTMLElement | null = null;
 
-	let pendingUpdate = null;
+	let pendingUpdate: number | null = null;
 
-	const options = {
+	const _options = {
 		throwOnError: false
 	};
 
@@ -325,7 +359,7 @@
 		const doc = state.doc;
 		const resolvedPos = doc.resolve(pos);
 		const textBlock = resolvedPos.parent;
-		const paraStart = resolvedPos.start();
+		const _paraStart = resolvedPos.start();
 		const text = textBlock.textContent;
 		const offset = resolvedPos.parentOffset;
 
@@ -340,7 +374,7 @@
 	};
 
 	// Returns {start, end} of the word at pos
-	function getWordBoundsAtPos(doc, pos) {
+	function getWordBoundsAtPos(doc: ProseMirrorNode, pos: number) {
 		const resolvedPos = doc.resolve(pos);
 		const textBlock = resolvedPos.parent;
 		const paraStart = resolvedPos.start();
@@ -357,7 +391,8 @@
 		};
 	}
 
-	export const replaceCommandWithText = async (text) => {
+	export const replaceCommandWithText = async (text: string) => {
+		if (!editor?.view) return;
 		const { state, dispatch } = editor.view;
 		const { selection } = state;
 		const pos = selection.from;
@@ -389,7 +424,7 @@
 
 			// Extract just the content, not the wrapper paragraphs
 			const content = fragment.content;
-			let nodesToInsert = [];
+			const nodesToInsert: ProseMirrorNode[] = [];
 
 			content.forEach((node) => {
 				if (node.type.name === 'paragraph') {
@@ -408,10 +443,9 @@
 			if (text.includes('\n')) {
 				// Split the text into lines and create a <p> node for each line
 				const lines = text.split('\n');
-				const nodes = lines.map(
-					(line, index) =>
+				const nodes = lines.map((line: string, index: number) =>
 						index === 0
-							? state.schema.text(line ? line : []) // First line is plain text
+							? state.schema.text(line || '')
 							: state.schema.nodes.paragraph.create({}, line ? state.schema.text(line) : undefined) // Subsequent lines are paragraphs
 				);
 
@@ -436,9 +470,7 @@
 					text !== '' ? state.schema.text(text) : []
 				);
 
-				tr = tr.setSelection(
-					state.selection.constructor.near(tr.doc.resolve(start + text.length + 1))
-				);
+				tr = tr.setSelection(TextSelection.near(tr.doc.resolve(start + text.length + 1)));
 			}
 		}
 
@@ -448,14 +480,13 @@
 		// selectNextTemplate(state, dispatch);
 	};
 
-	export const setText = (text: string) => {
+	export const setText = (text: string, options: { focus?: boolean } = {}) => {
 		if (!editor || !editor.view) return;
 
 		if (text === '') {
 			editor.commands.clearContent();
 		} else {
 			// Regex to find serialized mention tags: <@id>, <#id>, <$id|label>
-			const mentionReG = /<([@#$])([\w.\-:/]+)(?:\|([^>]*))?>/g;
 
 			// Convert each line to a <p>, replacing mention tags with proper
 			// TipTap mention spans that the editor's DOMParser will recognise.
@@ -484,46 +515,46 @@
 
 		selectNextTemplate(editor.view.state, editor.view.dispatch);
 
-		// Ensure the editor is still valid before trying to focus
-		focus();
+		if (options.focus !== false) {
+			focus();
+		}
 	};
 
-	export const insertContent = (content) => {
-		if (!editor || !editor.view) return;
-		const { state, view } = editor;
-		const { schema, tr } = state;
+	export const insertContent = (content: string, options: { focus?: boolean } = {}) => {
+		if (!editor?.view) return;
 
-		// If content is a string, convert it to a ProseMirror node
-		const htmlContent = marked.parse(content);
+		const htmlContent = marked.parse(content) as string;
 
 		// insert the HTML content at the current selection
 		editor.commands.insertContent(htmlContent);
 
-		focus();
+		if (options.focus !== false) {
+			focus();
+		}
 	};
 
 	// Convert text to ProseMirror nodes, using hardBreak for newlines
-	const textToNodes = (state, text) => {
+	const textToNodes = (state: EditorState, text: string): ProseMirrorNode | ProseMirrorNode[] => {
 		if (!text.includes('\n')) return state.schema.text(text);
-		const nodes = [];
-		text.split('\n').forEach((line, i) => {
+		const nodes: ProseMirrorNode[] = [];
+		text.split('\n').forEach((line: string, i: number) => {
 			if (i > 0) nodes.push(state.schema.nodes.hardBreak.create());
 			if (line) nodes.push(state.schema.text(line));
 		});
 		return nodes;
 	};
 
-	export const replaceVariables = (variables) => {
-		if (!editor || !editor.view) return;
+	export const replaceVariables = (variables: Record<string, unknown>) => {
+		if (!editor?.view) return;
 		const { state, view } = editor;
 		const { doc } = state;
 
 		// Create a transaction to replace variables
 		let tr = state.tr;
-		let offset = 0; // Track position changes due to text length differences
+		let _offset = 0; // Track position changes due to text length differences
 
 		// Collect all replacements first to avoid position conflicts
-		const replacements = [];
+		const replacements: { from: number; to: number; text: string }[] = [];
 
 		doc.descendants((node, pos) => {
 			if (node.isText && node.text) {
@@ -556,6 +587,16 @@
 		}
 	};
 
+	export const blur = () => {
+		if (editor?.view && !editor.isDestroyed) {
+			try {
+				editor.view.dom.blur();
+			} catch (e) {
+				console.warn('Error blurring editor', e);
+			}
+		}
+	};
+
 	export const focus = () => {
 		if (editor && editor.view) {
 			// Check if the editor is destroyed
@@ -575,14 +616,14 @@
 	};
 
 	// Function to find the next template in the document
-	function findNextTemplate(doc, from = 0) {
+	function findNextTemplate(doc: ProseMirrorNode, from = 0): TemplateRange | null {
 		const patterns = [{ start: '{{', end: '}}' }];
 
-		let result = null;
+		let result: TemplateRange | null = null;
 
-		doc.nodesBetween(from, doc.content.size, (node, pos) => {
+		doc.nodesBetween(from, doc.content.size, (node: ProseMirrorNode, pos: number) => {
 			if (result) return false; // Stop if we've found a match
-			if (node.isText) {
+			if (node.isText && node.text) {
 				const text = node.text;
 				let index = Math.max(0, from - pos);
 				while (index < text.length) {
@@ -607,7 +648,7 @@
 	}
 
 	// Function to select the next template in the document
-	function selectNextTemplate(state, dispatch) {
+	function selectNextTemplate(state: EditorState, dispatch?: (tr: Transaction) => void) {
 		const { doc, selection } = state;
 		const from = selection.to;
 		let template = findNextTemplate(doc, from);
@@ -632,14 +673,16 @@
 		return false;
 	}
 
-	export const setContent = (content) => {
+	export const setContent = (content: Content) => {
+		if (!editor) return;
 		editor.commands.setContent(content);
 	};
 
 	const selectTemplate = () => {
-		if (value !== '') {
+		if (value !== '' && editor?.view) {
 			// After updating the state, try to find and select the next template
 			setTimeout(() => {
+				if (!editor?.view) return;
 				const templateFound = selectNextTemplate(editor.view.state, editor.view.dispatch);
 				if (!templateFound) {
 					editor.commands.focus('end');
@@ -657,7 +700,7 @@
 					props: {
 						decorations: (state) => {
 							const { selection } = state;
-							const { focused } = this.editor;
+							const focused = this.editor.isFocused;
 
 							if (focused || selection.empty) {
 								return null;
@@ -675,7 +718,7 @@
 		}
 	});
 
-	import { listDragHandlePlugin } from './RichTextInput/listDragHandlePlugin.js';
+	import {listDragHandlePlugin} from './RichTextInput/listDragHandlePlugin.js';
 
 	const ListItemDragHandle = Extension.create({
 		name: 'listItemDragHandle',
@@ -700,20 +743,20 @@
 			if (preserveBreaks) {
 				turndownService.addRule('preserveBreaks', {
 					filter: 'br', // Target <br> elements
-					replacement: function (content) {
+					replacement: function (_content: string) {
 						return '<br/>';
 					}
 				});
 			}
 
 			if (!raw) {
-				const tryParse = async (value, attempts = 3, interval = 100) => {
+				const tryParse = async (value: string, attempts = 3, interval = 100): Promise<string> => {
 					try {
 						// Try parsing the value
 						return marked.parse(value.replaceAll(`\n<br/>`, `<br/>`), {
 							breaks: false
-						});
-					} catch (error) {
+						}) as string;
+					} catch (_error) {
 						// If no attempts remain, fallback to plain text
 						if (attempts <= 1) {
 							return value;
@@ -725,7 +768,7 @@
 				};
 
 				// Usage example
-				content = await tryParse(value);
+				content = await tryParse(typeof value === 'string' ? value : '');
 			}
 		}
 
@@ -737,7 +780,7 @@
 			element: element,
 			extensions: [
 				StarterKit.configure({
-					link: link,
+					link: link ? {} : false,
 					code: false, // Disabled in favor of FixedCode (see workaround above)
 					// When rich text is on, ListKit + CodeBlockLowlight provide these.
 					// Disable StarterKit's equivalents to avoid duplicate extension names.
@@ -781,7 +824,7 @@
 					? [
 							Mention.configure({
 								HTMLAttributes: { class: 'mention' },
-								suggestions: suggestions
+								suggestions: suggestions as never
 							})
 						]
 					: []),
@@ -799,13 +842,17 @@
 				...(autocomplete
 					? [
 							AIAutocompletion.configure({
-								generateCompletion: async (text) => {
+								generateCompletion: async (text: string) => {
 									if (text.trim().length === 0) {
 										return null;
 									}
 
 									const suggestion = await generateAutoCompletion(text).catch(() => null);
-									if (!suggestion || suggestion.trim().length === 0) {
+									if (
+										typeof suggestion !== 'string' ||
+										!suggestion ||
+										suggestion.trim().length === 0
+									) {
 										return null;
 									}
 
@@ -824,7 +871,7 @@
 									placement: 'top',
 									offset: 2
 								},
-								shouldShow: ({ editor, view, state, oldState, from, to }) => {
+								shouldShow: ({ editor, view, from, to }) => {
 									// safety check
 									if (!editor || !editor.view || editor.isDestroyed) {
 										return false;
@@ -841,7 +888,7 @@
 									placement: floatingMenuPlacement,
 									offset: 4
 								},
-								shouldShow: ({ editor, view, state, oldState }) => {
+								shouldShow: ({ editor, view, state }) => {
 									// safety check
 									if (!editor || !editor.view || editor.isDestroyed) {
 										return false;
@@ -866,7 +913,7 @@
 				...(collaboration && provider ? [provider.getEditorExtension()] : [])
 			],
 			content: collaboration ? undefined : content,
-			autofocus: messageInput ? true : false,
+			autofocus: messageInput && autofocusEnabled,
 			onTransaction: () => {
 				if (!editor) return;
 
@@ -969,7 +1016,7 @@
 						);
 
 						const lines = plainText.split('\n');
-						const nodes = [];
+						const nodes: ProseMirrorNode[] = [];
 
 						lines.forEach((line, index) => {
 							if (index > 0) {
@@ -981,7 +1028,7 @@
 						});
 
 						const fragment = Fragment.fromArray(nodes);
-						dispatch(state.tr.replaceSelectionWith(fragment, false).scrollIntoView());
+						dispatch(state.tr.replaceSelection(new Slice(fragment, 0, 0)).scrollIntoView());
 
 						return true; // handled
 					}
@@ -1008,7 +1055,7 @@
 							const { state, dispatch } = view;
 							const { from, to } = state.selection;
 							const lines = event.data.split('\n');
-							const nodes = [];
+							const nodes: ProseMirrorNode[] = [];
 
 							lines.forEach((line, index) => {
 								if (index > 0) {
@@ -1058,7 +1105,7 @@
 								if (isInCodeBlock) {
 									// Handle tab in code block - insert tab character or spaces
 									const tabChar = '\t'; // or '    ' for 4 spaces
-									editor.commands.insertContent(tabChar);
+									editor?.commands.insertContent(tabChar);
 									event.preventDefault();
 									return true; // Prevent further propagation
 								} else {
@@ -1084,7 +1131,7 @@
 										return false; // Let ProseMirror handle the Enter key normally
 									}
 
-									editor.commands.enter(); // Insert a new line
+									editor?.commands.enter(); // Insert a new line
 									view.dispatch(view.state.tr.scrollIntoView()); // Move viewport to the cursor
 									event.preventDefault();
 									return true;
@@ -1111,7 +1158,7 @@
 							// Handle shift + Enter for a line break
 							if (shiftEnter) {
 								if (event.key === 'Enter' && event.shiftKey && !event.ctrlKey && !event.metaKey) {
-									editor.commands.setHardBreak(); // Insert a hard break
+									editor?.commands.setHardBreak(); // Insert a hard break
 									view.dispatch(view.state.tr.scrollIntoView()); // Move viewport to the cursor
 									event.preventDefault();
 									return true;
@@ -1152,7 +1199,7 @@
 									const { from, to } = state.selection;
 
 									const lines = plainText.split('\n');
-									const nodes = [];
+									const nodes: ProseMirrorNode[] = [];
 
 									lines.forEach((line, index) => {
 										if (index > 0) {
@@ -1204,7 +1251,9 @@
 						// Only take the selected text & HTML, not the full doc
 						const plain = state.doc.textBetween(from, to, '\n');
 						const slice = state.doc.cut(from, to);
-						const html = editor.schema ? editor.getHTML(slice) : editor.getHTML(); // depending on your editor API
+						const html = editor
+							? getHTMLFromFragment(slice.content, state.schema)
+							: '';
 
 						event.clipboardData.setData('text/plain', plain);
 						event.clipboardData.setData('text/html', html);
@@ -1216,7 +1265,7 @@
 			},
 			onBeforeCreate: ({ editor }) => {
 				if (files) {
-					editor.storage.files = files;
+					(editor.storage as RichTextEditorStorage).files = files;
 				}
 			},
 			onSelectionUpdate: onSelectionUpdate,
@@ -1236,7 +1285,11 @@
 			enablePasteRules: richText
 		});
 
-		provider?.setEditor(editor, () => ({ md: mdValue, html: htmlValue, json: jsonValue }));
+		provider?.setEditor(editor, () => ({
+			md: mdValue,
+			html: htmlValue,
+			json: typeof jsonValue === 'string' ? jsonValue : JSON.stringify(jsonValue)
+		}));
 
 		if (messageInput) {
 			selectTemplate();
@@ -1295,12 +1348,13 @@
 				}
 			} else {
 				if (value !== mdValue) {
+					const markdownValue = typeof value === 'string' ? value : '';
 					editor.commands.setContent(
 						preserveBreaks
-							? value
-							: marked.parse(value.replaceAll(`\n<br/>`, `<br/>`), {
+							? markdownValue
+							: (marked.parse(markdownValue.replaceAll(`\n<br/>`, `<br/>`), {
 									breaks: false
-								})
+								}) as string)
 					);
 
 					selectTemplate();

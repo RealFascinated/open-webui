@@ -1,14 +1,14 @@
 <script>
-	import { toast } from 'svelte-sonner';
-	import { getContext, onMount, tick } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {getContext, tick} from 'svelte';
 
 	const i18n = getContext('i18n');
 
-	import { goto } from '$app/navigation';
-	import { user } from '$lib/stores';
-	import { updateToolAccessGrants } from '$lib/apis/tools';
+	import {goto} from '$app/navigation';
+	import {user} from '$lib/stores';
+	import {updateToolAccessGrants} from '$lib/apis/tools';
 
-	import { extractFrontmatter, formatSkillName, nameToId } from '$lib/utils';
+	import {extractFrontmatter, formatSkillName, nameToId} from '$lib/utils';
 	import CodeEditor from '$lib/components/common/CodeEditor.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import ChevronLeft from '$lib/components/icons/ChevronLeft.svelte';
@@ -17,7 +17,6 @@
 	import AccessControlModal from '../common/AccessControlModal.svelte';
 
 	let formElement = null;
-	let loading = false;
 
 	let showConfirm = false;
 	let showAccessControlModal = false;
@@ -158,7 +157,6 @@ class Tools:
 `;
 
 	const saveHandler = async () => {
-		loading = true;
 		onSave({
 			id,
 			name,
@@ -185,8 +183,7 @@ class Tools:
 
 			saveHandler();
 		}
-	};
-</script>
+	};</script>
 
 <AccessControlModal
 	bind:show={showAccessControlModal}

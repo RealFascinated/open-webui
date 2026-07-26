@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { goto } from '$app/navigation';
 	import { createNewTool, getTools } from '$lib/apis/tools';
 	import ToolkitEditor from '$lib/components/workspace/Tools/ToolkitEditor.svelte';
@@ -52,7 +52,7 @@
 	};
 
 	onMount(() => {
-		window.addEventListener('message', async (event) => {
+		window.addEventListener('message', async (event: Event) => {
 			if (
 				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'].includes(
 					event.origin

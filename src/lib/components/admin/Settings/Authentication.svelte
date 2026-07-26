@@ -23,7 +23,7 @@
 
 	const i18n = getContext('i18n');
 
-	let adminConfig = null;
+	let adminConfig: Record<string, unknown> = null;
 	let groups = [];
 	let dirty = false;
 	let saving = false;
@@ -794,6 +794,7 @@
 							</div>
 							<Switch bind:state={oauthConfig.OAUTH_UPDATE_PICTURE_ON_LOGIN} />
 						</div>
+				</div>
 			</AdminSettingsCard>
 		{/if}
 	</div>

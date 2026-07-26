@@ -42,7 +42,7 @@
 		utilities: {
 			label: $i18n.t('Utilities'),
 			description: $i18n.t(
-				'Weather, maps, currency conversion, sports scores, option buttons, and follow-up chips'
+				'Weather, maps, currency and unit conversion, definitions, JSON formatting, colors, time zones, diffs, sports scores, option buttons, and follow-up chips'
 			)
 		},
 		image_generation: {

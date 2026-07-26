@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { getContext, onMount, tick } from 'svelte';
-	import { models, config } from '$lib/stores';
+	import {getContext, tick} from 'svelte';
+	
 
-	import { toast } from 'svelte-sonner';
-	import { copyToClipboard } from '$lib/utils';
+	
+	
 
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import Modal from '$lib/components/common/Modal.svelte';
@@ -15,7 +15,7 @@
 	export let show = false;
 	export let variables = {};
 
-	export let onSave = (e) => {};
+	export let onSave = (_e: Event) => {};
 
 	let loading = true;
 	let variableValues = {};
@@ -90,7 +90,7 @@
 						{#if !loading}
 							<div class="flex flex-col gap-1">
 								{#each Object.keys(variables) as variable, idx}
-									{@const { type, ...variableAttributes } = variables[variable] ?? {}}
+									{@const { _type, ...variableAttributes } = variables[variable] ?? {}}
 
 									<div class=" py-0.5 w-full justify-between">
 										<div class="flex w-full justify-between mb-1.5">

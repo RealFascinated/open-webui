@@ -1,10 +1,10 @@
 <script lang="ts">
 	import Sortable from 'sortablejs';
 
-	import { createEventDispatcher, getContext, onMount, onDestroy, tick } from 'svelte';
+	import {getContext, onMount, onDestroy, tick} from 'svelte';
 	const i18n = getContext('i18n');
 
-	import { models } from '$lib/stores';
+	import {models} from '$lib/stores';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import EllipsisVertical from '$lib/components/icons/EllipsisVertical.svelte';
 
@@ -13,7 +13,7 @@
 	let sortable = null;
 	let modelListElement = null;
 
-	const positionChangeHandler = (event) => {
+	const positionChangeHandler = (event: Event) => {
 		const { oldIndex, newIndex, item } = event;
 
 		// Revert SortableJS's DOM manipulation so Svelte doesn't get out of sync.
@@ -39,7 +39,7 @@
 			sortable = new Sortable(modelListElement, {
 				animation: 150,
 				handle: '.model-item-handle',
-				onUpdate: (event) => {
+				onUpdate: (event: Event) => {
 					positionChangeHandler(event);
 				}
 			});

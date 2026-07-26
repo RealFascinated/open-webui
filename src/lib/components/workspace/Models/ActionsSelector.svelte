@@ -13,7 +13,7 @@
 		};
 	};
 
-	const i18n = getContext('i18n') as unknown;
+	const i18n = getContext('i18n');
 
 	export let actions: Action[] = [];
 	export let selectedActionIds: string[] = [];
@@ -48,7 +48,7 @@
 			/>
 
 			<div class=" flex items-center flex-wrap">
-				{#each selectedActions as action, actionIdx}
+				{#each selectedActions as action, _actionIdx}
 					<div class=" flex items-center gap-2 mr-3">
 						<div class="self-center flex items-center">
 							<Checkbox

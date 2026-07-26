@@ -65,14 +65,14 @@
 		}
 
 		themes
-			.filter((e) => e !== themeToApply)
-			.forEach((e) => {
-				e.split(' ').forEach((e) => {
+			.filter((e: Event) => e !== themeToApply)
+			.forEach((e: Event) => {
+				e.split(' ').forEach((e: Event) => {
 					document.documentElement.classList.remove(e);
 				});
 			});
 
-		themeToApply.split(' ').forEach((e) => {
+		themeToApply.split(' ').forEach((e: Event) => {
 			document.documentElement.classList.add(e);
 		});
 
@@ -157,7 +157,7 @@
 							: 'outline-hidden'}"
 						bind:value={lang}
 						placeholder={$i18n.t('Select a language')}
-						on:change={(e) => {
+						on:change={(_e) => {
 							changeLanguage(lang);
 						}}
 					>

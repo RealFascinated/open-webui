@@ -1,25 +1,18 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { createEventDispatcher, onMount, getContext } from 'svelte';
-	const dispatch = createEventDispatcher();
-
-	import { getBackendConfig } from '$lib/apis';
-	import {
-		getAudioConfig,
-		updateAudioConfig,
-		getModels as _getModels,
-		getVoices as _getVoices
-	} from '$lib/apis/audio';
-	import { config, settings } from '$lib/stores';
+	import {toast} from 'svelte-sonner';
+	import {onMount, getContext} from 'svelte';
+	import {getBackendConfig} from '$lib/apis';
+	import {getAudioConfig, updateAudioConfig, getModels as _getModels, getVoices as _getVoices} from '$lib/apis/audio';
+	import {config} from '$lib/stores';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import TTSVoiceInput from '$lib/components/workspace/Models/TTSVoiceInput.svelte';
 
-	import { TTS_RESPONSE_SPLIT } from '$lib/types';
+	import {TTS_RESPONSE_SPLIT} from '$lib/types';
 
-	import type { Writable } from 'svelte/store';
-	import type { i18n as i18nType } from 'i18next';
+	import type {Writable} from 'svelte/store';
+	import type {i18n as i18nType} from 'i18next';
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import AdminSaveBar from '../AdminSaveBar.svelte';
 	import AdminSettingsCard from '../AdminSettingsCard.svelte';
@@ -127,7 +120,7 @@
 		if (TTS_ENGINE === '') {
 			models = [];
 		} else {
-			const res = await _getModels(localStorage.token).catch((e) => {
+			const res = await _getModels(localStorage.token).catch((e: Event) => {
 				toast.error(`${e}`);
 			});
 
@@ -154,7 +147,7 @@
 		} else {
 			voices = [];
 
-			const res = await _getVoices(localStorage.token).catch((e) => {
+			const res = await _getVoices(localStorage.token).catch((e: Event) => {
 				toast.error(`${e}`);
 			});
 
@@ -173,7 +166,7 @@
 		try {
 			openaiParams = TTS_OPENAI_PARAMS ? JSON.parse(TTS_OPENAI_PARAMS) : {};
 			TTS_OPENAI_PARAMS = JSON.stringify(openaiParams, null, 2);
-		} catch (e) {
+		} catch (_e) {
 			toast.error($i18n.t('Invalid JSON format for Parameters'));
 			return false;
 		}

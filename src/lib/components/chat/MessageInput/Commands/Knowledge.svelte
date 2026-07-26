@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 	import dayjs from 'dayjs';
 	import relativeTime from 'dayjs/plugin/relativeTime';
 	dayjs.extend(relativeTime);
 
-	import { tick, getContext, onMount, onDestroy } from 'svelte';
+	import {tick, getContext, onMount, onDestroy} from 'svelte';
 
-	import { projects } from '$lib/stores';
-	import { getProjects } from '$lib/apis/projects';
-	import { searchKnowledgeBases, searchKnowledgeFiles } from '$lib/apis/knowledge';
-	import { removeLastWordFromString, isValidHttpUrl, isYoutubeUrl, decodeString } from '$lib/utils';
+	import {projects} from '$lib/stores';
+	import {getProjects} from '$lib/apis/projects';
+	import {searchKnowledgeBases, searchKnowledgeFiles} from '$lib/apis/knowledge';
+	import {isValidHttpUrl, isYoutubeUrl, decodeString} from '$lib/utils';
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import DocumentPage from '$lib/components/icons/DocumentPage.svelte';
@@ -21,7 +21,7 @@
 	const i18n = getContext('i18n');
 
 	export let query = '';
-	export let onSelect = (e) => {};
+	export let onSelect = (_e: Event) => {};
 
 	let selectedIdx = 0;
 	let items = [];

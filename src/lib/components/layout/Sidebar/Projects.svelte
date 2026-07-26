@@ -11,7 +11,7 @@
 	export let projects = {};
 	export let shiftKey = false;
 
-	export let onDelete = (projectId) => {};
+	export let onDelete = (_projectId) => {};
 
 	let ownedList = [];
 	let sharedList = [];
@@ -37,7 +37,7 @@
 		sharedList = rootKeys.filter((key) => projects[key].shared);
 	}
 
-	const onItemMove = (e) => {
+	const onItemMove = (e: Event) => {
 		if (e.originProjectId) {
 			projectRegistry[e.originProjectId]?.setProjectItems();
 		}

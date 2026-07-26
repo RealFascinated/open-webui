@@ -1,16 +1,13 @@
 <script lang="ts">
-	import { getContext, onMount } from 'svelte';
+	import {getContext} from 'svelte';
 
 	const i18n = getContext('i18n');
 
-	import { user as _user, channels, socket } from '$lib/stores';
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-	import { getChannels, getDMChannelByUserId } from '$lib/apis/channels';
-
-	import ChatBubbles from '$lib/components/icons/ChatBubbles.svelte';
-	import ChatBubble from '$lib/components/icons/ChatBubble.svelte';
-	import ChatBubbleOval from '$lib/components/icons/ChatBubbleOval.svelte';
-	import { goto } from '$app/navigation';
+	import {user as _user} from '$lib/stores';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
+	import {getDMChannelByUserId} from '$lib/apis/channels';
+import ChatBubbleOval from '$lib/components/icons/ChatBubbleOval.svelte';
+	import {goto} from '$app/navigation';
 	import Emoji from '$lib/components/common/Emoji.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 

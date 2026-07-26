@@ -1,17 +1,11 @@
 <script lang="ts">
-	import { getContext, onMount, tick } from 'svelte';
-	import { goto } from '$app/navigation';
+	import {getContext, tick} from 'svelte';
+	import {goto} from '$app/navigation';
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
-	import { config } from '$lib/stores';
-	import {
-		buildAdminSearchIndex,
-		filterAdminSearch,
-		getRecentAdminSearchResults,
-		recordAdminSearchVisit,
-		type AdminSearchItem
-	} from '$lib/utils/adminSearch';
+	import {config} from '$lib/stores';
+	import {buildAdminSearchIndex, filterAdminSearch, getRecentAdminSearchResults, recordAdminSearchVisit, type AdminSearchItem} from '$lib/utils/adminSearch';
 
 	const i18n = getContext('i18n');
 

@@ -1,17 +1,17 @@
 <script lang="ts">
 	import Fuse from 'fuse.js';
 
-	import { createEventDispatcher, onDestroy, onMount } from 'svelte';
-	import { tick, getContext } from 'svelte';
+	
+	import {getContext} from 'svelte';
 
-	import { models } from '$lib/stores';
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import {models} from '$lib/stores';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let query = '';
-	export let onSelect = (e) => {};
+	export let onSelect = (_e: Event) => {};
 
 	let selectedIdx = 0;
 	export let filteredItems = [];
@@ -35,7 +35,7 @@
 	);
 
 	$: filteredItems = query
-		? fuse.search(query).map((e) => {
+		? fuse.search(query).map((e: Event) => {
 				return e.item;
 			})
 		: $models.filter((model) => !model?.info?.meta?.hidden);

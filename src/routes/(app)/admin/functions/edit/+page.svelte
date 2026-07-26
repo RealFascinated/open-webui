@@ -1,17 +1,17 @@
 <script>
-	import { toast } from 'svelte-sonner';
-	import { onMount, getContext } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {onMount, getContext} from 'svelte';
 
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { config, functions, models, settings } from '$lib/stores';
-	import { updateFunctionById, getFunctions, getFunctionById } from '$lib/apis/functions';
+	import {goto} from '$app/navigation';
+	import {page} from '$app/stores';
+	import {functions, models} from '$lib/stores';
+	import {updateFunctionById, getFunctions, getFunctionById} from '$lib/apis/functions';
 
 	import FunctionEditor from '$lib/components/admin/Functions/FunctionEditor.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import { getModels } from '$lib/apis';
-	import { compareVersion, extractFrontmatter } from '$lib/utils';
-	import { WEBUI_VERSION } from '$lib/constants';
+	import {getModels} from '$lib/apis';
+	import {compareVersion, extractFrontmatter} from '$lib/utils';
+	import {WEBUI_VERSION} from '$lib/constants';
 
 	const i18n = getContext('i18n');
 

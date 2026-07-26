@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-	import { WEBUI_NAME, config, user as _user, showSidebar } from '$lib/stores';
-	import { goto } from '$app/navigation';
-	import { onMount, getContext } from 'svelte';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
+	import {user as _user} from '$lib/stores';
+	
+	import {getContext} from 'svelte';
 
 	import dayjs from 'dayjs';
 	import relativeTime from 'dayjs/plugin/relativeTime';
@@ -10,8 +10,8 @@
 	dayjs.extend(relativeTime);
 	dayjs.extend(localizedFormat);
 
-	import { toast } from 'svelte-sonner';
-	import { getChannelMembersById } from '$lib/apis/channels';
+	import {toast} from 'svelte-sonner';
+	import {getChannelMembersById} from '$lib/apis/channels';
 
 	import Pagination from '$lib/components/common/Pagination.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -34,7 +34,7 @@
 	let page = 1;
 
 	let users = null;
-	let total = null;
+	let total: number | null = null;
 
 	let query = '';
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -42,7 +42,7 @@
 	let orderBy = 'name'; // default sort key
 	let direction = 'asc'; // default sort order
 
-	const setSortKey = (key) => {
+	const _setSortKey = (key) => {
 		if (!sort) {
 			return;
 		}
@@ -210,7 +210,7 @@
 						</div>
 					</div> -->
 					<div class="w-full">
-						{#each users as user, userIdx (user.id)}
+						{#each users as user, _userIdx (user.id)}
 							<div class=" dark:border-gray-850 text-xs flex items-center justify-between">
 								<div class="px-2 py-1.5 font-medium text-gray-900 dark:text-white flex-1">
 									<div class="flex items-center gap-2">

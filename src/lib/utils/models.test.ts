@@ -49,7 +49,11 @@ describe('resolveSelectedModels', () => {
 		]);
 	});
 
+	test('keeps explicit selection while models are still loading', () => {
+		expect(resolveSelectedModels(['visible-b'], [], ['visible-a'])).toEqual(['visible-b']);
+	});
+
 	test('returns an empty placeholder when no models are available', () => {
-		expect(resolveSelectedModels(['missing-model'], [], ['also-missing'])).toEqual(['']);
+		expect(resolveSelectedModels([], [], ['also-missing'])).toEqual(['']);
 	});
 });

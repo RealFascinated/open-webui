@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
+	import {getContext} from 'svelte';
 
 	const i18n = getContext('i18n');
 
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import PinSlash from '$lib/components/icons/PinSlash.svelte';
@@ -21,10 +21,10 @@
 	<div
 		class=" flex justify-center text-gray-800 dark:text-gray-200 cursor-grab relative group"
 		data-id={model?.id}
-		on:mouseenter={(e) => {
+		on:mouseenter={(_e) => {
 			mouseOver = true;
 		}}
-		on:mouseleave={(e) => {
+		on:mouseleave={(_e) => {
 			mouseOver = false;
 		}}
 	>

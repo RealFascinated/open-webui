@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 
 	let map;
@@ -7,7 +7,7 @@
 	export let setViewLocation = [51.505, -0.09];
 	export let points = [];
 
-	export let onClick = (e) => {};
+	export let onClick = (_e: Event) => {};
 
 	let markerGroupLayer = null;
 
@@ -60,7 +60,7 @@
 
 		setMarkers(points);
 
-		map.on('click', (e) => {
+		map.on('click', (e: Event) => {
 			console.log(e.latlng);
 			onClick(`${e.latlng.lat}, ${e.latlng.lng}`);
 

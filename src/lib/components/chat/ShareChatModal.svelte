@@ -1,16 +1,10 @@
 <script lang="ts">
-	import { getContext, onMount } from 'svelte';
-	import { models, config, user } from '$lib/stores';
+	import {getContext} from 'svelte';
+	import {models, config, user} from '$lib/stores';
 
-	import { toast } from 'svelte-sonner';
-	import {
-		deleteSharedChatById,
-		getChatById,
-		shareChatById,
-		getChatAccessGrants,
-		updateChatAccessGrants
-	} from '$lib/apis/chats';
-	import { copyToClipboard } from '$lib/utils';
+	import {toast} from 'svelte-sonner';
+	import {deleteSharedChatById, getChatById, shareChatById, getChatAccessGrants, updateChatAccessGrants} from '$lib/apis/chats';
+	import {copyToClipboard} from '$lib/utils';
 
 	import Modal from '../common/Modal.svelte';
 	import Link from '../icons/Link.svelte';
@@ -19,7 +13,7 @@
 
 	export let chatId;
 
-	let chat = null;
+	let chat: import('$lib/types/chat').ChatRecord | null = null;
 	let shareUrl = null;
 	let accessGrants: unknown[] = [];
 	const i18n = getContext('i18n');
@@ -46,7 +40,7 @@
 		const tab = await window.open(`${url}/chats/upload`, '_blank');
 		window.addEventListener(
 			'message',
-			(event) => {
+			(event: Event) => {
 				if (event.origin !== url) return;
 				if (event.data === 'loaded') {
 					tab.postMessage(

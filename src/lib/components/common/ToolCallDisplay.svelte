@@ -11,26 +11,26 @@
 	import ChevronUp from '../icons/ChevronUp.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import Spinner from './Spinner.svelte';
-	import Markdown from '../chat/Messages/Markdown.svelte';
 	import WrenchSolid from '../icons/WrenchSolid.svelte';
 	import CheckCircle from '../icons/CheckCircle.svelte';
+	import XMark from '../icons/XMark.svelte';
 	import FullHeightIframe from './FullHeightIframe.svelte';
 	import { settings } from '$lib/stores';
+	import { formatToolName } from '$lib/utils';
+	import {
+		isToolCallPending,
+		isToolCallSuccessful,
+		resolveToolCallStatus,
+		type ToolCallAttributes
+	} from '$lib/utils/toolCallDisplay';
 
 	export let id: string = '';
-	export let attributes: {
-		type?: string;
-		id?: string;
-		name?: string;
-		arguments?: string;
-		result?: string;
-		files?: string;
-		embeds?: string;
-		done?: string;
-	} = {};
-
+	export let attributes: ToolCallAttributes = {};
 	export let open = false;
 	export let grouped = false;
+	export let compact = false;
+	export let messageDone = false;
+	export let toolSourceId = '';
 	export let className = '';
 
 	const RESULT_PREVIEW_LIMIT = 10000;
@@ -40,12 +40,11 @@
 	export let buttonClassName =
 		'w-fit text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition';
 
+	export let resultContent: string = '';
+
 	const componentId = id || uuidv4();
 
 	function parseJSONString(str: string) {
-		// Iteratively unwrap nested JSON-encoded strings. Same result as the previous
-		// recursive form, but without the stack-overflow-and-recover path it hit on
-		// scalar values (e.g. JSON.parse('5') -> 5 -> infinite self-recursion).
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		let value: unknown = str;
 		while (typeof value === 'string') {
@@ -63,10 +62,9 @@
 			const parsed = parseJSONString(str);
 			if (typeof parsed === 'object') {
 				return JSON.stringify(parsed, null, 2);
-			} else {
-				return String(parsed);
 			}
-		} catch (e) {
+			return String(parsed);
+		} catch (_e) {
 			return str;
 		}
 	}
@@ -83,25 +81,76 @@
 		}
 	}
 
-	export let resultContent: string = '';
-
-	$: result = resultContent || decode(attributes?.result ?? '');
-	$: embeds = parseJSONString(decode(attributes?.embeds ?? ''));
+	$: result = resultContent || decode(String(attributes?.result ?? ''));
+	$: embeds = parseJSONString(decode(String(attributes?.embeds ?? '')));
 	$: args =
-		open || (Array.isArray(embeds) && embeds.length > 0) ? decode(attributes?.arguments ?? '') : '';
-	$: isDone = attributes?.done === 'true';
-	$: isExecuting = attributes?.done && attributes?.done !== 'true';
-
+		open || (Array.isArray(embeds) && embeds.length > 0) ? decode(String(attributes?.arguments ?? '')) : '';
+	$: status = resolveToolCallStatus(attributes, messageDone);
+	$: isPending = isToolCallPending(status, messageDone);
+	$: isSuccessful = isToolCallSuccessful(status);
+	$: isCancelled = status === 'cancelled';
+	$: isFailed = status === 'failed' || status === 'incomplete';
 	$: parsedArgs = parseArguments(args);
 	$: parsedResult = parseJSONString(result);
+	$: displayName = formatToolName(String(attributes?.name ?? ''));
+	$: contextText = String(attributes?.context ?? resultContent ?? '').trim();
+	$: collapsedContext = contextText && contextText !== result ? contextText : '';
+	$: isCompact = compact || attributes?.compact === 'true';
+	$: statusLabel = isPending
+		? $i18n.t('Running {{NAME}}...', { NAME: displayName })
+		: isCancelled
+			? $i18n.t('{{NAME}} cancelled', { NAME: displayName })
+			: isFailed
+				? $i18n.t('{{NAME}} failed', { NAME: displayName })
+				: $i18n.t('Result from {{NAME}}', { NAME: displayName });
+	$: resolvedToolSourceId =
+		toolSourceId || (attributes?.name ? `${componentId}-${attributes.name}` : '');
 </script>
 
 <div {id} class={className}>
-	{#if !grouped && embeds && Array.isArray(embeds) && embeds.length > 0}
-		<!-- Embed Mode: Show iframes without collapsible behavior -->
+	{#if isCompact}
+		<div
+			class="w-full max-w-full font-medium flex items-center gap-1.5 py-0.5"
+			data-tool-source={resolvedToolSourceId}
+		>
+			{#if isPending}
+				<div>
+					<Spinner className="size-4" />
+				</div>
+			{:else if isSuccessful}
+				<div class="text-emerald-500 dark:text-emerald-400">
+					<CheckCircle className="size-4" strokeWidth="2" />
+				</div>
+			{:else if isCancelled}
+				<div class="text-gray-400 dark:text-gray-500">
+					<XMark className="size-4" strokeWidth="2" />
+				</div>
+			{:else if isFailed}
+				<div class="text-amber-500 dark:text-amber-400">
+					<XMark className="size-4" strokeWidth="2" />
+				</div>
+			{:else}
+				<div class="text-gray-400 dark:text-gray-500">
+					<WrenchSolid className="size-3.5" />
+				</div>
+			{/if}
+
+			<div class="flex-1 min-w-0 line-clamp-1">
+				<span class="text-sm text-gray-700 dark:text-gray-200">{displayName}</span>
+				{#if collapsedContext}
+					<span class="text-sm text-gray-400 dark:text-gray-500"> · {collapsedContext}</span>
+				{/if}
+				{#if isCancelled}
+					<span class="text-sm text-gray-400 dark:text-gray-500"> · {$i18n.t('cancelled')}</span>
+				{:else if isFailed}
+					<span class="text-sm text-amber-500 dark:text-amber-400"> · {$i18n.t('failed')}</span>
+				{/if}
+			</div>
+		</div>
+	{:else if !grouped && embeds && Array.isArray(embeds) && embeds.length > 0}
 		<div class="py-1 w-full cursor-pointer">
 			<div class="w-full text-xs text-gray-500">
-				{attributes.name}
+				{displayName}
 			</div>
 			{#each embeds as embed, idx}
 				<div class="my-2" id={`${componentId}-tool-call-embed-${idx}`}>
@@ -117,27 +166,36 @@
 			{/each}
 		</div>
 	{:else}
-		<!-- Tool call display -->
-		<!-- svelte-ignore a11y-no-static-element-interactions -->
-		<div
-			class="{buttonClassName} cursor-pointer"
-			on:pointerup={() => {
+		<button
+			type="button"
+			class="{buttonClassName} cursor-pointer w-full text-left"
+			aria-expanded={open}
+			aria-label={statusLabel}
+			data-tool-source={resolvedToolSourceId || undefined}
+			on:click={() => {
 				open = !open;
 			}}
 		>
 			<div
-				class="w-full max-w-full font-medium flex items-center gap-1.5 {isExecuting
-					? 'shimmer'
-					: ''}"
+				class="w-full max-w-full font-medium flex items-center gap-1.5 {grouped
+					? 'py-0.5'
+					: ''} {isPending ? 'shimmer' : ''}"
 			>
-				<!-- Status icon -->
-				{#if isExecuting}
+				{#if isPending}
 					<div>
 						<Spinner className="size-4" />
 					</div>
-				{:else if isDone}
+				{:else if isSuccessful}
 					<div class="text-emerald-500 dark:text-emerald-400">
 						<CheckCircle className="size-4" strokeWidth="2" />
+					</div>
+				{:else if isCancelled}
+					<div class="text-gray-400 dark:text-gray-500">
+						<XMark className="size-4" strokeWidth="2" />
+					</div>
+				{:else if isFailed}
+					<div class="text-amber-500 dark:text-amber-400">
+						<XMark className="size-4" strokeWidth="2" />
 					</div>
 				{:else}
 					<div class="text-gray-400 dark:text-gray-500">
@@ -145,32 +203,30 @@
 					</div>
 				{/if}
 
-				<!-- Label -->
-				<div class="flex-1 line-clamp-1">
-					<!-- Short label (below md) -->
-					<span class="@md:hidden text-black dark:text-white">{attributes.name}</span>
-					<!-- Full label (md and above) -->
-					<span class="hidden @md:inline font-normal">
-						{#if isDone}
-							<Markdown
-								id={`${componentId}-tool-call-title`}
-								content={$i18n.t('View Result from **{{NAME}}**', {
-									NAME: attributes.name
-								})}
-							/>
-						{:else}
-							<Markdown
-								id={`${componentId}-tool-call-executing`}
-								content={$i18n.t('Executing **{{NAME}}**...', {
-									NAME: attributes.name
-								})}
-							/>
+				<div class="flex-1 min-w-0 line-clamp-1">
+					{#if grouped}
+						<span class="text-sm text-gray-700 dark:text-gray-200">{displayName}</span>
+						{#if collapsedContext}
+							<span class="text-sm text-gray-400 dark:text-gray-500">
+								· {collapsedContext}
+							</span>
 						{/if}
-					</span>
+						{#if isCancelled}
+							<span class="text-sm text-gray-400 dark:text-gray-500"> · {$i18n.t('cancelled')}</span>
+						{:else if isFailed}
+							<span class="text-sm text-amber-500 dark:text-amber-400"> · {$i18n.t('failed')}</span>
+						{/if}
+					{:else}
+						<span class="text-sm text-gray-700 dark:text-gray-200">{statusLabel}</span>
+						{#if collapsedContext}
+							<span class="text-sm text-gray-400 dark:text-gray-500">
+								· {collapsedContext}
+							</span>
+						{/if}
+					{/if}
 				</div>
 
-				<!-- Chevron -->
-				<div class="flex shrink-0 self-center translate-y-[1px]">
+				<div class="flex shrink-0 self-center translate-y-[1px] text-gray-400 dark:text-gray-500">
 					{#if open}
 						<ChevronUp strokeWidth="3.5" className="size-3.5" />
 					{:else}
@@ -178,12 +234,15 @@
 					{/if}
 				</div>
 			</div>
-		</div>
+		</button>
 
 		{#if open}
 			<div transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}>
-				<div class="border border-gray-50 dark:border-gray-850/30 rounded-2xl my-1.5 p-3 space-y-3">
-					<!-- Input -->
+				<div
+					class="{grouped
+						? 'border-l border-gray-100 dark:border-gray-800 ml-2 pl-3'
+						: ''} border border-gray-50 dark:border-gray-850/30 rounded-2xl my-1.5 p-3 space-y-3"
+				>
 					{#if args}
 						<div>
 							<div
@@ -216,8 +275,7 @@
 						</div>
 					{/if}
 
-					<!-- Output -->
-					{#if isDone && result}
+					{#if (isSuccessful || isFailed) && result}
 						<div>
 							<div
 								class="text-[10px] uppercase tracking-wider font-medium text-gray-400 dark:text-gray-500 mb-1.5 px-1"
@@ -253,6 +311,14 @@
 									{/if}
 								{/if}
 							</div>
+						</div>
+					{:else if isCancelled}
+						<div class="px-1 text-xs text-gray-500 dark:text-gray-400">
+							{$i18n.t('This tool call was cancelled before it finished.')}
+						</div>
+					{:else if isFailed && !result}
+						<div class="px-1 text-xs text-gray-500 dark:text-gray-400">
+							{$i18n.t('This tool call did not return a result.')}
 						</div>
 					{/if}
 				</div>

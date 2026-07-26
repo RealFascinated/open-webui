@@ -1,28 +1,17 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { onMount, getContext, tick, onDestroy } from 'svelte';
+	import {onMount, getContext, tick, onDestroy} from 'svelte';
 	const i18n = getContext('i18n');
 
-	import { WEBUI_NAME, user, skills as _skills } from '$lib/stores';
-	import { goto } from '$app/navigation';
-	import {
-		getSkills,
-		getSkillById,
-		getSkillItems,
-		exportSkills,
-		createNewSkill,
-		deleteSkillById,
-		toggleSkillById
-	} from '$lib/apis/skills';
-	import { capitalizeFirstLetter, parseFrontmatter, formatSkillName } from '$lib/utils';
-	import TagInput from '$lib/components/common/Tags/TagInput.svelte';
-
-	import Tooltip from '../common/Tooltip.svelte';
-	import ConfirmDialog from '../common/ConfirmDialog.svelte';
-	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
+	import {WEBUI_NAME, user, skills as _skills} from '$lib/stores';
+	import {goto} from '$app/navigation';
+	import {getSkills, getSkillById, getSkillItems, exportSkills, createNewSkill, deleteSkillById, toggleSkillById} from '$lib/apis/skills';
+	import {capitalizeFirstLetter, parseFrontmatter, formatSkillName} from '$lib/utils';
+import Tooltip from '../common/Tooltip.svelte';
+import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
 	import GarbageBin from '../icons/GarbageBin.svelte';
 	import Search from '../icons/Search.svelte';
@@ -48,7 +37,7 @@
 	let showDeleteConfirm = false;
 
 	let filteredItems = null;
-	let total = null;
+	let total: number | null = null;
 	let loading = false;
 
 	let tagsContainerElement: HTMLDivElement;
@@ -144,13 +133,13 @@
 		viewOption = localStorage?.workspaceViewOption || '';
 		loaded = true;
 
-		const onKeyDown = (event) => {
+		const onKeyDown = (event: Event) => {
 			if (event.key === 'Shift') {
 				shiftKey = true;
 			}
 		};
 
-		const onKeyUp = (event) => {
+		const onKeyUp = (event: Event) => {
 			if (event.key === 'Shift') {
 				shiftKey = false;
 			}
@@ -229,7 +218,7 @@
 										page = 1;
 										loadSkillItems();
 										_skills.set(await getSkills(localStorage.token));
-									} catch (e) {
+									} catch (_e) {
 										toast.error($i18n.t('Invalid JSON file'));
 									}
 								};

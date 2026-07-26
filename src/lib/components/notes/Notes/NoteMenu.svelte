@@ -16,7 +16,7 @@
 	export let show = false;
 	export const className = 'max-w-[180px]';
 
-	export let onDownload = (type) => {};
+	export let onDownload = (_type) => {};
 	export let onDelete = () => {};
 	export let onPin = null;
 	export let isPinned = false;

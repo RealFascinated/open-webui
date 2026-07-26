@@ -209,7 +209,7 @@
 				true
 			);
 
-			contentWindow.addEventListener('dragstart', (event) => {
+			contentWindow.addEventListener('dragstart', (event: Event) => {
 				event.preventDefault();
 			});
 		} catch {

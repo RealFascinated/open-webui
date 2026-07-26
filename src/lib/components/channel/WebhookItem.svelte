@@ -17,7 +17,7 @@
 
 	export let onClick = () => {};
 	export let onDelete = () => {};
-	export let onUpdate = (changes: { name: string; profile_image_url: string }) => {};
+	export let onUpdate = (_changes: { name: string; profile_image_url: string }) => {};
 
 	let name = webhook.name;
 	let image = webhook.profile_image_url || '';
@@ -28,13 +28,13 @@
 	}
 
 	let filesInputElement;
-	let inputFiles;
+	let inputFiles: File[] | undefined;
 
 	const handleImageUpload = () => {
 		if (!inputFiles?.length) return;
 
 		const reader = new FileReader();
-		reader.onload = (event) => {
+		reader.onload = (event: Event) => {
 			const dataUrl = `${event.target?.result}`;
 			const fileType = inputFiles[0]?.type;
 

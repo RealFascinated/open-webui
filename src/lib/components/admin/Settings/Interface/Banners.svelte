@@ -19,13 +19,13 @@
 		);
 
 		// Sort the banners array based on the new order
-		banners = bannerIdOrder.map((id) => {
+		banners = bannerIdOrder.map((id: string) => {
 			const index = banners.findIndex((banner) => banner.id === id);
 			return banners[index];
 		});
 	};
 
-	const classNames: Record<string, string> = {
+	const _classNames: Record<string, string> = {
 		info: 'bg-blue-500/20 text-blue-700 dark:text-blue-200 ',
 		success: 'bg-green-500/20 text-green-700 dark:text-green-200',
 		warning: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-200',
@@ -45,7 +45,7 @@
 			sortable = new Sortable(bannerListElement, {
 				animation: 150,
 				handle: '.item-handle',
-				onUpdate: async (event) => {
+				onUpdate: async (_event) => {
 					positionChangeHandler();
 				}
 			});

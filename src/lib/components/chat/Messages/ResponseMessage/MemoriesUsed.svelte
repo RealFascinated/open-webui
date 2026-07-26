@@ -33,7 +33,7 @@
 		>
 			<Brain className="size-4 shrink-0 text-gray-400" />
 			<div class="min-w-0 flex-1">
-				<div class="text-base text-gray-600 dark:text-gray-400">
+				<div class="{done ? '' : 'shimmer'} text-base text-gray-600 dark:text-gray-400">
 					{$i18n.t('Used {{count}} memories', { count: memories.length })}
 				</div>
 				{#if !expanded}

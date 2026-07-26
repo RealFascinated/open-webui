@@ -4,7 +4,6 @@ import {
 	findMatchingArtifactClose
 } from '$lib/utils/ant-artifact';
 
-const OPEN = '<antArtifact';
 const CLOSE = '</antArtifact>';
 
 let allowStreamingTokens = false;

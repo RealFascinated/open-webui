@@ -1,64 +1,25 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { v4 as uuidv4 } from 'uuid';
-	import Sortable from 'sortablejs';
+	import {toast} from 'svelte-sonner';
+	import {v4 as uuidv4} from 'uuid';
+	import Sortable, {type SortableEvent} from 'sortablejs';
 
-	import { goto } from '$app/navigation';
-	import {
-		user,
-		chats,
-		settings,
-		showSettings,
-		chatId,
-		tags,
-		projects as projectsStore,
-		showSidebar,
-		showSearch,
-		mobile,
-		showArchivedChats,
-		pinnedChats,
-		pinnedNotes,
-		scrollPaginationEnabled,
-		currentChatPage,
-		temporaryChatEnabled,
-		channels,
-		socket,
-		config,
-		isApp,
-		models,
-		selectedProject,
-		WEBUI_NAME,
-		sidebarWidth,
-		activeChatIds
-	} from '$lib/stores';
-	import { onMount, getContext, tick, onDestroy } from 'svelte';
+	import {goto} from '$app/navigation';
+	import {page} from '$app/stores';
+	import type {Writable} from 'svelte/store';
+	import {user, chats, settings, chatId, tags, projects as projectsStore, showSidebar, showSearch, mobile, showArchivedChats, pinnedChats, pinnedNotes, scrollPaginationEnabled, currentChatPage, temporaryChatEnabled, channels, socket, config, isApp, models, selectedProject, WEBUI_NAME, sidebarWidth, activeChatIds} from '$lib/stores';
+	import {onMount, getContext, tick} from 'svelte';
 
 	const i18n = getContext('i18n');
 
 	$: canImportChats = $user?.role === 'admin' || ($user?.permissions?.chat?.import ?? true);
 
-	import {
-		getChatList,
-		getAllTags,
-		getPinnedChatList,
-		toggleChatPinnedStatusById,
-		getChatById,
-		updateChatProjectIdById,
-		importChats,
-		deleteAllChats,
-		getChatListBySearchText
-	} from '$lib/apis/chats';
-	import {
-		createNewProject,
-		getProjects,
-		getSharedProjects,
-		updateProjectParentIdById
-	} from '$lib/apis/projects';
-	import { createNewNote, getPinnedNoteList, toggleNotePinnedStatusById } from '$lib/apis/notes';
-	import { updateUserSettings } from '$lib/apis/users';
-	import { checkActiveChats } from '$lib/apis/tasks';
-	import { createNoteHandler } from '$lib/components/notes/utils';
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import {getChatList, getAllTags, getPinnedChatList, toggleChatPinnedStatusById, getChatById, updateChatProjectIdById, importChats} from '$lib/apis/chats';
+	import {createNewProject, getProjects, getSharedProjects, updateProjectParentIdById} from '$lib/apis/projects';
+	import {getPinnedNoteList} from '$lib/apis/notes';
+	import {updateUserSettings} from '$lib/apis/users';
+	import {checkActiveChats} from '$lib/apis/tasks';
+	import {createNoteHandler} from '$lib/components/notes/utils';
+	import {WEBUI_API_BASE_URL, WEBUI_BASE_URL} from '$lib/constants';
 
 	import ArchivedChatsModal from './ArchivedChatsModal.svelte';
 	import UserMenu from './Sidebar/UserMenu.svelte';
@@ -68,8 +29,7 @@
 	import Folder from '../common/Folder.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import Folders from './Sidebar/Projects.svelte';
-	import SharedProjectItem from './Sidebar/SharedProjectItem.svelte';
-	import { getChannels, createNewChannel } from '$lib/apis/channels';
+import {getChannels, createNewChannel} from '$lib/apis/channels';
 	import ChannelModal from './Sidebar/ChannelModal.svelte';
 	import ChannelItem from './Sidebar/ChannelItem.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
@@ -82,23 +42,95 @@
 	import Note from '../icons/Note.svelte';
 	import Code from '../icons/Code.svelte';
 	import Cube from '../icons/Cube.svelte';
-	import { slide } from 'svelte/transition';
+	import {slide} from 'svelte/transition';
 	import HotkeyHint from '../common/HotkeyHint.svelte';
 
-	const BREAKPOINT = 768;
 	const DEFAULT_PINNED_ITEMS = ['notes', 'artifacts', 'workspace'];
+
+	type PinnedMenuItemId = 'notes' | 'artifacts' | 'workspace' | 'automations' | 'calendar' | 'playground';
+
+	type SidebarProject = {
+		id: string;
+		name?: string;
+		parent_id?: string | null;
+		created_at?: number;
+		updated_at?: number;
+		shared?: boolean;
+		new?: boolean;
+		childrenIds?: string[];
+		[key: string]: unknown;
+	};
+
+	type SidebarChannel = {
+		id: string;
+		type?: string | null;
+		[key: string]: unknown;
+	};
+
+	type ImportChatItem = {
+		chat: unknown;
+		meta?: Record<string, unknown>;
+		created_at?: number | null;
+		updated_at?: number | null;
+	};
+
+	type CreateFolderInput = {
+		name?: string;
+		data?: Record<string, unknown>;
+		parent_id?: string | null;
+	};
+
+	type ChannelSubmitPayload = {
+		type?: string;
+		name?: string;
+		is_private?: boolean | null;
+		access_grants?: object[];
+		group_ids?: string[];
+		user_ids?: string[];
+	};
+
+	type ProjectRegistryEntry = {
+		setProjectItems: () => void;
+	};
+
+	const MENU_ITEMS: Record<
+		PinnedMenuItemId,
+		{ label: string; href: string; iconType: string }
+	> = {
+		notes: { label: 'Notes', href: '/notes', iconType: 'note' },
+		artifacts: { label: 'Artifacts', href: '/artifacts', iconType: 'cube' },
+		workspace: { label: 'Workspace', href: '/workspace', iconType: 'workspace' },
+		automations: { label: 'Automations', href: '/automations', iconType: 'automations' },
+		calendar: { label: 'Calendar', href: '/calendar', iconType: 'calendar' },
+		playground: { label: 'Playground', href: '/playground', iconType: 'playground' }
+	};
+
+	const hasFeaturePermission = (feature: string, defaultValue = true): boolean => {
+		const features = $user?.permissions?.features as Record<string, boolean | undefined> | undefined;
+		return features?.[feature] ?? defaultValue;
+	};
+
+	const toChatDate = (value: unknown): number | null =>
+		typeof value === 'number' ? value : null;
 
 	let scrollTop = 0;
 
-	let navElement;
+	let navElement: HTMLElement | undefined;
 	let shiftKey = false;
 
-	let selectedChatId = null;
+	let selectedChatId: string | null = null;
+	let selectedChatIdForPinnedLists: null | undefined = null;
+
+	$: if (selectedChatIdForPinnedLists === null || selectedChatIdForPinnedLists === undefined) {
+		selectedChatId = null;
+	}
+
 	let showCreateChannel = false;
 
 	// Pagination variables
 	let chatListLoading = false;
 	let allChatsLoaded = false;
+	let chatListGeneration = 0;
 
 	let showCreateProjectModal = false;
 
@@ -106,21 +138,21 @@
 	let showPinnedNotes = false;
 	let showChannels = false;
 	let showFolders = false;
-	let showSharedFolders = false;
 
-	let projects = {};
-	let projectRegistry = {};
+	let projects: Record<string, SidebarProject> = {};
+	let projectRegistry: Record<string, ProjectRegistryEntry> = {};
 
-	let newFolderId = null;
+	let newFolderId: string | null = null;
 
-	let sharedFolders: unknown[] = [];
+	let sharedFolders: SidebarProject[] = [];
 
-	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
+	$: pinnedItems = ($settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS) as string[];
+	$: channelList = ($channels ?? []) as SidebarChannel[];
 	$: projectsEnabled =
 		$config?.features?.enable_projects &&
 		($user?.role === 'admin' || ($user?.permissions?.features?.projects ?? true));
 
-	const isMenuItemVisible = (id) => {
+	const isMenuItemVisible = (id: string) => {
 		switch (id) {
 			case 'notes':
 				return (
@@ -130,7 +162,7 @@
 			case 'artifacts':
 				return (
 					($config?.features?.enable_artifacts ?? false) &&
-					($user?.role === 'admin' || ($user?.permissions?.features?.artifacts ?? true))
+					($user?.role === 'admin' || hasFeaturePermission('artifacts'))
 				);
 			case 'workspace':
 				return (
@@ -157,16 +189,11 @@
 		}
 	};
 
-	const getMenuItemMeta = (id) => {
-		const items = {
-			notes: { label: 'Notes', href: '/notes', iconType: 'note' },
-			artifacts: { label: 'Artifacts', href: '/artifacts', iconType: 'cube' },
-			workspace: { label: 'Workspace', href: '/workspace', iconType: 'workspace' },
-			automations: { label: 'Automations', href: '/automations', iconType: 'automations' },
-			calendar: { label: 'Calendar', href: '/calendar', iconType: 'calendar' },
-			playground: { label: 'Playground', href: '/playground', iconType: 'playground' }
-		};
-		return items[id];
+	const getMenuItemMeta = (id: string) => {
+		if (id in MENU_ITEMS) {
+			return MENU_ITEMS[id as PinnedMenuItemId];
+		}
+		return undefined;
 	};
 
 	const initPinnedMenuSortable = () => {
@@ -174,9 +201,10 @@
 		if (el && !$mobile) {
 			new Sortable(el, {
 				animation: 150,
-				onUpdate: async (event) => {
+				onUpdate: async (event: SortableEvent) => {
 					const itemId = event.item.dataset.id;
 					const newIndex = event.newIndex;
+					if (!itemId || newIndex === undefined) return;
 					const current = [...pinnedItems];
 					const oldIndex = current.indexOf(itemId);
 					current.splice(oldIndex, 1);
@@ -197,10 +225,14 @@
 			return;
 		}
 
-		const folderList = await getProjects(localStorage.token).catch((error) => {
+		const folderList = ((await getProjects(localStorage.token).catch((_error) => {
 			return [];
-		});
-		projectsStore.set(folderList.sort((a, b) => b.updated_at - a.updated_at));
+		})) ?? []) as SidebarProject[];
+		projectsStore.set(
+			folderList.sort(
+				(a: SidebarProject, b: SidebarProject) => (b.updated_at ?? 0) - (a.updated_at ?? 0)
+			)
+		);
 
 		projects = {};
 
@@ -219,25 +251,26 @@
 			if (project.parent_id) {
 				// Ensure the parent folder is initialized if it doesn't exist
 				if (!projects[project.parent_id]) {
-					projects[project.parent_id] = {}; // Create a placeholder if not already present
+					projects[project.parent_id] = { id: project.parent_id };
 				}
 
-				// Initialize childrenIds array if it doesn't exist and add the current folder id
-				projects[project.parent_id].childrenIds = projects[project.parent_id].childrenIds
-					? [...projects[project.parent_id].childrenIds, project.id]
+				const parentProject = projects[project.parent_id];
+				const childrenIds = parentProject.childrenIds
+					? [...parentProject.childrenIds, project.id]
 					: [project.id];
 
 				// Sort the children by updated_at field
-				projects[project.parent_id].childrenIds.sort((a, b) => {
-					return projects[b].updated_at - projects[a].updated_at;
+				childrenIds.sort((a: string, b: string) => {
+					return (projects[b]?.updated_at ?? 0) - (projects[a]?.updated_at ?? 0);
 				});
+				parentProject.childrenIds = childrenIds;
 			}
 		}
 
 		// Merge shared projects into the same structure
 		try {
-			sharedFolders = await getSharedProjects(localStorage.token);
-		} catch (e) {
+			sharedFolders = ((await getSharedProjects(localStorage.token)) ?? []) as SidebarProject[];
+		} catch (_e) {
 			sharedFolders = [];
 		}
 
@@ -249,9 +282,9 @@
 		// Build parent-child relationships for shared projects
 		for (const sf of sharedFolders) {
 			if (projects[sf.id]?.shared && sf.parent_id && projects[sf.parent_id]) {
-				projects[sf.parent_id].childrenIds = projects[sf.parent_id].childrenIds
-					? [...new Set([...projects[sf.parent_id].childrenIds, sf.id])]
-					: [sf.id];
+				const parentProject = projects[sf.parent_id];
+				const existingChildren = parentProject.childrenIds ?? [];
+				parentProject.childrenIds = [...new Set([...existingChildren, sf.id])];
 			}
 		}
 	};
@@ -260,25 +293,31 @@
 		await initFolders();
 	};
 
-	const createFolder = async ({ name, data, parent_id }) => {
-		name = name?.trim();
-		if (!name) {
+	const createFolder = async ({ name, data, parent_id }: CreateFolderInput) => {
+		const trimmedName = name?.trim();
+		if (!trimmedName) {
 			toast.error($i18n.t('Project name cannot be empty.'));
 			return;
 		}
 
+		let folderName = trimmedName;
+
 		// Check for duplicate names in the same parent
-		const siblings = Object.values(projects).filter((project) => project.parent_id === parent_id);
-		if (siblings.find((project) => project.name.toLowerCase() === name.toLowerCase())) {
+		const siblings = Object.values(projects).filter(
+			(project: SidebarProject) => project.parent_id === parent_id
+		);
+		if (siblings.find((project) => (project.name ?? '').toLowerCase() === folderName.toLowerCase())) {
 			// If a folder with the same name already exists, append a number to the name
 			let i = 1;
 			while (
-				siblings.find((project) => project.name.toLowerCase() === `${name} ${i}`.toLowerCase())
+				siblings.find(
+					(project) => (project.name ?? '').toLowerCase() === `${folderName} ${i}`.toLowerCase()
+				)
 			) {
 				i++;
 			}
 
-			name = `${name} ${i}`;
+			folderName = `${folderName} ${i}`;
 		}
 
 		// Add a dummy folder to the list to show the user that the folder is being created
@@ -287,7 +326,7 @@
 			...projects,
 			[tempId]: {
 				id: tempId,
-				name: name,
+				name: folderName,
 				parent_id: parent_id,
 				created_at: Date.now(),
 				updated_at: Date.now()
@@ -295,7 +334,7 @@
 		};
 
 		const res = await createNewProject(localStorage.token, {
-			name,
+			name: folderName,
 			data,
 			parent_id
 		}).catch((error) => {
@@ -312,25 +351,28 @@
 
 	const initChannels = async () => {
 		// default (none), group, dm type
-		const res = await getChannels(localStorage.token).catch((error) => {
+		const res = ((await getChannels(localStorage.token).catch((_error) => {
 			return null;
-		});
+		})) ?? null) as SidebarChannel[] | null;
 
 		if (res) {
-			await channels.set(
-				res.sort(
-					(a, b) =>
-						['', null, 'group', 'dm'].indexOf(a.type) - ['', null, 'group', 'dm'].indexOf(b.type)
-				)
+			const channelTypeOrder = ['', null, 'group', 'dm'];
+			const sortedChannels = res.sort(
+				(a: SidebarChannel, b: SidebarChannel) =>
+					channelTypeOrder.indexOf(a.type ?? '') - channelTypeOrder.indexOf(b.type ?? '')
 			);
+			(channels as Writable<SidebarChannel[]>).set(sortedChannels);
 		}
 	};
 
 	const initChatList = async () => {
+		const generation = ++chatListGeneration;
+
 		// Reset pagination variables
 		console.log('initChatList');
 		currentChatPage.set(1);
 		allChatsLoaded = false;
+		chatListLoading = false;
 		scrollPaginationEnabled.set(false);
 
 		initFolders();
@@ -358,34 +400,55 @@
 			})(),
 			(async () => {
 				console.log('Init chat list');
-				const _chats = await getChatList(localStorage.token, $currentChatPage);
-				await chats.set(_chats);
+				const _chats = await getChatList(localStorage.token, 1);
+				if (generation === chatListGeneration) {
+					await chats.set(_chats);
+				}
 			})()
 		]);
 
 		// Enable pagination
-		scrollPaginationEnabled.set(true);
+		if (generation === chatListGeneration) {
+			scrollPaginationEnabled.set(true);
+		}
 	};
 
 	const loadMoreChats = async () => {
+		if (chatListLoading || allChatsLoaded || !$scrollPaginationEnabled) {
+			return;
+		}
+
+		const generation = chatListGeneration;
+		const nextPage = $currentChatPage + 1;
 		chatListLoading = true;
 
-		currentChatPage.set($currentChatPage + 1);
+		try {
+			const newChatList = await getChatList(localStorage.token, nextPage);
 
-		let newChatList = [];
+			if (generation !== chatListGeneration) {
+				return;
+			}
 
-		newChatList = await getChatList(localStorage.token, $currentChatPage);
-
-		// once the bottom of the list has been reached (no results) there is no need to continue querying
-		allChatsLoaded = newChatList.length === 0;
-		const existingIds = new Set(($chats ?? []).map((c) => c.id));
-		const uniqueNewChats = newChatList.filter((c) => !existingIds.has(c.id));
-		await chats.set([...($chats ? $chats : []), ...uniqueNewChats]);
-
-		chatListLoading = false;
+			// Once the bottom of the list has been reached (no results), stop querying.
+			allChatsLoaded = newChatList.length === 0;
+			const existingIds = new Set(($chats ?? []).map((c: Record<string, unknown>) => String(c.id)));
+			const uniqueNewChats = newChatList.filter(
+				(c: Record<string, unknown>) => !existingIds.has(String(c.id))
+			);
+			await chats.set([...($chats ? $chats : []), ...uniqueNewChats]);
+			currentChatPage.set(nextPage);
+		} finally {
+			if (generation === chatListGeneration) {
+				chatListLoading = false;
+			}
+		}
 	};
 
-	const importChatHandler = async (items, pinned = false, projectId = null) => {
+	const importChatHandler = async (
+		items: ImportChatItem[],
+		pinned = false,
+		projectId: string | null = null
+	) => {
 		if (!canImportChats) {
 			toast.error($i18n.t('Access prohibited'));
 			return;
@@ -411,16 +474,21 @@
 		initChatList();
 	};
 
-	const inputFilesHandler = async (files) => {
+	const inputFilesHandler = async (files: FileList | File[]) => {
 		console.log(files);
 
 		for (const file of files) {
 			const reader = new FileReader();
-			reader.onload = async (e) => {
-				const content = e.target.result;
+			reader.onload = async (e: ProgressEvent<FileReader>) => {
+				const content = e.target?.result;
+
+				if (typeof content !== 'string') {
+					toast.error($i18n.t(`Invalid file format.`));
+					return;
+				}
 
 				try {
-					const chatItems = JSON.parse(content);
+					const chatItems = JSON.parse(content) as ImportChatItem[];
 					importChatHandler(chatItems);
 				} catch {
 					toast.error($i18n.t(`Invalid file format.`));
@@ -431,8 +499,8 @@
 		}
 	};
 
-	const tagEventHandler = async (type, tagName, chatId) => {
-		console.log(type, tagName, chatId);
+	const tagEventHandler = async (type: string, tagName: string, chatIdParam: string) => {
+		console.log(type, tagName, chatIdParam);
 		if (type === 'delete') {
 			initChatList();
 		} else if (type === 'add') {
@@ -440,24 +508,18 @@
 		}
 	};
 
-	let draggedOver = false;
-
-	const onDragOver = (e) => {
+	const onDragOver = (e: DragEvent) => {
 		e.preventDefault();
 
 		// Check if a file is being draggedOver.
-		if (e.dataTransfer?.types?.includes('Files')) {
-			draggedOver = true;
-		} else {
-			draggedOver = false;
+		if (!e.dataTransfer?.types?.includes('Files')) {
+			return;
 		}
 	};
 
-	const onDragLeave = () => {
-		draggedOver = false;
-	};
+	const onDragLeave = () => {};
 
-	const onDrop = async (e) => {
+	const onDrop = async (e: DragEvent) => {
 		e.preventDefault();
 		console.log(e); // Log the drop event
 
@@ -471,11 +533,10 @@
 			}
 		}
 
-		draggedOver = false; // Reset draggedOver status after drop
 	};
 
-	let touchstart;
-	let touchend;
+	let touchstart: Touch;
+	let touchend: Touch;
 
 	function checkDirection() {
 		const screenWidth = window.innerWidth;
@@ -490,23 +551,23 @@
 		}
 	}
 
-	const onTouchStart = (e) => {
+	const onTouchStart = (e: TouchEvent) => {
 		touchstart = e.changedTouches[0];
 		console.log(touchstart.clientX);
 	};
 
-	const onTouchEnd = (e) => {
+	const onTouchEnd = (e: TouchEvent) => {
 		touchend = e.changedTouches[0];
 		checkDirection();
 	};
 
-	const onKeyDown = (e) => {
+	const onKeyDown = (e: KeyboardEvent) => {
 		if (e.key === 'Shift') {
 			shiftKey = true;
 		}
 	};
 
-	const onKeyUp = (e) => {
+	const onKeyUp = (e: KeyboardEvent) => {
 		if (e.key === 'Shift') {
 			shiftKey = false;
 		}
@@ -545,7 +606,7 @@
 		localStorage.setItem('sidebarWidth', String($sidebarWidth));
 	};
 
-	const resizeSidebarHandler = (endClientX) => {
+	const resizeSidebarHandler = (endClientX: number) => {
 		const dx = endClientX - startClientX;
 		const newSidebarWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + dx));
 
@@ -553,7 +614,7 @@
 		document.documentElement.style.setProperty('--sidebar-width', `${newSidebarWidth}px`);
 	};
 
-	onMount(async () => {
+	onMount(() => {
 		try {
 			const width = Number(localStorage.getItem('sidebarWidth'));
 			if (!Number.isNaN(width) && width >= MIN_WIDTH && width <= MAX_WIDTH) {
@@ -570,6 +631,10 @@
 
 		showSidebar.set(!$mobile ? localStorage.sidebar === 'true' : false);
 
+		const setNavAppRegion = (element: HTMLElement, value: string) => {
+			element.style.setProperty('-webkit-app-region', value);
+		};
+
 		const unsubscribers = [
 			mobile.subscribe((value) => {
 				if ($showSidebar && value) {
@@ -577,9 +642,9 @@
 				}
 
 				if ($showSidebar && !value) {
-					const navElement = document.getElementsByTagName('nav')[0];
-					if (navElement) {
-						navElement.style['-webkit-app-region'] = 'drag';
+					const nav = document.getElementsByTagName('nav')[0];
+					if (nav) {
+						setNavAppRegion(nav, 'drag');
 					}
 				}
 			}),
@@ -587,17 +652,17 @@
 				localStorage.sidebar = value;
 
 				// nav element is not available on the first render
-				const navElement = document.getElementsByTagName('nav')[0];
+				const nav = document.getElementsByTagName('nav')[0];
 
-				if (navElement) {
+				if (nav) {
 					if ($mobile) {
 						if (!value) {
-							navElement.style['-webkit-app-region'] = 'drag';
+							setNavAppRegion(nav, 'drag');
 						} else {
-							navElement.style['-webkit-app-region'] = 'no-drag';
+							setNavAppRegion(nav, 'no-drag');
 						}
 					} else {
-						navElement.style['-webkit-app-region'] = 'drag';
+						setNavAppRegion(nav, 'drag');
 					}
 				}
 
@@ -612,7 +677,10 @@
 					await initChatList();
 
 					// Check which chats have active tasks
-					const allChatIds = [...$chats.map((c) => c.id), ...$pinnedChats.map((c) => c.id)];
+					const allChatIds: string[] = [
+						...($chats ?? []).map((c: Record<string, unknown>) => String(c.id)),
+						...$pinnedChats.map((c: Record<string, unknown>) => String(c.id))
+					];
 					if (allChatIds.length > 0) {
 						try {
 							const res = await checkActiveChats(localStorage.token, allChatIds);
@@ -644,8 +712,10 @@
 		const socketInstance = $socket;
 		socketInstance?.on('events', chatActiveEventHandler);
 
-		await tick();
-		initPinnedMenuSortable();
+		void (async () => {
+			await tick();
+			initPinnedMenuSortable();
+		})();
 
 		return () => {
 			unsubscribers.forEach((unsubscriber) => unsubscriber());
@@ -676,7 +746,8 @@
 		data: { type: string; data: unknown };
 	}) => {
 		if (event.data?.type === 'chat:active') {
-			const { active } = event.data.data;
+			const activeData = event.data.data as { active?: boolean };
+			const { active } = activeData;
 			activeChatIds.update((ids) => {
 				const newSet = new Set(ids);
 				if (active) {
@@ -692,6 +763,7 @@
 	};
 
 	const newChatHandler = async () => {
+		const wasHome = $page.url.pathname === '/';
 		selectedChatId = null;
 		selectedProject.set(null);
 
@@ -699,6 +771,10 @@
 			await temporaryChatEnabled.set(true);
 		} else {
 			await temporaryChatEnabled.set(false);
+		}
+
+		if (wasHome) {
+			document.getElementById('new-chat-button')?.click();
 		}
 
 		setTimeout(() => {
@@ -719,8 +795,7 @@
 		await tick();
 	};
 
-	const isWindows = /Windows/i.test(navigator.userAgent);
-</script>
+	const isWindows = /Windows/i.test(navigator.userAgent);</script>
 
 <ArchivedChatsModal
 	bind:show={$showArchivedChats}
@@ -737,8 +812,9 @@
 
 <ChannelModal
 	bind:show={showCreateChannel}
-	onSubmit={async (payload: Record<string, unknown>) => {
-		let { type, name, is_private, access_grants, group_ids, user_ids } = payload ?? {};
+	onSubmit={async (...args: unknown[]) => {
+		const payload = (args[0] ?? {}) as ChannelSubmitPayload;
+		let { type, name, is_private, access_grants, group_ids, user_ids } = payload;
 		name = name?.trim();
 
 		if (type === 'dm') {
@@ -755,7 +831,7 @@
 
 		const res = await createNewChannel(localStorage.token, {
 			type: type,
-			name: name,
+			name: name ?? '',
 			is_private: is_private,
 			access_grants: access_grants,
 			group_ids: group_ids,
@@ -766,7 +842,7 @@
 		});
 
 		if (res) {
-			$socket.emit('join-channels', { auth: { token: $user?.token } });
+			$socket?.emit('join-channels', { auth: { token: localStorage.token } });
 			await initChannels();
 			showCreateChannel = false;
 			showChannels = true;
@@ -777,7 +853,8 @@
 
 <ProjectModal
 	bind:show={showCreateProjectModal}
-	onSubmit={async (project) => {
+	onSubmit={async (...args: unknown[]) => {
+		const project = args[0] as CreateFolderInput;
 		await createFolder(project);
 		showCreateProjectModal = false;
 	}}
@@ -1105,17 +1182,14 @@
 			</div>
 
 			<div
-				class="relative flex flex-col flex-1 overflow-y-auto scrollbar-hidden pt-3 pb-3"
+				class="relative flex flex-col flex-1 overflow-x-hidden overflow-y-auto scrollbar-hidden pt-3 pb-3"
 				on:scroll={(e) => {
-					if (e.target.scrollTop === 0) {
-						scrollTop = 0;
-					} else {
-						scrollTop = e.target.scrollTop;
-					}
+					const target = e.currentTarget as HTMLElement;
+					scrollTop = target.scrollTop === 0 ? 0 : target.scrollTop;
 				}}
 			>
 				<div class="pb-1.5">
-					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
+					<div class="px-[0.4375rem] flex justify-start text-gray-800 dark:text-gray-200">
 						<a
 							id="sidebar-new-chat-button"
 							class="group grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
@@ -1129,14 +1203,16 @@
 							</div>
 
 							<div class="flex flex-1 self-center translate-y-[0.5px]">
-								<div class=" self-center text-sm font-primary">{$i18n.t('New Chat')}</div>
+								<div class=" self-center text-sm font-primary whitespace-nowrap">
+									{$i18n.t('New Chat')}
+								</div>
 							</div>
 
 							<HotkeyHint name="newChat" className=" group-hover:visible invisible" />
 						</a>
 					</div>
 
-					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
+					<div class="px-[0.4375rem] flex justify-start text-gray-800 dark:text-gray-200">
 						<button
 							id="sidebar-search-button"
 							class="group grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
@@ -1151,7 +1227,9 @@
 							</div>
 
 							<div class="flex flex-1 self-center translate-y-[0.5px]">
-								<div class=" self-center text-sm font-primary">{$i18n.t('Search')}</div>
+								<div class=" self-center text-sm font-primary whitespace-nowrap">
+									{$i18n.t('Search')}
+								</div>
 							</div>
 							<HotkeyHint name="search" className=" group-hover:visible invisible" />
 						</button>
@@ -1244,7 +1322,7 @@
 						chevron={false}
 						dragAndDrop={false}
 					>
-						<PinnedModelList bind:selectedChatId {shiftKey} />
+						<PinnedModelList bind:selectedChatId={selectedChatIdForPinnedLists} {shiftKey} />
 					</Folder>
 				{/if}
 
@@ -1264,7 +1342,7 @@
 						}}
 						onAddLabel={$i18n.t('New Note')}
 					>
-						<PinnedNoteList bind:selectedChatId />
+						<PinnedNoteList bind:selectedChatId={selectedChatIdForPinnedLists} />
 					</Folder>
 				{/if}
 
@@ -1287,7 +1365,7 @@
 							: null}
 						onAddLabel={$i18n.t('Create Channel')}
 					>
-						{#each $channels as channel, channelIdx (`${channel?.id}`)}
+						{#each channelList as channel, channelIdx (`${channel?.id}`)}
 							<ChannelItem
 								{channel}
 								onUpdate={async () => {
@@ -1295,7 +1373,7 @@
 								}}
 							/>
 
-							{#if channelIdx < $channels.length - 1 && channel.type !== $channels[channelIdx + 1]?.type}<hr
+							{#if channelIdx < channelList.length - 1 && channel.type !== channelList[channelIdx + 1]?.type}<hr
 									class=" border-gray-100/40 dark:border-gray-800/10 my-1.5 w-full"
 								/>
 							{/if}
@@ -1314,14 +1392,14 @@
 						}}
 						onAddLabel={$i18n.t('New Project')}
 						on:drop={async (e) => {
-							const { type, id, item } = e.detail;
+							const { type, id, _item } = e.detail;
 
 							if (type === 'project') {
 								if (projects[id].parent_id === null) {
 									return;
 								}
 
-								const res = await updateProjectParentIdById(localStorage.token, id, null).catch(
+								const res = await updateProjectParentIdById(localStorage.token, id, undefined).catch(
 									(error) => {
 										toast.error(`${error}`);
 										return null;
@@ -1338,7 +1416,7 @@
 							bind:projectRegistry
 							{projects}
 							{shiftKey}
-							onDelete={(projectId) => {
+							onDelete={(_projectId) => {
 								selectedProject.set(null);
 								initChatList();
 							}}
@@ -1364,7 +1442,7 @@
 					id="sidebar-chats"
 					className="px-2 {projectsEnabled ? '' : 'mt-0.5'}"
 					name={$i18n.t('Chats')}
-					on:change={async (e) => {
+					on:change={async (_e) => {
 						selectedProject.set(null);
 					}}
 					on:import={(e) => {
@@ -1374,7 +1452,7 @@
 						const { type, id, item } = e.detail;
 
 						if (type === 'chat') {
-							let chat = await getChatById(localStorage.token, id).catch((error) => {
+							let chat = await getChatById(localStorage.token, id).catch((_error) => {
 								return null;
 							});
 							if (!chat && item) {
@@ -1398,7 +1476,7 @@
 							if (chat) {
 								console.log(chat);
 								if (chat.project_id) {
-									const res = await updateChatProjectIdById(localStorage.token, chat.id, null).catch(
+									const _res = await updateChatProjectIdById(localStorage.token, String(chat.id), undefined).catch(
 										(error) => {
 											toast.error(`${error}`);
 											return null;
@@ -1409,7 +1487,7 @@
 								}
 
 								if (chat.pinned) {
-									const res = await toggleChatPinnedStatusById(localStorage.token, chat.id);
+									const _res = await toggleChatPinnedStatusById(localStorage.token, chat.id);
 								}
 
 								initChatList();
@@ -1419,7 +1497,7 @@
 								return;
 							}
 
-							const res = await updateProjectParentIdById(localStorage.token, id, null).catch(
+							const res = await updateProjectParentIdById(localStorage.token, id, undefined).catch(
 								(error) => {
 									toast.error(`${error}`);
 									return null;
@@ -1445,7 +1523,7 @@
 										const { type, id, item } = e.detail;
 
 										if (type === 'chat') {
-											let chat = await getChatById(localStorage.token, id).catch((error) => {
+											let chat = await getChatById(localStorage.token, id).catch((_error) => {
 												return null;
 											});
 											if (!chat && item) {
@@ -1469,10 +1547,10 @@
 											if (chat) {
 												console.log(chat);
 												if (chat.project_id) {
-													const res = await updateChatProjectIdById(
+													const _res = await updateChatProjectIdById(
 														localStorage.token,
-														chat.id,
-														null
+														String(chat.id),
+														undefined
 													).catch((error) => {
 														toast.error(`${error}`);
 														return null;
@@ -1480,7 +1558,7 @@
 												}
 
 												if (!chat.pinned) {
-													const res = await toggleChatPinnedStatusById(localStorage.token, chat.id);
+													const _res = await toggleChatPinnedStatusById(localStorage.token, chat.id);
 												}
 
 												initChatList();
@@ -1495,15 +1573,15 @@
 										{#each $pinnedChats as chat, idx (`pinned-chat-${chat?.id ?? idx}`)}
 											<ChatItem
 												className=""
-												id={chat.id}
-												title={chat.title}
-												createdAt={chat.created_at}
-												updatedAt={chat.updated_at}
-												lastReadAt={chat.last_read_at}
+												id={String(chat.id)}
+												title={String(chat.title ?? '')}
+												createdAt={toChatDate(chat.created_at)}
+												updatedAt={toChatDate(chat.updated_at)}
+												lastReadAt={toChatDate(chat.last_read_at)}
 												{shiftKey}
 												selected={selectedChatId === chat.id}
 												on:select={() => {
-													selectedChatId = chat.id;
+													selectedChatId = String(chat.id);
 												}}
 												on:unselect={() => {
 													selectedChatId = null;
@@ -1512,8 +1590,8 @@
 													initChatList();
 												}}
 												on:tag={(e) => {
-													const { type, name } = e.detail;
-													tagEventHandler(type, name, chat.id);
+													const { type, name } = e.detail as { type: string; name: string };
+													tagEventHandler(type, name, String(chat.id));
 												}}
 											/>
 										{/each}
@@ -1534,7 +1612,7 @@
 												? ''
 												: 'pt-5'} pb-1.5"
 										>
-											{$i18n.t(chat.time_range)}
+											{$i18n.t(String(chat.time_range ?? ''))}
 											<!-- localisation keys for time_range to be recognized from the i18next parser (so they don't get automatically removed):
 							{$i18n.t('Today')}
 							{$i18n.t('Yesterday')}
@@ -1558,15 +1636,15 @@
 
 									<ChatItem
 										className=""
-										id={chat.id}
-										title={chat.title}
-										createdAt={chat.created_at}
-										updatedAt={chat.updated_at}
-										lastReadAt={chat.last_read_at}
+										id={String(chat.id)}
+										title={String(chat.title ?? '')}
+										createdAt={toChatDate(chat.created_at)}
+										updatedAt={toChatDate(chat.updated_at)}
+										lastReadAt={toChatDate(chat.last_read_at)}
 										{shiftKey}
 										selected={selectedChatId === chat.id}
 										on:select={() => {
-											selectedChatId = chat.id;
+											selectedChatId = String(chat.id);
 										}}
 										on:unselect={() => {
 											selectedChatId = null;
@@ -1575,15 +1653,15 @@
 											initChatList();
 										}}
 										on:tag={(e) => {
-											const { type, name } = e.detail;
-											tagEventHandler(type, name, chat.id);
+											const { type, name } = e.detail as { type: string; name: string };
+											tagEventHandler(type, name, String(chat.id));
 										}}
 									/>
 								{/each}
 
 								{#if $scrollPaginationEnabled && !allChatsLoaded}
 									<Loader
-										on:visible={(e) => {
+										on:visible={(_e) => {
 											if (!chatListLoading) {
 												loadMoreChats();
 											}

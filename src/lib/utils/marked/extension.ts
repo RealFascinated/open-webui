@@ -1,3 +1,11 @@
+import type {
+	MarkedExtension,
+	TokenizerAndRendererExtension,
+	TokenizerExtension,
+	TokenizerThis,
+	Tokens
+} from 'marked';
+
 // Helper function to find matching closing tag
 function findMatchingClosingTag(src: string, openTag: string, closeTag: string): number {
 	let depth = 1;
@@ -26,10 +34,38 @@ function parseAttributes(tag: string): { [key: string]: string } {
 	return attributes;
 }
 
+type DetailsToken = Tokens.Generic & {
+	attributes?: Record<string, string>;
+	summary?: string;
+	text: string;
+};
+
+function paragraphBeforeDetailsTokenizer(
+	this: TokenizerThis,
+	src: string
+): Tokens.Generic | undefined {
+	const boundary = /\r?\n(?=<details(?:\s+[^>]*)?>\r?\n)/.exec(src);
+	if (!boundary) return;
+
+	const raw = src.slice(0, boundary.index + boundary[0].length);
+	const tokens = this.lexer.blockTokens(raw, []);
+
+	if (tokens.length !== 1 || tokens[0].type !== 'paragraph') return;
+
+	return tokens[0] as Tokens.Generic;
+}
+
+function paragraphBeforeDetailsExtension(): TokenizerExtension {
+	return {
+		name: 'paragraphBeforeDetails',
+		level: 'block',
+		tokenizer: paragraphBeforeDetailsTokenizer
+	};
+}
+
 function detailsTokenizer(src: string) {
-	// Updated regex to capture attributes inside <details>
-	const detailsRegex = /^<details(\s+[^>]*)?>\n/;
-	const summaryRegex = /^<summary>(.*?)<\/summary>\n/;
+	const detailsRegex = /^<details(\s+[^>]*)?>\r?\n/;
+	const summaryRegex = /^<summary>(.*?)<\/summary>\r?\n/;
 
 	const detailsMatch = detailsRegex.exec(src);
 	if (detailsMatch) {
@@ -38,9 +74,9 @@ function detailsTokenizer(src: string) {
 
 		const fullMatch = src.slice(0, endIndex);
 		const detailsTag = detailsMatch[0];
-		const attributes = parseAttributes(detailsTag); // Parse attributes from <details>
+		const attributes = parseAttributes(detailsTag);
 
-		let content = fullMatch.slice(detailsTag.length, -10).trim(); // Remove <details> and </details>
+		let content = fullMatch.slice(detailsTag.length, -10).trim();
 		let summary = '';
 
 		const summaryMatch = summaryRegex.exec(content);
@@ -54,20 +90,13 @@ function detailsTokenizer(src: string) {
 			raw: fullMatch,
 			summary: summary,
 			text: content,
-			attributes: attributes // Include extracted attributes from <details>
+			attributes: attributes
 		};
 	}
 }
 
-function detailsStart(src: string) {
-	return src.match(/^<details[\s>]/) ? 0 : -1;
-}
-
-	function detailsRenderer(token: {
-		attributes?: Record<string, string>;
-		summary?: string;
-		text?: string;
-	}) {
+function detailsRenderer(genericToken: Tokens.Generic) {
+	const token = genericToken as DetailsToken;
 	const attributesString = token.attributes
 		? Object.entries(token.attributes)
 				.map(([key, value]) => `${key}="${value}"`)
@@ -80,21 +109,19 @@ function detailsStart(src: string) {
   </details>`;
 }
 
-import antArtifactExtension from './ant-artifact-extension';
-
-// Extension wrapper function
-function detailsExtension() {
+function detailsExtension(): TokenizerAndRendererExtension {
 	return {
 		name: 'details',
 		level: 'block',
-		start: detailsStart,
 		tokenizer: detailsTokenizer,
 		renderer: detailsRenderer
 	};
 }
 
-export default function (options = {}) {
+import antArtifactExtension from './ant-artifact-extension';
+
+export default function (): MarkedExtension {
 	return {
-		extensions: [detailsExtension(options), antArtifactExtension()]
+		extensions: [paragraphBeforeDetailsExtension(), detailsExtension(), antArtifactExtension()]
 	};
 }

@@ -43,3 +43,9 @@ class SearchResult(BaseModel):
     link: str
     title: str | None
     snippet: str | None
+    published: str | None = None
+    engines: list[str] | None = None
+    score: float | None = None
+    author: str | None = None
+    category: str | None = None
+    thumbnail: str | None = None

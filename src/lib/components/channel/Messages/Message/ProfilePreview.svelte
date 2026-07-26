@@ -1,10 +1,8 @@
 <script lang="ts">
-	import { LinkPreview } from 'bits-ui';
-	import { getContext } from 'svelte';
+	import {LinkPreview} from 'bits-ui';
+	
 
-	const i18n = getContext('i18n');
-	import UserStatus from './UserStatus.svelte';
-	import UserStatusLinkPreview from './UserStatusLinkPreview.svelte';
+import UserStatusLinkPreview from './UserStatusLinkPreview.svelte';
 
 	export let user = null;
 

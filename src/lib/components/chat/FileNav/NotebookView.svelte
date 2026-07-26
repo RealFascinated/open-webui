@@ -1,13 +1,9 @@
 <script lang="ts">
-	import { getContext, onMount, onDestroy } from 'svelte';
-	import { marked } from 'marked';
+	import {getContext, onDestroy} from 'svelte';
+	import {marked} from 'marked';
 	import DOMPurify from 'dompurify';
-	import { highlightCode } from '$lib/utils/codeHighlight';
-	import {
-		createNotebookSession,
-		executeNotebookCell,
-		stopNotebookSession
-	} from '$lib/apis/terminal';
+	
+	import {createNotebookSession, executeNotebookCell, stopNotebookSession} from '$lib/apis/terminal';
 	import Spinner from '../../common/Spinner.svelte';
 	import Tooltip from '../../common/Tooltip.svelte';
 	import CellEditor from './CellEditor.svelte';
@@ -126,8 +122,6 @@
 	let kernelError: string | null = null;
 	let runningCell: number | null = null;
 	let runAllActive = false;
-
-	const canExecute = baseUrl && apiKey && filePath;
 
 	const startSession = async (): Promise<boolean> => {
 		if (!baseUrl || !apiKey || !filePath) return false;

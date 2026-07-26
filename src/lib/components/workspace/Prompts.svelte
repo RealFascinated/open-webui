@@ -46,7 +46,7 @@
 
 	let prompts = null;
 	let tags = [];
-	let total = null;
+	let total: number | null = null;
 	let loading = false;
 
 	let showDeleteConfirm = false;
@@ -119,7 +119,7 @@
 		const tab = await window.open(`${url}/prompts/create`, '_blank');
 		window.addEventListener(
 			'message',
-			(event) => {
+			(event: Event) => {
 				if (event.origin !== url) return;
 				if (event.data === 'loaded') {
 					tab.postMessage(JSON.stringify(prompt), '*');
@@ -179,13 +179,13 @@
 		viewOption = localStorage?.workspaceViewOption || '';
 		loaded = true;
 
-		const onKeyDown = (event) => {
+		const onKeyDown = (event: Event) => {
 			if (event.key === 'Shift') {
 				shiftKey = true;
 			}
 		};
 
-		const onKeyUp = (event) => {
+		const onKeyUp = (event: Event) => {
 			if (event.key === 'Shift') {
 				shiftKey = false;
 			}

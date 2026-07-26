@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { getContext, onMount } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {getContext} from 'svelte';
 	const i18n = getContext('i18n');
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Modal from '$lib/components/common/Modal.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
-	import { extractFrontmatter, nameToId } from '$lib/utils';
+	import {extractFrontmatter, nameToId} from '$lib/utils';
 
 	export let show = false;
 
-	export let onImport = (e) => {};
+	export let onImport = (_e: Event) => {};
 	export const onClose = () => {};
 
 	export let loadUrlHandler: (...args: unknown[]) => unknown = () => {};

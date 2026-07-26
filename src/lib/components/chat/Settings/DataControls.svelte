@@ -2,28 +2,13 @@
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import {
-		chatId,
-		chats,
-		user,
-		settings,
-		scrollPaginationEnabled,
-		currentChatPage,
-		pinnedChats
-	} from '$lib/stores';
+	import {chatId, chats, user, scrollPaginationEnabled, currentChatPage, pinnedChats} from '$lib/stores';
 
-	import {
-		archiveAllChats,
-		deleteAllChats,
-		getAllChats,
-		getChatList,
-		getPinnedChatList,
-		importChats
-	} from '$lib/apis/chats';
-	import { getImportOrigin, convertOpenAIChats } from '$lib/utils';
-	import { onMount, getContext } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { toast } from 'svelte-sonner';
+	import {archiveAllChats, deleteAllChats, getAllChats, getChatList, getPinnedChatList, importChats} from '$lib/apis/chats';
+	import {getImportOrigin, convertOpenAIChats} from '$lib/utils';
+	import {getContext} from 'svelte';
+	import {goto} from '$app/navigation';
+	import {toast} from 'svelte-sonner';
 	import ArchivedChatsModal from '$lib/components/layout/ArchivedChatsModal.svelte';
 	import SharedChatsModal from '$lib/components/layout/SharedChatsModal.svelte';
 	import FilesModal from '$lib/components/layout/FilesModal.svelte';
@@ -48,7 +33,7 @@
 		console.log(importFiles);
 
 		let reader = new FileReader();
-		reader.onload = (event) => {
+		reader.onload = (event: Event) => {
 			let chats = JSON.parse(event.target.result);
 			console.log(chats);
 			if (getImportOrigin(chats) == 'openai') {

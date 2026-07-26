@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { createEventDispatcher, getContext } from 'svelte';
-	import type { CalendarEventModel, CalendarModel } from '$lib/apis/calendar';
+	import {createEventDispatcher, getContext} from 'svelte';
+	import type {CalendarEventModel, CalendarModel} from '$lib/apis/calendar';
 	import CalendarEventChip from './CalendarEventChip.svelte';
 
 	const i18n = getContext('i18n');
@@ -19,7 +19,7 @@
 		(acc, c) => ({ ...acc, [c.id]: c.color }),
 		{} as Record<string, string | null>
 	);
-	$: filteredEvents = events.filter((e) => visibleCalendarIds.has(e.calendar_id));
+	$: filteredEvents = events.filter((e: Event) => visibleCalendarIds.has(e.calendar_id));
 
 	// Pre-group events by day key so the template reactively updates when events change
 	$: eventsByDay = (() => {
@@ -85,16 +85,6 @@
 		return d.getMonth() === currentDate.getMonth();
 	}
 
-	function getEventsForDay(day: Date): CalendarEventModel[] {
-		const dayStartMs = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
-		const dayEndMs = dayStartMs + 86_400_000;
-		return filteredEvents.filter((e) => {
-			const startMs = e.start_at / NS;
-			const endMs = (e.end_at || e.start_at) / NS;
-			return startMs < dayEndMs && endMs >= dayStartMs;
-		});
-	}
-
 	function getEventsForHour(
 		day: Date,
 		hour: number,
@@ -102,7 +92,7 @@
 	): CalendarEventModel[] {
 		const hourStartMs = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour).getTime();
 		const hourEndMs = hourStartMs + 3_600_000;
-		return eventsList.filter((e) => {
+		return eventsList.filter((e: Event) => {
 			const startMs = e.start_at / NS;
 			return startMs >= hourStartMs && startMs < hourEndMs;
 		});

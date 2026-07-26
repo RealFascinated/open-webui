@@ -1,11 +1,9 @@
 <script lang="ts">
-	import { getContext, afterUpdate } from 'svelte';
-	import { tick } from 'svelte';
-	import Folder from '../../icons/Folder.svelte';
-	import NewFolderAlt from '../../icons/NewFolderAlt.svelte';
+	import {getContext, afterUpdate} from 'svelte';
+	
+import NewFolderAlt from '../../icons/NewFolderAlt.svelte';
 	import FilePlusAlt from '../../icons/FilePlusAlt.svelte';
-	import Spinner from '../../common/Spinner.svelte';
-	import Tooltip from '../../common/Tooltip.svelte';
+import Tooltip from '../../common/Tooltip.svelte';
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 
 	const i18n = getContext('i18n');

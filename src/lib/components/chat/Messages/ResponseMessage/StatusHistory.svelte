@@ -8,12 +8,10 @@
 	export let expand = false;
 	export let messageDone = false;
 
-	let showHistory = true;
+	let showHistory = false;
 
 	$: if (expand) {
 		showHistory = true;
-	} else {
-		showHistory = false;
 	}
 
 	let history = [];
@@ -26,20 +24,70 @@
 	$: if (!equal(statusHistory, history)) {
 		history = statusHistory;
 	}
+
+	$: isComplete = messageDone || status?.done;
+	$: hasMultipleSteps = history.length > 1;
+	$: canExpandHistory = hasMultipleSteps && isComplete;
 </script>
 
 {#if history && history.length > 0}
 	{#if status?.hidden !== true}
 		<div class="text-sm flex flex-col w-full">
-			{#if messageDone || status?.done}
-				<div class="w-full">
-					<div class="flex items-start gap-2">
-						<StatusItem {status} done={true} />
+			{#if isComplete}
+				{#if canExpandHistory}
+					<button
+						class="w-full"
+						type="button"
+						aria-label={$i18n.t('Toggle status history')}
+						aria-expanded={showHistory}
+						on:click={() => {
+							showHistory = !showHistory;
+						}}
+					>
+						<div class="flex items-start gap-2">
+							<StatusItem {status} done={true} />
+						</div>
+					</button>
+
+					{#if showHistory}
+						<div class="flex flex-row">
+							<div class="w-full">
+								{#each history.slice(0, -1) as step, idx}
+									<div class="flex items-stretch gap-2 mb-1">
+										<div>
+											<div class="pt-3 px-1 mb-1.5">
+												<span
+													class="relative flex size-1.5 rounded-full justify-center items-center"
+												>
+													<span
+														class="relative inline-flex size-1.5 rounded-full bg-gray-500 dark:bg-gray-400"
+													></span>
+												</span>
+											</div>
+											{#if idx !== history.length - 2}
+												<div
+													class="w-[0.5px] ml-[6.5px] h-[calc(100%-14px)] bg-gray-300 dark:bg-gray-700"
+												></div>
+											{/if}
+										</div>
+
+										<StatusItem status={step} done={true} />
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				{:else}
+					<div class="w-full">
+						<div class="flex items-start gap-2">
+							<StatusItem {status} done={true} />
+						</div>
 					</div>
-				</div>
+				{/if}
 			{:else}
 				<button
 					class="w-full"
+					type="button"
 					aria-label={$i18n.t('Toggle status history')}
 					aria-expanded={showHistory}
 					on:click={() => {
@@ -50,34 +98,37 @@
 						<StatusItem {status} />
 					</div>
 				</button>
-			{/if}
 
-			{#if showHistory && !(messageDone || status?.done)}
-				<div class="flex flex-row">
-					{#if history.length > 1}
-						<div class="w-full">
-							{#each history as status, idx}
-								<div class="flex items-stretch gap-2 mb-1">
-									<div class=" ">
-										<div class="pt-3 px-1 mb-1.5">
-											<span class="relative flex size-1.5 rounded-full justify-center items-center">
+				{#if showHistory}
+					<div class="flex flex-row">
+						{#if hasMultipleSteps}
+							<div class="w-full">
+								{#each history as step, idx}
+									<div class="flex items-stretch gap-2 mb-1">
+										<div>
+											<div class="pt-3 px-1 mb-1.5">
 												<span
-													class="relative inline-flex size-1.5 rounded-full bg-gray-500 dark:bg-gray-400"
-												></span>
-											</span>
+													class="relative flex size-1.5 rounded-full justify-center items-center"
+												>
+													<span
+														class="relative inline-flex size-1.5 rounded-full bg-gray-500 dark:bg-gray-400"
+													></span>
+												</span>
+											</div>
+											{#if idx !== history.length - 1}
+												<div
+													class="w-[0.5px] ml-[6.5px] h-[calc(100%-14px)] bg-gray-300 dark:bg-gray-700"
+												></div>
+											{/if}
 										</div>
-										{#if idx !== history.length - 1}
-											<div
-												class="w-[0.5px] ml-[6.5px] h-[calc(100%-14px)] bg-gray-300 dark:bg-gray-700"></div>
-										{/if}
-									</div>
 
-									<StatusItem {status} done={true} />
-								</div>
-							{/each}
-						</div>
-					{/if}
-				</div>
+										<StatusItem status={step} done={true} />
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				{/if}
 			{/if}
 		</div>
 	{/if}

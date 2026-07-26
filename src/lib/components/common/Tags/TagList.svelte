@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-	import { getContext } from 'svelte';
-	const i18n = getContext('i18n');
+	import {createEventDispatcher} from 'svelte';
+	
 
 	import TagItem from './TagItem.svelte';
 	const dispatch = createEventDispatcher();

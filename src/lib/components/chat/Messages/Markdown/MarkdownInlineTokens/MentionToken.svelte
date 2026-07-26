@@ -1,13 +1,12 @@
 <script lang="ts">
-	import type { Token } from 'marked';
-	import { LinkPreview } from 'bits-ui';
+	import type {Token} from 'marked';
+	import {LinkPreview} from 'bits-ui';
 
-	import { getContext } from 'svelte';
+	import {getContext} from 'svelte';
 
-	import { goto } from '$app/navigation';
-	import { channels, models } from '$lib/stores';
-	import UserStatus from '$lib/components/channel/Messages/Message/UserStatus.svelte';
-	import UserStatusLinkPreview from '$lib/components/channel/Messages/Message/UserStatusLinkPreview.svelte';
+	import {goto} from '$app/navigation';
+	import {channels, models} from '$lib/stores';
+import UserStatusLinkPreview from '$lib/components/channel/Messages/Message/UserStatusLinkPreview.svelte';
 
 	const i18n = getContext('i18n');
 

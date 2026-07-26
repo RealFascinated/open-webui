@@ -1,34 +1,19 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
-	import { toast } from 'svelte-sonner';
+	import {getContext} from 'svelte';
+	
 
-	import {
-		WEBUI_NAME,
-		banners,
-		chatId,
-		config,
-		mobile,
-		settings,
-		showArchivedChats,
-		showControls,
-		showSidebar,
-		temporaryChatEnabled,
-		user
-	} from '$lib/stores';
+	import {banners, chatId, config, mobile, settings, showArchivedChats, showControls, showSidebar, temporaryChatEnabled, user} from '$lib/stores';
 
-	import { slide } from 'svelte/transition';
-	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
+	
+	import {page} from '$app/stores';
+	import {goto} from '$app/navigation';
 
 	import ShareChatModal from '../chat/ShareChatModal.svelte';
 	import ModelSelector from '../chat/ModelSelector.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import Menu from '$lib/components/layout/Navbar/Menu.svelte';
 	import UserMenu from '$lib/components/layout/Sidebar/UserMenu.svelte';
-	import AdjustmentsHorizontal from '../icons/AdjustmentsHorizontal.svelte';
-
-	import PencilSquare from '../icons/PencilSquare.svelte';
-	import Banner from '../common/Banner.svelte';
+import Banner from '../common/Banner.svelte';
 	import Sidebar from '../icons/Sidebar.svelte';
 
 	import ChatBubbleDotted from '../icons/ChatBubbleDotted.svelte';
@@ -38,7 +23,7 @@
 	import ChatPlus from '../icons/ChatPlus.svelte';
 	import ChatCheck from '../icons/ChatCheck.svelte';
 	import Knobs from '../icons/Knobs.svelte';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 
 	const i18n = getContext('i18n');
 
@@ -69,7 +54,6 @@
 	};
 
 	let showShareChatModal = false;
-	let showDownloadChatModal = false;
 </script>
 
 <ShareChatModal bind:show={showShareChatModal} chatId={$chatId} />

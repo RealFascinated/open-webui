@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { createEventDispatcher, onMount, getContext } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {createEventDispatcher, onMount, getContext} from 'svelte';
 
-	import { user, settings, config } from '$lib/stores';
-	import { getVoices as _getVoices } from '$lib/apis/audio';
+	import {settings, config} from '$lib/stores';
+	import {getVoices as _getVoices} from '$lib/apis/audio';
 
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -15,7 +15,6 @@
 	export let saveSettings: (...args: unknown[]) => unknown;
 
 	// Audio
-	let conversationMode = false;
 	let speechAutoSend = false;
 	let responseAutoPlayback = false;
 	let nonLocalVoices = false;
@@ -28,7 +27,6 @@
 
 	let TTSModel = null;
 	let TTSModelProgress = null;
-	let TTSModelLoading = false;
 
 	let voices = [];
 	let voice = '';
@@ -60,7 +58,7 @@
 					}
 				}, 100);
 			} else {
-				const res = await _getVoices(localStorage.token).catch((e) => {
+				const res = await _getVoices(localStorage.token).catch((e: Event) => {
 					toast.error(`${e}`);
 				});
 
@@ -84,7 +82,6 @@
 
 	onMount(async () => {
 		playbackRate = $settings.audio?.tts?.playbackRate ?? 1;
-		conversationMode = $settings.conversationMode ?? false;
 		speechAutoSend = $settings.speechAutoSend ?? false;
 		responseAutoPlayback = $settings.responseAutoPlayback ?? false;
 
@@ -122,7 +119,6 @@
 			if (TTSEngineConfig?.dtype) {
 				TTSModel = null;
 				TTSModelProgress = null;
-				TTSModelLoading = true;
 
 				const model_id = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
@@ -130,7 +126,7 @@
 				TTSModel = await KokoroTTS.from_pretrained(model_id, {
 					dtype: TTSEngineConfig.dtype, // Options: "fp32", "fp16", "q8", "q4", "q4f16"
 					device: navigator?.gpu ? 'webgpu' : 'wasm', // Detect WebGPU
-					progress_callback: (e) => {
+					progress_callback: (e: Event) => {
 						TTSModelProgress = e;
 						console.log(e);
 					}

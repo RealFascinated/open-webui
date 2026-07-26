@@ -21,7 +21,7 @@
 	import { toast } from 'svelte-sonner';
 	import { user } from '$lib/stores';
 
-	const dispatch = createEventDispatcher();
+	const _dispatch = createEventDispatcher();
 	const i18n = getContext('i18n');
 
 	export let boilerplate = '';
@@ -211,7 +211,7 @@ print("${endTag}")
 		keymap.of([{ key: 'Tab', run: acceptCompletion }, indentWithTab]),
 		indentUnit.of('    '),
 		placeholder($i18n.t('Enter your code here...')),
-		EditorView.updateListener.of((e) => {
+		EditorView.updateListener.of((e: Event) => {
 			if (e.docChanged) {
 				_value = e.state.doc.toString();
 				onChange(_value);
@@ -286,7 +286,7 @@ print("${endTag}")
 			attributeFilter: ['class']
 		});
 
-		const keydownHandler = async (e) => {
+		const keydownHandler = async (e: Event) => {
 			if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 				e.preventDefault();
 

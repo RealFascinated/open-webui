@@ -33,6 +33,13 @@ export const resolveSelectedModels = (
 		return resolved;
 	}
 
+	const explicitSelection = candidateModelIds.filter((modelId) => modelId);
+
+	// Keep an explicit user choice while the model list is still loading.
+	if (explicitSelection.length > 0 && availableModelIds.length === 0) {
+		return explicitSelection;
+	}
+
 	if (defaultModelIds.length > 0) {
 		const defaultModels = defaultModelIds.filter((modelId) => availableModelIds.includes(modelId));
 		if (defaultModels.length > 0) {

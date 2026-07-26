@@ -102,7 +102,7 @@
 
 		const tab = await window.open(`${url}/tools/create`, '_blank');
 
-		const messageHandler = (event) => {
+		const messageHandler = (event: Event) => {
 			if (event.origin !== url) return;
 			if (event.data === 'loaded') {
 				tab.postMessage(JSON.stringify(item), '*');
@@ -166,13 +166,13 @@
 		await init();
 		loaded = true;
 
-		const onKeyDown = (event) => {
+		const onKeyDown = (event: Event) => {
 			if (event.key === 'Shift') {
 				shiftKey = true;
 			}
 		};
 
-		const onKeyUp = (event) => {
+		const onKeyUp = (event: Event) => {
 			if (event.key === 'Shift') {
 				shiftKey = false;
 			}
@@ -615,7 +615,7 @@
 				console.log(_tools);
 
 				for (const tool of _tools) {
-					const res = await createNewTool(localStorage.token, tool).catch((error) => {
+					const _res = await createNewTool(localStorage.token, tool).catch((error) => {
 						toast.error(`${error}`);
 						return null;
 					});

@@ -215,20 +215,442 @@ async def calculate_timestamp(
 # WEB SEARCH TOOLS
 # =============================================================================
 
+_FETCH_URL_MAX_BATCH = 5
+_VIEW_CHAT_DEFAULT_MAX_MESSAGES = 50
+_NOTE_EXCERPT_MAX_CHARS = 280
+_MEMORY_EXCERPT_MAX_CHARS = 280
+_DEFAULT_AUTO_QUERY_KB_COUNT = 5
+
+_EXCHANGE_RATE_CACHE: dict[str, tuple[float, dict]] = {}
+_EXCHANGE_RATE_CACHE_TTL = 3600
+_exchange_rate_lock = asyncio.Lock()
+
+_RELATIVE_DATE_OFFSETS = {
+    'last_7_days': 7 * 86400,
+    'last_week': 7 * 86400,
+    'last_30_days': 30 * 86400,
+    'last_month': 30 * 86400,
+}
+
+
+def _resolve_chat_timestamp(value: int | str | None) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text.isdigit():
+        return int(text)
+    offset = _RELATIVE_DATE_OFFSETS.get(text)
+    if offset is not None:
+        return int(time.time()) - offset
+    return None
+
+
+def _knowledge_chunk_relevance(chunk: dict) -> float | None:
+    score = chunk.get('relevance')
+    if isinstance(score, (int, float)):
+        return float(score)
+    distance = chunk.get('distance')
+    if isinstance(distance, (int, float)):
+        return float(distance)
+    return None
+
+
+def _filter_knowledge_chunks_by_threshold(chunks: list[dict], threshold: float) -> list[dict]:
+    if threshold <= 0:
+        return chunks
+
+    filtered: list[dict] = []
+    for chunk in chunks:
+        if chunk.get('type') in {'note', 'external'}:
+            filtered.append(chunk)
+            continue
+        relevance = _knowledge_chunk_relevance(chunk)
+        if relevance is None or relevance >= threshold:
+            filtered.append(chunk)
+    return filtered
+
+
+def _group_knowledge_chunks(chunks: list[dict]) -> list[dict]:
+    grouped: dict[str, dict] = {}
+    for chunk in chunks:
+        file_id = chunk.get('file_id') or ''
+        note_id = chunk.get('note_id') or ''
+        source = chunk.get('source', 'Unknown')
+        key = file_id or note_id or source
+        entry = grouped.setdefault(
+            key,
+            {
+                'source': source,
+                'file_id': file_id or None,
+                'note_id': note_id or None,
+                'knowledge_id': chunk.get('knowledge_id'),
+                'type': chunk.get('type', 'file'),
+                'chunks': [],
+            },
+        )
+        chunk_payload = {'content': chunk.get('content', '')}
+        relevance = _knowledge_chunk_relevance(chunk)
+        if relevance is not None:
+            chunk_payload['relevance'] = relevance
+        if chunk.get('truncated'):
+            chunk_payload['truncated'] = True
+        if chunk.get('read_more'):
+            chunk_payload['read_more'] = chunk['read_more']
+        entry['chunks'].append(chunk_payload)
+
+    return list(grouped.values())
+
+
+def _build_text_excerpt(content: str, query: str = '', max_chars: int = 280) -> tuple[str, bool]:
+    text = (content or '').strip()
+    if not text:
+        return '', False
+    if len(text) <= max_chars:
+        return text, False
+
+    lowered_query = (query or '').strip().lower()
+    if lowered_query:
+        idx = text.lower().find(lowered_query)
+        if idx >= 0:
+            start = max(0, idx - 80)
+            end = min(len(text), start + max_chars)
+            excerpt = ('...' if start > 0 else '') + text[start:end]
+            if end < len(text):
+                excerpt += '...'
+            return excerpt, True
+
+    return text[:max_chars] + '...', True
+
+
+def _build_note_chunk(note, query: str = '') -> dict:
+    full_content = note.data.get('content', {}).get('md', '')
+    excerpt, truncated = _build_text_excerpt(full_content, query=query, max_chars=_NOTE_EXCERPT_MAX_CHARS)
+    chunk = {
+        'content': excerpt,
+        'source': note.title,
+        'note_id': note.id,
+        'type': 'note',
+    }
+    if truncated:
+        chunk['truncated'] = True
+        chunk['read_more'] = 'Use view_note or view_note_lines with note_id for the full note.'
+    return chunk
+
+
+def _build_knowledge_overview(query: str, chunks: list[dict], limit: int = 3) -> str | None:
+    parts: list[str] = []
+    for chunk in chunks[:limit]:
+        source = chunk.get('source', 'Unknown')
+        content = (chunk.get('content') or '').strip()
+        if not content:
+            continue
+        excerpt = content[:240] + ('...' if len(content) > 240 else '')
+        parts.append(f'{source}: {excerpt}')
+    overview = '\n\n'.join(parts).strip()
+    return overview or None
+
+
+def _build_knowledge_query_payload(
+    query: str,
+    chunks: list[dict],
+    *,
+    matched_knowledge_bases: list[dict] | None = None,
+) -> dict:
+    sources = _group_knowledge_chunks(chunks)
+    payload = {
+        'query': query,
+        'sources': sources,
+        'total_chunks': sum(len(source.get('chunks') or []) for source in sources),
+    }
+    overview = _build_knowledge_overview(query, chunks)
+    if overview:
+        payload['overview'] = overview
+    if matched_knowledge_bases:
+        payload['matched_knowledge_bases'] = matched_knowledge_bases
+    return payload
+
+
+async def _discover_knowledge_bases_by_query(
+    request: Request,
+    user_id: str,
+    user_group_ids: list[str],
+    query: str,
+    count: int = _DEFAULT_AUTO_QUERY_KB_COUNT,
+) -> list[dict]:
+    import heapq
+
+    from open_webui.models.knowledge import Knowledges
+    from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
+    from open_webui.routers.knowledge import KNOWLEDGE_BASES_COLLECTION
+
+    embedding_function = request.app.state.EMBEDDING_FUNCTION
+    if not embedding_function:
+        return []
+
+    query_embedding = await embedding_function(query)
+    top_results_heap: list[tuple[float, str]] = []
+    seen_ids: set[str] = set()
+    page_offset = 0
+    page_size = 100
+
+    while True:
+        accessible_knowledge_bases = await Knowledges.search_knowledge_bases(
+            user_id,
+            filter={'user_id': user_id, 'group_ids': user_group_ids},
+            skip=page_offset,
+            limit=page_size,
+        )
+
+        if not accessible_knowledge_bases.items:
+            break
+
+        accessible_ids = [kb.id for kb in accessible_knowledge_bases.items]
+        search_results = await ASYNC_VECTOR_DB_CLIENT.search(
+            collection_name=KNOWLEDGE_BASES_COLLECTION,
+            vectors=[query_embedding],
+            filter={'knowledge_base_id': {'$in': accessible_ids}},
+            limit=count,
+        )
+
+        if search_results and search_results.ids and search_results.ids[0]:
+            result_ids = search_results.ids[0]
+            result_distances = search_results.distances[0] if search_results.distances else [0] * len(result_ids)
+
+            for knowledge_base_id, distance in zip(result_ids, result_distances):
+                if knowledge_base_id in seen_ids:
+                    continue
+                seen_ids.add(knowledge_base_id)
+
+                if len(top_results_heap) < count:
+                    heapq.heappush(top_results_heap, (distance, knowledge_base_id))
+                elif distance > top_results_heap[0][0]:
+                    heapq.heapreplace(top_results_heap, (distance, knowledge_base_id))
+
+        page_offset += page_size
+        if len(accessible_knowledge_bases.items) < page_size:
+            break
+        if page_offset >= MAX_KNOWLEDGE_BASE_SEARCH_ITEMS:
+            break
+
+    sorted_results = sorted(top_results_heap, key=lambda item: item[0], reverse=True)
+    matched: list[dict] = []
+    for distance, knowledge_base_id in sorted_results:
+        knowledge_base = await Knowledges.get_knowledge_by_id(knowledge_base_id)
+        if knowledge_base:
+            matched.append(
+                {
+                    'id': knowledge_base.id,
+                    'name': knowledge_base.name,
+                    'description': knowledge_base.description or '',
+                    'similarity': round(distance, 4),
+                }
+            )
+    return matched
+
+
+async def _fetch_url_entry(request: Request, url: str, max_length: int | None) -> dict:
+    try:
+        content, docs = await get_content_from_url(request, url)
+        if content is None:
+            content = ''
+
+        truncated = False
+        if max_length and max_length > 0 and len(content) > max_length:
+            content = content[:max_length] + '\n\n[Content truncated...]'
+            truncated = True
+
+        metadata = docs[0].metadata if docs else {}
+        title = metadata.get('title') or metadata.get('name') or url
+        description = metadata.get('description')
+        word_count = len(content.split()) if content else 0
+
+        return {
+            'url': url,
+            'title': title,
+            'description': description,
+            'content': content,
+            'truncated': truncated,
+            'word_count': word_count,
+        }
+    except Exception as e:
+        log.warning(f'fetch_url entry error for {url}: {e}')
+        return {'url': url, 'error': str(e)}
+
+
+def _dedupe_image_results(images: list[dict]) -> list[dict]:
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for image in images:
+        key = image.get('image_url') or image.get('thumbnail_url') or ''
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(image)
+    return deduped
+
+
+async def _searxng_image_results(query: str, count: int, cache_scope: str | None = None) -> list[dict]:
+    from types import SimpleNamespace
+
+    from open_webui.retrieval.web.searxng import search_searxng, searxng_options_from_config
+
+    query_url = await Config.get('web.search.searxng_query_url')
+    if not query_url:
+        return []
+
+    filter_list = await Config.get('web.search.domain_filter_list')
+    searxng_config = SimpleNamespace(
+        SEARXNG_LANGUAGE=await Config.get('web.search.searxng_language'),
+        SEARXNG_TIME_RANGE=await Config.get('web.search.searxng_time_range'),
+        SEARXNG_CATEGORIES='images',
+        SEARXNG_SAFESEARCH=await Config.get('web.search.searxng_safesearch'),
+        SEARXNG_ENGINES=await Config.get('web.search.searxng_engines'),
+        SEARXNG_AUTO_SPELLING_CORRECTION=await Config.get('web.search.searxng_auto_spelling_correction'),
+        SEARXNG_FETCH_PAGE_2=await Config.get('web.search.searxng_fetch_page_2'),
+        SEARXNG_MIN_SCORE_RATIO=await Config.get('web.search.searxng_min_score_ratio'),
+        SEARXNG_MIN_ABSOLUTE_SCORE=await Config.get('web.search.searxng_min_absolute_score'),
+        SEARXNG_MAX_RESULTS_PER_DOMAIN=await Config.get('web.search.searxng_max_results_per_domain'),
+        WEB_SEARCH_CACHE_TTL=await Config.get('web.search.cache_ttl'),
+    )
+    options = searxng_options_from_config(searxng_config)
+    response = await search_searxng(
+        query_url,
+        query,
+        count,
+        filter_list,
+        options=options,
+        cache_scope=cache_scope,
+    )
+
+    images: list[dict] = []
+    for result in response.results:
+        image_url = result.thumbnail or result.link
+        if not image_url:
+            continue
+        images.append(
+            {
+                'title': result.title,
+                'image_url': image_url,
+                'thumbnail_url': result.thumbnail,
+                'source_url': result.link,
+                'snippet': result.snippet,
+                'engine': 'searxng',
+            }
+        )
+    return images
+
+
+async def _brave_image_results(query: str, count: int) -> list[dict]:
+    from open_webui.utils.session_pool import get_session
+
+    api_key = await Config.get('web.search.brave_search_api_key')
+    if not api_key:
+        return []
+
+    session = await get_session()
+    async with session.get(
+        'https://api.search.brave.com/res/v1/images/search',
+        headers={
+            'Accept': 'application/json',
+            'Accept-Encoding': 'gzip',
+            'X-Subscription-Token': api_key,
+        },
+        params={'q': query, 'count': count},
+    ) as response:
+        response.raise_for_status()
+        payload = await response.json()
+
+    images: list[dict] = []
+    for item in (payload.get('results') or [])[:count]:
+        thumbnail = (item.get('thumbnail') or {}).get('src')
+        image_url = thumbnail or item.get('url')
+        if not image_url:
+            continue
+        properties = item.get('properties') or {}
+        images.append(
+            {
+                'title': item.get('title'),
+                'image_url': image_url,
+                'thumbnail_url': thumbnail,
+                'source_url': properties.get('url') or item.get('url'),
+                'source_name': item.get('source'),
+                'engine': 'brave',
+            }
+        )
+    return images
+
+
+def _build_weather_forecast(forecast: dict) -> dict:
+    daily = forecast.get('daily') or {}
+    hourly = forecast.get('hourly') or {}
+    daily_units = forecast.get('daily_units') or {}
+    hourly_units = forecast.get('hourly_units') or {}
+
+    daily_rows = []
+    dates = daily.get('time') or []
+    for idx, day in enumerate(dates[:7]):
+        code = (daily.get('weather_code') or [None])[idx] if daily.get('weather_code') else None
+        daily_rows.append(
+            {
+                'date': day,
+                'weather_code': code,
+                'description': _wmo_description(code),
+                'temperature_max': (daily.get('temperature_2m_max') or [None])[idx],
+                'temperature_min': (daily.get('temperature_2m_min') or [None])[idx],
+                'precipitation_probability_max': (daily.get('precipitation_probability_max') or [None])[idx],
+                'temperature_unit': daily_units.get('temperature_2m_max', '°C'),
+            }
+        )
+
+    hourly_rows = []
+    times = hourly.get('time') or []
+    for idx, moment in enumerate(times[:24]):
+        code = (hourly.get('weather_code') or [None])[idx] if hourly.get('weather_code') else None
+        hourly_rows.append(
+            {
+                'time': moment,
+                'weather_code': code,
+                'description': _wmo_description(code),
+                'temperature': (hourly.get('temperature_2m') or [None])[idx],
+                'precipitation_probability': (hourly.get('precipitation_probability') or [None])[idx],
+                'temperature_unit': hourly_units.get('temperature_2m', '°C'),
+            }
+        )
+
+    return {'daily': daily_rows, 'hourly': hourly_rows}
+
 
 async def search_web(
     query: str,
     count: Optional[int] = None,
+    time_range: Optional[str] = None,
+    category: Optional[str] = None,
     __request__: Request = None,
     __user__: dict = None,
+    __chat_id__: str = None,
 ) -> str:
     """
     Search the public web for information. Best for current events, external references,
     or topics not covered in internal documents.
 
+    Results include title, link, and snippet for each hit — snippets are often enough without
+    calling fetch_url. Prefer one broad search and only fetch_url when snippets are insufficient
+    (fetch_url defaults to depth=snippet and reuses cached search snippets).
+
+    With SearXNG, also returns overview, direct answers, infoboxes, and related_queries when
+    available. Use related_queries for follow-ups instead of inventing new terms.
+
     :param query: The search query to look up
     :param count: Number of results to return (default: admin-configured value)
-    :return: JSON with search results containing title, link, and snippet for each result
+    :param time_range: Optional recency filter for SearXNG: day, week, month, or year
+    :param category: Optional SearXNG category: general, news, science, it, images, etc.
+    :return: JSON search payload (rich structured object for SearXNG, result list for other engines)
     """
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
@@ -250,6 +672,68 @@ async def search_web(
         configured = await Config.get('web.search.result_count')
         max_count = 5 if configured is None else configured
         count = max(1, min(count, max_count)) if count is not None else max_count
+
+        if engine == 'searxng':
+            from types import SimpleNamespace
+
+            from open_webui.retrieval.web.searxng import search_searxng, searxng_options_from_config
+
+            query_url = await Config.get('web.search.searxng_query_url')
+            if not query_url:
+                return json.dumps({'error': 'SearXNG Query URL is not configured (Admin → Settings → Web Search).'})
+
+            filter_list = await Config.get('web.search.domain_filter_list')
+            searxng_config = SimpleNamespace(
+                SEARXNG_LANGUAGE=await Config.get('web.search.searxng_language'),
+                SEARXNG_TIME_RANGE=await Config.get('web.search.searxng_time_range'),
+                SEARXNG_CATEGORIES=await Config.get('web.search.searxng_categories'),
+                SEARXNG_SAFESEARCH=await Config.get('web.search.searxng_safesearch'),
+                SEARXNG_ENGINES=await Config.get('web.search.searxng_engines'),
+                SEARXNG_AUTO_SPELLING_CORRECTION=await Config.get('web.search.searxng_auto_spelling_correction'),
+                SEARXNG_FETCH_PAGE_2=await Config.get('web.search.searxng_fetch_page_2'),
+                SEARXNG_MIN_SCORE_RATIO=await Config.get('web.search.searxng_min_score_ratio'),
+                SEARXNG_MIN_ABSOLUTE_SCORE=await Config.get('web.search.searxng_min_absolute_score'),
+                SEARXNG_MAX_RESULTS_PER_DOMAIN=await Config.get('web.search.searxng_max_results_per_domain'),
+                WEB_SEARCH_CACHE_TTL=await Config.get('web.search.cache_ttl'),
+            )
+            overrides = {}
+            if time_range:
+                overrides['time_range'] = time_range
+            if category:
+                overrides['categories'] = category
+            options = searxng_options_from_config(searxng_config, overrides)
+            response = await search_searxng(
+                query_url,
+                query,
+                count,
+                filter_list,
+                options=options,
+                cache_scope=__chat_id__,
+            )
+
+            if not response.has_content():
+                return json.dumps(
+                    {
+                        'error': (
+                            f'Web search returned no results for "{query}" (engine: searxng).'
+                            ' If using SearXNG, upstream engines may be rate-limited — check SearXNG logs '
+                            'or wait before retrying. '
+                            'Tell the user search failed or returned nothing. '
+                            'Do not invent facts or answer "what is X?" from memory — say you could not verify.'
+                        ),
+                        'query': query,
+                        'results': [],
+                        **({'engine_failures': response.engine_failures} if response.engine_failures else {}),
+                    },
+                    ensure_ascii=False,
+                )
+
+            from open_webui.retrieval.web.url_cache import cache_search_results
+
+            cache_ttl = int(await Config.get('web.search.cache_ttl') or 60)
+            payload = response.to_tool_payload(count=count)
+            await cache_search_results(payload.get('results') or [], cache_ttl)
+            return json.dumps(payload, ensure_ascii=False)
 
         results = await _search_web(__request__, engine, query, user)
 
@@ -277,10 +761,12 @@ async def search_web(
                 ensure_ascii=False,
             )
 
-        return json.dumps(
-            [{'title': r.title, 'link': r.link, 'snippet': r.snippet} for r in results],
-            ensure_ascii=False,
-        )
+        from open_webui.retrieval.web.url_cache import cache_search_results
+
+        cache_ttl = int(await Config.get('web.search.cache_ttl') or 60)
+        result_dicts = [{'title': r.title, 'link': r.link, 'snippet': r.snippet} for r in results]
+        await cache_search_results(result_dicts, cache_ttl)
+        return json.dumps(result_dicts, ensure_ascii=False)
     except Exception as e:
         log.exception(f'search_web error: {e}')
         err = str(e)
@@ -298,32 +784,90 @@ async def search_web(
 
 
 async def fetch_url(
-    url: str,
+    url: Optional[str] = None,
+    urls: Optional[list[str]] = None,
+    depth: Optional[str] = 'snippet',
     __request__: Request = None,
     __user__: dict = None,
 ) -> str:
     """
-    Fetch and extract the main text content from a web page URL.
+    Fetch and extract the main text content from one or more web page URLs.
 
-    :param url: The URL to fetch content from
-    :return: The extracted text content from the page
+    URLs recently returned by search_web may be served from cache when depth=snippet
+    (default), avoiding duplicate HTTP fetches. Use depth=full for the full page body.
+
+    Prefer batching multiple URLs in one call instead of repeated single-URL fetches.
+
+    :param url: A single URL to fetch
+    :param urls: Multiple URLs to fetch in parallel (max 5)
+    :param depth: snippet (default, use search cache when available) or full (always fetch page)
+    :return: Structured JSON with title, description, content, and metadata per URL
     """
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
 
+    target_urls: list[str] = []
+    if urls:
+        if isinstance(urls, str):
+            try:
+                urls = json.loads(urls)
+            except json.JSONDecodeError:
+                urls = [urls]
+        if isinstance(urls, list):
+            target_urls.extend(str(item).strip() for item in urls if str(item).strip())
+    if url and str(url).strip():
+        if str(url).strip() not in target_urls:
+            target_urls.insert(0, str(url).strip())
+
+    if not target_urls:
+        return json.dumps({'error': 'Provide url or urls to fetch.'})
+
+    target_urls = list(dict.fromkeys(target_urls))[:_FETCH_URL_MAX_BATCH]
+
+    fetch_depth = (depth or 'snippet').strip().lower()
+    if fetch_depth not in {'snippet', 'full'}:
+        fetch_depth = 'snippet'
+
     try:
-        content, _ = await get_content_from_url(__request__, url)
+        from open_webui.retrieval.web.url_cache import (
+            cached_snippet_to_fetch_entry,
+            get_cached_snippet,
+            set_cached_full,
+        )
 
-        # Truncate if configured (WEB_FETCH_MAX_CONTENT_LENGTH)
-        # Guard: content may be None if the web loader silently failed
-        if content is not None:
-            max_length = await Config.get('web.fetch.max_content_length')
-            if max_length and max_length > 0 and len(content) > max_length:
-                content = content[:max_length] + '\n\n[Content truncated...]'
-        else:
-            content = ''
+        max_length = await Config.get('web.fetch.max_content_length')
+        concurrent_limit = await Config.get('web.loader.concurrent_requests')
+        if not concurrent_limit or concurrent_limit < 1:
+            concurrent_limit = 2
+        cache_ttl = int(await Config.get('web.search.cache_ttl') or 60)
 
-        return content
+        semaphore = asyncio.Semaphore(concurrent_limit)
+
+        async def fetch_with_limit(single_url: str):
+            if fetch_depth != 'full':
+                cached = await get_cached_snippet(single_url, cache_ttl)
+                if cached:
+                    return cached_snippet_to_fetch_entry(cached)
+
+            async with semaphore:
+                entry = await _fetch_url_entry(__request__, single_url, max_length)
+            if not entry.get('error'):
+                entry['depth'] = 'full'
+                entry['from_cache'] = False
+                await set_cached_full(single_url, entry, cache_ttl)
+            return entry
+
+        entries = await asyncio.gather(*(fetch_with_limit(single_url) for single_url in target_urls))
+
+        if len(entries) == 1:
+            entry = entries[0]
+            if entry.get('error') and not entry.get('content'):
+                return json.dumps({'error': entry['error'], 'url': entry.get('url')}, ensure_ascii=False)
+            return json.dumps(entry, ensure_ascii=False)
+
+        results = [entry for entry in entries if not entry.get('error') or entry.get('content')]
+        errors = [{'url': entry.get('url'), 'error': entry.get('error')} for entry in entries if entry.get('error')]
+        return json.dumps({'results': results, 'errors': errors}, ensure_ascii=False)
     except Exception as e:
         log.warning(f'fetch_url error: {e}')
         return json.dumps({'error': str(e)})
@@ -716,12 +1260,14 @@ async def search_memories(
     """
     Search or browse saved memories by content, path, type, or memory ID.
 
+    Returns excerpts by default. Use read_memory_path with memory_id or path for full content.
+
     :param query: Optional query to search memory content and path
     :param count: Number of memories to return (default 5)
     :param type: "user", "context", or "all"
     :param path: Optional memory path to search around
-    :param memory_id: Optional exact memory ID to read
-    :return: JSON with matching memories and their dates
+    :param memory_id: Optional exact memory ID to read (returns full content)
+    :return: JSON with matching memories, excerpts, and metadata
     """
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
@@ -743,20 +1289,31 @@ async def search_memories(
         if not memories:
             return json.dumps([])
 
-        return json.dumps(
-            [
-                {
-                    'id': memory.id,
-                    'type': memory.type,
-                    'path': memory.path,
-                    'content': memory.content,
-                    'created_at': time.strftime('%Y-%m-%d', time.localtime(memory.created_at)),
-                    'updated_at': time.strftime('%Y-%m-%d', time.localtime(memory.updated_at)),
-                }
-                for memory in memories
-            ],
-            ensure_ascii=False,
-        )
+        results = []
+        include_full_content = bool(memory_id)
+        for memory in memories:
+            entry = {
+                'id': memory.id,
+                'type': memory.type,
+                'path': memory.path,
+                'created_at': time.strftime('%Y-%m-%d', time.localtime(memory.created_at)),
+                'updated_at': time.strftime('%Y-%m-%d', time.localtime(memory.updated_at)),
+            }
+            if include_full_content:
+                entry['content'] = memory.content
+            else:
+                excerpt, truncated = _build_text_excerpt(
+                    memory.content or '',
+                    query=query or '',
+                    max_chars=_MEMORY_EXCERPT_MAX_CHARS,
+                )
+                entry['excerpt'] = excerpt
+                if truncated:
+                    entry['truncated'] = True
+                    entry['read_more'] = 'Use read_memory_path with memory_id or path for full content.'
+            results.append(entry)
+
+        return json.dumps(results, ensure_ascii=False)
     except Exception as e:
         log.exception(f'search_memories error: {e}')
         return json.dumps({'error': str(e)})
@@ -1537,8 +2094,8 @@ async def delete_note(
 async def search_chats(
     query: str,
     count: int = 5,
-    start_timestamp: Optional[int] = None,
-    end_timestamp: Optional[int] = None,
+    start_timestamp: Optional[int | str] = None,
+    end_timestamp: Optional[int | str] = None,
     __request__: Request = None,
     __user__: dict = None,
     __chat_id__: str = None,
@@ -1549,8 +2106,9 @@ async def search_chats(
 
     :param query: The search query to find matching chats
     :param count: Maximum number of results to return (default: 5)
-    :param start_timestamp: Only include chats updated after this Unix timestamp (seconds)
-    :param end_timestamp: Only include chats updated before this Unix timestamp (seconds)
+    :param start_timestamp: Only include chats updated after this time — Unix seconds or
+        relative: last_7_days, last_week, last_30_days, last_month
+    :param end_timestamp: Only include chats updated before this time — Unix seconds or relative
     :return: JSON with matching chats containing id, title, updated_at, and content snippet
     """
     if __request__ is None:
@@ -1561,6 +2119,8 @@ async def search_chats(
 
     try:
         user_id = __user__.get('id')
+        resolved_start = _resolve_chat_timestamp(start_timestamp)
+        resolved_end = _resolve_chat_timestamp(end_timestamp)
 
         chats = await Chats.get_chats_by_user_id_and_search_text(
             user_id=user_id,
@@ -1577,9 +2137,9 @@ async def search_chats(
                 continue
 
             # Apply date filters (updated_at is in seconds)
-            if start_timestamp and chat.updated_at < start_timestamp:
+            if resolved_start and chat.updated_at < resolved_start:
                 continue
-            if end_timestamp and chat.updated_at > end_timestamp:
+            if resolved_end and chat.updated_at > resolved_end:
                 continue
 
             # Find a matching message snippet
@@ -1619,15 +2179,19 @@ async def search_chats(
 
 async def view_chat(
     chat_id: str,
+    max_messages: int = _VIEW_CHAT_DEFAULT_MAX_MESSAGES,
+    offset: int = 0,
     __request__: Request = None,
     __user__: dict = None,
 ) -> str:
     """
-    Get the full conversation history of a chat by its ID after a relevant
-    previous chat has been identified.
+    Get the conversation history of a chat by its ID after a relevant previous chat
+    has been identified. Results are paginated to avoid huge context payloads.
 
     :param chat_id: The ID of the chat to retrieve
-    :return: JSON with the chat's id, title, and messages
+    :param max_messages: Maximum messages to return per call (default: 50)
+    :param offset: Number of chronological messages to skip (for pagination)
+    :return: JSON with the chat's id, title, messages slice, and pagination metadata
     """
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
@@ -1667,13 +2231,26 @@ async def view_chat(
         # Reverse to get chronological order
         messages.reverse()
 
+        total_messages = len(messages)
+        safe_offset = max(0, int(offset or 0))
+        safe_limit = max(1, min(int(max_messages or _VIEW_CHAT_DEFAULT_MAX_MESSAGES), 200))
+        page = messages[safe_offset : safe_offset + safe_limit]
+        next_offset = safe_offset + len(page) if safe_offset + len(page) < total_messages else None
+
         return json.dumps(
             {
                 'id': chat.id,
                 'title': chat.title,
-                'messages': messages,
+                'messages': page,
                 'updated_at': chat.updated_at,
                 'created_at': chat.created_at,
+                'pagination': {
+                    'total_messages': total_messages,
+                    'offset': safe_offset,
+                    'returned': len(page),
+                    'truncated': next_offset is not None,
+                    'next_offset': next_offset,
+                },
             },
             ensure_ascii=False,
         )
@@ -2609,6 +3186,8 @@ async def query_knowledge_files(
     query: str,
     knowledge_ids: Optional[list[str]] = None,
     count: int = 5,
+    auto_query: bool = True,
+    kb_count: int = _DEFAULT_AUTO_QUERY_KB_COUNT,
     __request__: Request = None,
     __user__: dict = None,
     __model_knowledge__: list[dict] = None,
@@ -2618,10 +3197,17 @@ async def query_knowledge_files(
     individual files, and notes that the user has access to.
     Helpful for internal documentation, uploaded knowledge, and attached model knowledge.
 
+    With auto_query=true (default), semantically discovers the most relevant knowledge bases and
+    queries them in one call — no separate query_knowledge_bases step needed.
+
+    Note attachments return excerpts only; use view_note or view_note_lines for full note content.
+
     :param query: The search query to find semantically relevant content
     :param knowledge_ids: Optional list of KB ids to limit search to specific knowledge bases
     :param count: Maximum number of results to return (default: 5)
-    :return: JSON with relevant chunks containing content, source filename, and relevance score
+    :param auto_query: When true and knowledge_ids omitted, discover relevant KBs automatically (default: true)
+    :param kb_count: How many knowledge bases to consider when auto_query is enabled (default: 5)
+    :return: JSON with overview, grouped sources, matched_knowledge_bases, and relevance-scored chunks
     """
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
@@ -2635,6 +3221,15 @@ async def query_knowledge_files(
             count = int(count)
         except ValueError:
             count = 5  # Default fallback
+
+    if isinstance(auto_query, str):
+        auto_query = auto_query.strip().lower() not in {'false', '0', 'no', 'off'}
+
+    if isinstance(kb_count, str):
+        try:
+            kb_count = int(kb_count)
+        except ValueError:
+            kb_count = _DEFAULT_AUTO_QUERY_KB_COUNT
 
     # Handle knowledge_ids being string "None", "null", or empty
     if isinstance(knowledge_ids, str):
@@ -2667,6 +3262,7 @@ async def query_knowledge_files(
         collection_names = []
         external_knowledges = []
         note_results = []  # Notes aren't vectorized, handle separately
+        matched_knowledge_bases: list[dict] = []
 
         # If model has attached knowledge, use those
         if __model_knowledge__:
@@ -2700,7 +3296,7 @@ async def query_knowledge_files(
                         collection_names.append(f'file-{item_id}')
 
                 elif item_type == 'note':
-                    # Note - always return full content as context
+                    # Note - return excerpt; use view_note for full content
                     note = await Notes.get_note_by_id(item_id)
                     if note and (
                         user_role == 'admin'
@@ -2712,15 +3308,7 @@ async def query_knowledge_files(
                             permission='read',
                         )
                     ):
-                        content = note.data.get('content', {}).get('md', '')
-                        note_results.append(
-                            {
-                                'content': content,
-                                'source': note.title,
-                                'note_id': note.id,
-                                'type': 'note',
-                            }
-                        )
+                        note_results.append(_build_note_chunk(note, query=query))
 
         elif knowledge_ids:
             # User specified specific KBs
@@ -2742,22 +3330,40 @@ async def query_knowledge_files(
                     else:
                         collection_names.append(knowledge_id)
         else:
-            # No model knowledge and no specific IDs - search all accessible KBs
-            result = await Knowledges.search_knowledge_bases(
-                user_id,
-                filter={
-                    'query': '',
-                    'user_id': user_id,
-                    'group_ids': user_group_ids,
-                },
-                skip=0,
-                limit=50,
-            )
-            for knowledge_base in result.items:
-                if (knowledge_base.meta or {}).get('source') == 'external':
-                    external_knowledges.append(knowledge_base)
-                else:
-                    collection_names.append(knowledge_base.id)
+            safe_kb_count = max(1, min(int(kb_count or _DEFAULT_AUTO_QUERY_KB_COUNT), 20))
+            if auto_query:
+                matched_knowledge_bases = await _discover_knowledge_bases_by_query(
+                    __request__,
+                    user_id,
+                    user_group_ids,
+                    query,
+                    count=safe_kb_count,
+                )
+                for kb in matched_knowledge_bases:
+                    knowledge = await Knowledges.get_knowledge_by_id(kb['id'])
+                    if not knowledge:
+                        continue
+                    if (knowledge.meta or {}).get('source') == 'external':
+                        external_knowledges.append(knowledge)
+                    else:
+                        collection_names.append(knowledge.id)
+            else:
+                # Legacy wide search across all accessible KBs
+                result = await Knowledges.search_knowledge_bases(
+                    user_id,
+                    filter={
+                        'query': '',
+                        'user_id': user_id,
+                        'group_ids': user_group_ids,
+                    },
+                    skip=0,
+                    limit=50,
+                )
+                for knowledge_base in result.items:
+                    if (knowledge_base.meta or {}).get('source') == 'external':
+                        external_knowledges.append(knowledge_base)
+                    else:
+                        collection_names.append(knowledge_base.id)
 
         chunks = []
 
@@ -2771,7 +3377,7 @@ async def query_knowledge_files(
                 collection_names=collection_names,
                 queries=[query],
                 embedding_function=embedding_function,
-                k=count,
+                k=max(count * 3, count, 10),
             )
 
             if query_results and 'documents' in query_results:
@@ -2787,6 +3393,7 @@ async def query_knowledge_files(
                     }
                     if idx < len(distances):
                         chunk_info['distance'] = distances[idx]
+                        chunk_info['relevance'] = distances[idx]
                     chunks.append(chunk_info)
 
         for knowledge in external_knowledges:
@@ -2794,7 +3401,7 @@ async def query_knowledge_files(
                 __request__,
                 knowledge,
                 queries=[query],
-                count=count,
+                count=max(count * 3, count, 10),
                 user=type('UserContext', (), {'id': user_id, 'role': user_role})(),
             )
             documents = query_results.get('documents', [[]])[0]
@@ -2812,12 +3419,33 @@ async def query_knowledge_files(
                 }
                 if idx < len(distances):
                     chunk_info['distance'] = distances[idx]
+                    chunk_info['relevance'] = distances[idx]
                 chunks.append(chunk_info)
 
-        # Limit to requested count
+        relevance_threshold = await Config.get('rag.relevance_threshold', 0.0) or 0.0
+        chunks = _filter_knowledge_chunks_by_threshold(chunks, float(relevance_threshold))
+        chunks.sort(
+            key=lambda chunk: _knowledge_chunk_relevance(chunk) if _knowledge_chunk_relevance(chunk) is not None else -1.0,
+            reverse=True,
+        )
         chunks = chunks[:count]
 
-        return json.dumps(chunks, ensure_ascii=False)
+        if not chunks:
+            return json.dumps(
+                {
+                    'query': query,
+                    'overview': None,
+                    'sources': [],
+                    'total_chunks': 0,
+                    'message': 'No knowledge chunks met the relevance threshold for this query.',
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            _build_knowledge_query_payload(query, chunks, matched_knowledge_bases=matched_knowledge_bases or None),
+            ensure_ascii=False,
+        )
     except Exception as e:
         log.exception(f'query_knowledge_files error: {e}')
         return json.dumps({'error': str(e)})
@@ -2832,7 +3460,9 @@ async def query_knowledge_bases(
     """
     Search knowledge bases by semantic similarity to query.
     Finds KBs whose name/description match the meaning of your query.
-    Helpful for discovering which knowledge base to query next.
+
+    Prefer query_knowledge_files with auto_query=true — it discovers relevant KBs and
+    returns matching chunks in one call.
 
     :param query: Natural language query describing what you're looking for
     :param count: Maximum results (default: 5)
@@ -2845,77 +3475,22 @@ async def query_knowledge_bases(
         return json.dumps({'error': 'User context not available'})
 
     try:
-        import heapq
-
-        from open_webui.models.knowledge import Knowledges
-        from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
-        from open_webui.routers.knowledge import KNOWLEDGE_BASES_COLLECTION
-
         user_id = __user__.get('id')
         user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
-        query_embedding = await __request__.app.state.EMBEDDING_FUNCTION(query)
 
-        # Min-heap of (distance, knowledge_base_id) - only holds top `count` results
-        top_results_heap = []
-        seen_ids = set()
-        page_offset = 0
-        page_size = 100
+        if isinstance(count, str):
+            try:
+                count = int(count)
+            except ValueError:
+                count = 5
 
-        while True:
-            accessible_knowledge_bases = await Knowledges.search_knowledge_bases(
-                user_id,
-                filter={'user_id': user_id, 'group_ids': user_group_ids},
-                skip=page_offset,
-                limit=page_size,
-            )
-
-            if not accessible_knowledge_bases.items:
-                break
-
-            accessible_ids = [kb.id for kb in accessible_knowledge_bases.items]
-
-            search_results = await ASYNC_VECTOR_DB_CLIENT.search(
-                collection_name=KNOWLEDGE_BASES_COLLECTION,
-                vectors=[query_embedding],
-                filter={'knowledge_base_id': {'$in': accessible_ids}},
-                limit=count,
-            )
-
-            if search_results and search_results.ids and search_results.ids[0]:
-                result_ids = search_results.ids[0]
-                result_distances = search_results.distances[0] if search_results.distances else [0] * len(result_ids)
-
-                for knowledge_base_id, distance in zip(result_ids, result_distances):
-                    if knowledge_base_id in seen_ids:
-                        continue
-                    seen_ids.add(knowledge_base_id)
-
-                    if len(top_results_heap) < count:
-                        heapq.heappush(top_results_heap, (distance, knowledge_base_id))
-                    elif distance > top_results_heap[0][0]:
-                        heapq.heapreplace(top_results_heap, (distance, knowledge_base_id))
-
-            page_offset += page_size
-            if len(accessible_knowledge_bases.items) < page_size:
-                break
-            if page_offset >= MAX_KNOWLEDGE_BASE_SEARCH_ITEMS:
-                break
-
-        # Sort by distance descending (best first) and fetch KB details
-        sorted_results = sorted(top_results_heap, key=lambda x: x[0], reverse=True)
-
-        matching_knowledge_bases = []
-        for distance, knowledge_base_id in sorted_results:
-            knowledge_base = await Knowledges.get_knowledge_by_id(knowledge_base_id)
-            if knowledge_base:
-                matching_knowledge_bases.append(
-                    {
-                        'id': knowledge_base.id,
-                        'name': knowledge_base.name,
-                        'description': knowledge_base.description or '',
-                        'similarity': round(distance, 4),
-                    }
-                )
+        matching_knowledge_bases = await _discover_knowledge_bases_by_query(
+            __request__,
+            user_id,
+            user_group_ids,
+            query,
+            count=max(1, min(count, 20)),
+        )
 
         return json.dumps(matching_knowledge_bases, ensure_ascii=False)
 
@@ -4112,11 +4687,11 @@ async def weather_fetch(
     __metadata__: dict = None,
 ) -> str:
     """
-    Fetch current weather for a location. If no location is given, requests the user's
+    Fetch current weather and a short forecast for a location. If no location is given, requests the user's
     browser coordinates via geolocation.
 
     :param location: City or place name (optional — uses browser location if omitted)
-    :return: JSON summary of current weather conditions
+    :return: JSON with current conditions plus daily (7-day) and hourly (24h) forecast
     """
     try:
         latitude = None
@@ -4154,6 +4729,9 @@ async def weather_fetch(
                 'latitude': latitude,
                 'longitude': longitude,
                 'current': 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m',
+                'daily': 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+                'hourly': 'temperature_2m,weather_code,precipitation_probability',
+                'forecast_days': 7,
                 'timezone': 'auto',
             },
         )
@@ -4174,6 +4752,7 @@ async def weather_fetch(
             'weather_code': weather_code,
             'description': description,
             'time': current.get('time'),
+            'forecast': _build_weather_forecast(forecast),
         }
 
         if __event_emitter__:
@@ -4206,7 +4785,7 @@ async def image_search(
 
     :param query: The image search query
     :param count: Number of images to return (default 8, max 12)
-    :return: Confirmation that images are displayed
+    :return: Confirmation with rich image metadata (title, source page, thumbnail)
     """
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
@@ -4214,61 +4793,23 @@ async def image_search(
     try:
         count = max(1, min(int(count or 8), 12))
         engine = await Config.get('web.search.engine')
-        image_urls: list[str] = []
+        images: list[dict] = []
 
         if engine == 'searxng':
-            from open_webui.retrieval.web.searxng import search_searxng
-
-            query_url = await Config.get('web.search.searxng_query_url')
-            if not query_url:
-                return json.dumps({'error': 'SearXNG is not configured for image search.'})
-
-            filter_list = await Config.get('web.search.domain_filter_list')
-            language = await Config.get('web.search.searxng_language')
-            results = await search_searxng(
-                query_url,
-                query,
-                count,
-                filter_list,
-                categories=['images'],
-                language=language or 'all',
-            )
-            image_urls = [r.link for r in results if r.link]
+            images = await _searxng_image_results(query, count, cache_scope=__chat_id__)
         elif engine == 'brave':
-            from open_webui.utils.session_pool import get_session
-
-            api_key = await Config.get('web.search.brave_search_api_key')
-            if not api_key:
-                return json.dumps({'error': 'Brave Search API key is not configured.'})
-
-            session = await get_session()
-            async with session.get(
-                'https://api.search.brave.com/res/v1/images/search',
-                headers={
-                    'Accept': 'application/json',
-                    'Accept-Encoding': 'gzip',
-                    'X-Subscription-Token': api_key,
-                },
-                params={'q': query, 'count': count},
-            ) as response:
-                response.raise_for_status()
-                payload = await response.json()
-
-            for item in (payload.get('results') or [])[:count]:
-                url = item.get('thumbnail', {}).get('src') or item.get('url')
-                if url:
-                    image_urls.append(url)
+            images = await _brave_image_results(query, count)
         else:
-            return json.dumps(
-                {
-                    'error': 'Image search requires SearXNG or Brave as the configured web search engine.',
-                }
-            )
+            images = await _searxng_image_results(query, count, cache_scope=__chat_id__)
+            if not images:
+                images = await _brave_image_results(query, count)
 
-        if not image_urls:
+        images = _dedupe_image_results(images)[:count]
+
+        if not images:
             return json.dumps({'error': f'No images found for query: {query}'})
 
-        image_files = [{'type': 'image', 'url': url} for url in image_urls[:count]]
+        image_files = [{'type': 'image', 'url': image['image_url']} for image in images if image.get('image_url')]
 
         if __chat_id__ and __message_id__ and image_files:
             db_files = await Chats.add_message_files_by_id_and_message_id(
@@ -4294,11 +4835,12 @@ async def image_search(
                         'Do not embed or link them again — acknowledge they are visible.'
                     ),
                     'count': len(image_files),
+                    'images': images,
                 },
                 ensure_ascii=False,
             )
 
-        return json.dumps({'status': 'success', 'count': len(image_files)}, ensure_ascii=False)
+        return json.dumps({'status': 'success', 'count': len(image_files), 'images': images}, ensure_ascii=False)
     except Exception as e:
         log.exception(f'image_search error: {e}')
         return json.dumps({'error': str(e)})
@@ -4342,57 +4884,985 @@ async def present_options(
         return json.dumps({'error': str(e)})
 
 
+async def _get_exchange_rate_payload(from_code: str) -> dict:
+    now = time.monotonic()
+    async with _exchange_rate_lock:
+        entry = _EXCHANGE_RATE_CACHE.get(from_code)
+        if entry and entry[0] > now:
+            return entry[1].copy()
+
+    payload = await _http_get_json(f'https://open.er-api.com/v6/latest/{from_code}')
+    if not isinstance(payload, dict):
+        raise ValueError('Unexpected exchange-rate API response')
+
+    async with _exchange_rate_lock:
+        _EXCHANGE_RATE_CACHE[from_code] = (time.monotonic() + _EXCHANGE_RATE_CACHE_TTL, payload)
+    return payload
+
+
 async def currency_convert(
     amount: float,
     from_currency: str,
-    to_currency: str,
+    to_currency: Optional[str] = None,
+    to_currencies: Optional[list[str]] = None,
     __event_emitter__: callable = None,
 ) -> str:
     """
     Convert an amount between currencies using live exchange rates.
 
+    Rates are cached for one hour per source currency. Convert to multiple targets
+    in one call with to_currencies instead of repeated single-pair calls.
+
     :param amount: The amount to convert
     :param from_currency: Source currency code (e.g. USD)
-    :param to_currency: Target currency code (e.g. EUR)
-    :return: JSON with conversion result and rate
+    :param to_currency: Single target currency code (e.g. EUR)
+    :param to_currencies: Multiple target codes in one call (e.g. ["EUR", "GBP", "JPY"])
+    :return: JSON with conversion result(s) and rate(s)
     """
     try:
         from_code = str(from_currency).strip().upper()
-        to_code = str(to_currency).strip().upper()
-        if not from_code or not to_code:
-            return json.dumps({'error': 'Both from_currency and to_currency are required.'})
+        targets: list[str] = []
+        if to_currency and str(to_currency).strip():
+            targets.append(str(to_currency).strip().upper())
+        if to_currencies:
+            parsed = to_currencies
+            if isinstance(parsed, str):
+                try:
+                    parsed = json.loads(parsed)
+                except json.JSONDecodeError:
+                    parsed = [parsed]
+            if isinstance(parsed, list):
+                targets.extend(str(code).strip().upper() for code in parsed if str(code).strip())
+        targets = list(dict.fromkeys(targets))
 
-        payload = await _http_get_json(f'https://open.er-api.com/v6/latest/{from_code}')
+        if not from_code:
+            return json.dumps({'error': 'from_currency is required.'})
+        if not targets:
+            return json.dumps({'error': 'Provide to_currency or to_currencies.'})
+
+        payload = await _get_exchange_rate_payload(from_code)
         rates = payload.get('rates') or {}
-        if to_code not in rates:
-            return json.dumps({'error': f'Unknown currency code: {to_code}'})
+        updated = payload.get('time_last_update_utc')
+        amount_value = float(amount)
 
-        rate = float(rates[to_code])
-        inverse_rate = round(1 / rate, 6) if rate else None
-        result_amount = round(float(amount) * rate, 4)
-        currency_data = {
+        conversions: list[dict] = []
+        for to_code in targets:
+            if to_code not in rates:
+                return json.dumps({'error': f'Unknown currency code: {to_code}'})
+            rate = float(rates[to_code])
+            inverse_rate = round(1 / rate, 6) if rate else None
+            conversions.append(
+                {
+                    'from': from_code,
+                    'to': to_code,
+                    'amount': amount_value,
+                    'result': round(amount_value * rate, 4),
+                    'rate': rate,
+                    'inverse_rate': inverse_rate,
+                    'updated': updated,
+                }
+            )
+
+        if __event_emitter__ and conversions:
+            await __event_emitter__({'type': 'chat:message:currency', 'data': conversions[0]})
+
+        response: dict = {
+            'status': 'success',
+            'message': 'Currency card displayed to the user.',
             'from': from_code,
-            'to': to_code,
-            'amount': float(amount),
-            'result': result_amount,
-            'rate': rate,
-            'inverse_rate': round(inverse_rate, 6),
-            'updated': payload.get('time_last_update_utc'),
+            'amount': amount_value,
+            'updated': updated,
+        }
+        if len(conversions) == 1:
+            response['conversion'] = conversions[0]
+        else:
+            response['conversions'] = conversions
+
+        return json.dumps(response, ensure_ascii=False)
+    except Exception as e:
+        log.exception(f'currency_convert error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+# =============================================================================
+# UTILITY LOOKUP, CONVERSION & DIFF TOOLS
+# =============================================================================
+
+_WIKIMEDIA_HEADERS = {'User-Agent': 'Open WebUI (https://github.com/open-webui/open-webui)'}
+
+_TZ_ALIASES = {
+    'utc': 'UTC',
+    'gmt': 'Etc/GMT',
+    'tokyo': 'Asia/Tokyo',
+    'jst': 'Asia/Tokyo',
+    'london': 'Europe/London',
+    'uk': 'Europe/London',
+    'paris': 'Europe/Paris',
+    'berlin': 'Europe/Berlin',
+    'new york': 'America/New_York',
+    'nyc': 'America/New_York',
+    'est': 'America/New_York',
+    'edt': 'America/New_York',
+    'los angeles': 'America/Los_Angeles',
+    'la': 'America/Los_Angeles',
+    'pst': 'America/Los_Angeles',
+    'pdt': 'America/Los_Angeles',
+    'chicago': 'America/Chicago',
+    'cst': 'America/Chicago',
+    'denver': 'America/Denver',
+    'mst': 'America/Denver',
+    'sydney': 'Australia/Sydney',
+    'aest': 'Australia/Sydney',
+    'singapore': 'Asia/Singapore',
+    'hong kong': 'Asia/Hong_Kong',
+    'dubai': 'Asia/Dubai',
+    'mumbai': 'Asia/Kolkata',
+    'ist': 'Asia/Kolkata',
+    'beijing': 'Asia/Shanghai',
+    'shanghai': 'Asia/Shanghai',
+}
+
+_LENGTH_TO_METERS = {
+    'm': 1.0,
+    'meter': 1.0,
+    'meters': 1.0,
+    'km': 1000.0,
+    'kilometer': 1000.0,
+    'kilometers': 1000.0,
+    'cm': 0.01,
+    'centimeter': 0.01,
+    'centimeters': 0.01,
+    'mm': 0.001,
+    'millimeter': 0.001,
+    'millimeters': 0.001,
+    'mi': 1609.344,
+    'mile': 1609.344,
+    'miles': 1609.344,
+    'ft': 0.3048,
+    'foot': 0.3048,
+    'feet': 0.3048,
+    'in': 0.0254,
+    'inch': 0.0254,
+    'inches': 0.0254,
+    'yd': 0.9144,
+    'yard': 0.9144,
+    'yards': 0.9144,
+}
+
+_WEIGHT_TO_KG = {
+    'kg': 1.0,
+    'kilogram': 1.0,
+    'kilograms': 1.0,
+    'g': 0.001,
+    'gram': 0.001,
+    'grams': 0.001,
+    'mg': 0.000001,
+    'milligram': 0.000001,
+    'milligrams': 0.000001,
+    'lb': 0.45359237,
+    'lbs': 0.45359237,
+    'pound': 0.45359237,
+    'pounds': 0.45359237,
+    'oz': 0.028349523125,
+    'ounce': 0.028349523125,
+    'ounces': 0.028349523125,
+    'ton': 1000.0,
+    'tons': 1000.0,
+    'tonne': 1000.0,
+    'tonnes': 1000.0,
+}
+
+_DATA_TO_BYTES = {
+    'b': 1.0,
+    'byte': 1.0,
+    'bytes': 1.0,
+    'kb': 1000.0,
+    'kilobyte': 1000.0,
+    'kilobytes': 1000.0,
+    'mb': 1000.0**2,
+    'megabyte': 1000.0**2,
+    'megabytes': 1000.0**2,
+    'gb': 1000.0**3,
+    'gigabyte': 1000.0**3,
+    'gigabytes': 1000.0**3,
+    'tb': 1000.0**4,
+    'terabyte': 1000.0**4,
+    'terabytes': 1000.0**4,
+    'kib': 1024.0,
+    'mib': 1024.0**2,
+    'gib': 1024.0**3,
+    'tib': 1024.0**4,
+}
+
+_UNIT_CATEGORY_MAP = {
+    **_LENGTH_TO_METERS,
+    **_WEIGHT_TO_KG,
+    **_DATA_TO_BYTES,
+}
+
+_DIFF_MAX_INPUT_CHARS = 200_000
+_DIFF_MAX_OUTPUT_CHARS = 30_000
+
+
+def _normalize_unit(unit: str) -> str:
+    return re.sub(r'\s+', ' ', str(unit).strip().lower())
+
+
+def _resolve_timezone_name(name: str) -> str:
+    cleaned = str(name).strip()
+    if not cleaned:
+        raise ValueError('Timezone is required.')
+    alias = _TZ_ALIASES.get(cleaned.lower())
+    return alias or cleaned
+
+
+def _convert_temperature(value: float, from_unit: str, to_unit: str) -> float:
+    from_u = _normalize_unit(from_unit)
+    to_u = _normalize_unit(to_unit)
+    if from_u not in {'c', 'celsius', 'f', 'fahrenheit', 'k', 'kelvin'}:
+        raise ValueError(f'Unsupported temperature unit: {from_unit}')
+    if to_u not in {'c', 'celsius', 'f', 'fahrenheit', 'k', 'kelvin'}:
+        raise ValueError(f'Unsupported temperature unit: {to_unit}')
+
+    if from_u in {'c', 'celsius'}:
+        celsius = value
+    elif from_u in {'f', 'fahrenheit'}:
+        celsius = (value - 32) * 5 / 9
+    else:
+        celsius = value - 273.15
+
+    if to_u in {'c', 'celsius'}:
+        return celsius
+    if to_u in {'f', 'fahrenheit'}:
+        return celsius * 9 / 5 + 32
+    return celsius + 273.15
+
+
+def _convert_scalar_unit(value: float, from_unit: str, to_unit: str) -> float:
+    from_key = _normalize_unit(from_unit)
+    to_key = _normalize_unit(to_unit)
+
+    if from_key in {'c', 'celsius', 'f', 'fahrenheit', 'k', 'kelvin'}:
+        return _convert_temperature(value, from_key, to_key)
+
+    if from_key not in _UNIT_CATEGORY_MAP or to_key not in _UNIT_CATEGORY_MAP:
+        raise ValueError(f'Unsupported unit conversion: {from_unit} -> {to_unit}')
+
+    from_factor = _UNIT_CATEGORY_MAP[from_key]
+    to_factor = _UNIT_CATEGORY_MAP[to_key]
+
+    length_from = from_key in _LENGTH_TO_METERS
+    length_to = to_key in _LENGTH_TO_METERS
+    weight_from = from_key in _WEIGHT_TO_KG
+    weight_to = to_key in _WEIGHT_TO_KG
+    data_from = from_key in _DATA_TO_BYTES
+    data_to = to_key in _DATA_TO_BYTES
+
+    if length_from != length_to or weight_from != weight_to or data_from != data_to:
+        raise ValueError(f'Incompatible units: {from_unit} -> {to_unit}')
+
+    base_value = value * from_factor
+    return base_value / to_factor
+
+
+def _unit_category(unit: str) -> str:
+    key = _normalize_unit(unit)
+    if key in {'c', 'celsius', 'f', 'fahrenheit', 'k', 'kelvin'}:
+        return 'temperature'
+    if key in _LENGTH_TO_METERS:
+        return 'length'
+    if key in _WEIGHT_TO_KG:
+        return 'weight'
+    if key in _DATA_TO_BYTES:
+        return 'data'
+    raise ValueError(f'Unknown unit: {unit}')
+
+
+async def _wiktionary_lookup(term: str, language: str = 'en') -> dict | None:
+    from urllib.parse import quote
+
+    encoded = quote(term.replace(' ', '_'))
+    url = f'https://{language}.wiktionary.org/api/rest_v1/page/definition/{encoded}'
+    try:
+        payload = await _http_get_json(url, headers=_WIKIMEDIA_HEADERS)
+    except Exception:
+        return None
+
+    if not isinstance(payload, list):
+        return None
+
+    entries = []
+    for entry in payload[:3]:
+        part = entry.get('partOfSpeech')
+        definitions = []
+        for definition in (entry.get('definitions') or [])[:3]:
+            text = definition.get('definition')
+            if text:
+                definitions.append(re.sub(r'<[^>]+>', '', text).strip())
+        if definitions:
+            entries.append({'part_of_speech': part, 'definitions': definitions})
+
+    if not entries:
+        return None
+
+    return {
+        'source': 'wiktionary',
+        'term': term,
+        'language': language,
+        'entries': entries,
+    }
+
+
+async def _wikidata_lookup(term: str, language: str = 'en') -> dict | None:
+    search_payload = await _http_get_json(
+        'https://www.wikidata.org/w/api.php',
+        headers=_WIKIMEDIA_HEADERS,
+        params={
+            'action': 'wbsearchentities',
+            'search': term,
+            'language': language,
+            'format': 'json',
+            'limit': 3,
+        },
+    )
+    results = search_payload.get('search') or []
+    if not results:
+        return None
+
+    top = results[0]
+    entity_id = top.get('id')
+    description = top.get('description')
+    label = top.get('label') or term
+    aliases = top.get('aliases') or []
+
+    entity_payload = None
+    if entity_id:
+        try:
+            entity_payload = await _http_get_json(
+                'https://www.wikidata.org/w/api.php',
+                headers=_WIKIMEDIA_HEADERS,
+                params={
+                    'action': 'wbgetentities',
+                    'ids': entity_id,
+                    'props': 'descriptions|aliases|claims',
+                    'languages': language,
+                    'format': 'json',
+                },
+            )
+        except Exception:
+            entity_payload = None
+
+    extra_description = description
+    if entity_payload:
+        entities = entity_payload.get('entities') or {}
+        entity = entities.get(entity_id) or {}
+        descriptions = entity.get('descriptions') or {}
+        if language in descriptions and descriptions[language].get('value'):
+            extra_description = descriptions[language]['value']
+        entity_aliases = entity.get('aliases') or {}
+        if language in entity_aliases:
+            aliases = [item.get('value') for item in entity_aliases[language][:5] if item.get('value')]
+
+    return {
+        'source': 'wikidata',
+        'term': label,
+        'entity_id': entity_id,
+        'description': extra_description,
+        'aliases': aliases,
+        'url': f'https://www.wikidata.org/wiki/{entity_id}' if entity_id else None,
+    }
+
+
+async def _load_file_text_content(
+    file_id: str,
+    request: Request,
+    user: dict,
+    model_knowledge: list[dict] | None,
+) -> tuple[str, str]:
+    from open_webui.models.files import Files
+
+    file = await Files.get_file_by_id(file_id)
+    if not file:
+        raise ValueError('File not found')
+    user_id = user.get('id')
+    user_role = user.get('role', 'user')
+    if not await _has_read_access_to_file(file, user_id, user_role, model_knowledge):
+        raise ValueError('File not found')
+    content = (file.data or {}).get('content', '') if file.data else ''
+    return str(content), file.filename or file_id
+
+
+async def _load_artifact_text_content(artifact_id: str, user: dict) -> tuple[str, str]:
+    from open_webui.models.artifacts import Artifacts
+
+    artifact = await Artifacts.get_artifact_by_id(artifact_id)
+    if not artifact:
+        raise ValueError('Artifact not found')
+    user_id = user.get('id')
+    if artifact.user_id != user_id and user.get('role') != 'admin':
+        raise ValueError('Access denied')
+    _artifact_type, content = _editable_artifact_content(artifact)
+    return str(content), artifact.title or artifact_id
+
+
+def _build_text_diff(
+    text_a: str,
+    text_b: str,
+    *,
+    label_a: str = 'a',
+    label_b: str = 'b',
+    context_lines: int = 3,
+    max_output_chars: int = _DIFF_MAX_OUTPUT_CHARS,
+) -> dict:
+    import difflib
+
+    if len(text_a) > _DIFF_MAX_INPUT_CHARS or len(text_b) > _DIFF_MAX_INPUT_CHARS:
+        raise ValueError(f'Each input must be at most {_DIFF_MAX_INPUT_CHARS} characters.')
+
+    matcher = difflib.SequenceMatcher(None, text_a, text_b)
+    ratio = round(matcher.ratio(), 4)
+    lines_a = text_a.splitlines()
+    lines_b = text_b.splitlines()
+
+    diff_lines = list(
+        difflib.unified_diff(
+            lines_a,
+            lines_b,
+            fromfile=label_a,
+            tofile=label_b,
+            n=max(0, int(context_lines or 3)),
+            lineterm='',
+        )
+    )
+    diff_text = '\n'.join(diff_lines)
+    truncated = False
+    if len(diff_text) > max_output_chars:
+        diff_text = diff_text[:max_output_chars] + '\n... [diff truncated]'
+        truncated = True
+
+    additions = sum(1 for line in diff_lines if line.startswith('+') and not line.startswith('+++'))
+    deletions = sum(1 for line in diff_lines if line.startswith('-') and not line.startswith('---'))
+
+    return {
+        'label_a': label_a,
+        'label_b': label_b,
+        'similarity': ratio,
+        'additions': additions,
+        'deletions': deletions,
+        'identical': ratio == 1.0 and text_a == text_b,
+        'diff': diff_text,
+        'truncated': truncated,
+    }
+
+
+def _json_value_type(value) -> str:
+    if value is None:
+        return 'null'
+    if isinstance(value, bool):
+        return 'boolean'
+    if isinstance(value, int) and not isinstance(value, bool):
+        return 'integer'
+    if isinstance(value, float):
+        return 'number'
+    if isinstance(value, str):
+        return 'string'
+    if isinstance(value, list):
+        return 'array'
+    if isinstance(value, dict):
+        return 'object'
+    return type(value).__name__
+
+
+def _format_json_text(
+    text: str,
+    *,
+    action: str = 'pretty',
+    indent: int = 2,
+    sort_keys: bool = False,
+) -> dict:
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return {
+            'valid': False,
+            'error': str(exc),
+            'line': exc.lineno,
+            'column': exc.colno,
+            'position': exc.pos,
         }
 
-        if __event_emitter__:
-            await __event_emitter__({'type': 'chat:message:currency', 'data': currency_data})
+    result = {
+        'valid': True,
+        'type': _json_value_type(parsed),
+        'action': action,
+    }
 
+    if action == 'validate':
+        if isinstance(parsed, dict):
+            result['keys'] = len(parsed)
+        elif isinstance(parsed, list):
+            result['length'] = len(parsed)
+        return result
+
+    if action == 'minify':
+        result['formatted'] = json.dumps(parsed, ensure_ascii=False, separators=(',', ':'), sort_keys=sort_keys)
+        return result
+
+    safe_indent = max(0, min(int(indent), 8))
+    result['formatted'] = json.dumps(
+        parsed,
+        ensure_ascii=False,
+        indent=safe_indent if safe_indent else None,
+        sort_keys=sort_keys,
+    )
+    return result
+
+
+def _clamp_byte(value: float) -> int:
+    return max(0, min(255, int(round(value))))
+
+
+def _parse_hex_color(color: str) -> tuple[int, int, int, float | None]:
+    hex_digits = color.lstrip('#')
+    if len(hex_digits) == 3:
+        hex_digits = ''.join(ch * 2 for ch in hex_digits)
+    if len(hex_digits) == 4:
+        hex_digits = ''.join(ch * 2 for ch in hex_digits)
+    if len(hex_digits) == 6:
+        r = int(hex_digits[0:2], 16)
+        g = int(hex_digits[2:4], 16)
+        b = int(hex_digits[4:6], 16)
+        return r, g, b, None
+    if len(hex_digits) == 8:
+        r = int(hex_digits[0:2], 16)
+        g = int(hex_digits[2:4], 16)
+        b = int(hex_digits[4:6], 16)
+        a = int(hex_digits[6:8], 16) / 255
+        return r, g, b, a
+    raise ValueError(f'Invalid hex color: {color}')
+
+
+def _parse_function_color(color: str) -> tuple[int, int, int, float | None]:
+    match = re.match(
+        r'^(rgba?|hsla?)\s*\(\s*([^)]+)\)$',
+        color.strip(),
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        raise ValueError(f'Unsupported color format: {color}')
+
+    fn = match.group(1).lower()
+    parts = [part.strip() for part in match.group(2).split(',')]
+    if fn == 'rgb' and len(parts) == 3:
+        return int(parts[0]), int(parts[1]), int(parts[2]), None
+    if fn == 'rgba' and len(parts) == 4:
+        alpha = float(parts[3].rstrip('%')) / 100 if parts[3].endswith('%') else float(parts[3])
+        return int(parts[0]), int(parts[1]), int(parts[2]), alpha
+    if fn == 'hsl' and len(parts) == 3:
+        rgb = _hsl_to_rgb(float(parts[0]), _parse_percent(parts[1]), _parse_percent(parts[2]))
+        return rgb[0], rgb[1], rgb[2], None
+    if fn == 'hsla' and len(parts) == 4:
+        rgb = _hsl_to_rgb(float(parts[0]), _parse_percent(parts[1]), _parse_percent(parts[2]))
+        alpha = float(parts[3].rstrip('%')) / 100 if parts[3].endswith('%') else float(parts[3])
+        return rgb[0], rgb[1], rgb[2], alpha
+    raise ValueError(f'Unsupported color format: {color}')
+
+
+def _parse_percent(value: str) -> float:
+    text = value.strip()
+    if text.endswith('%'):
+        return float(text[:-1])
+    return float(text)
+
+
+def _parse_color_string(color: str) -> tuple[int, int, int, float | None]:
+    cleaned = str(color).strip()
+    if not cleaned:
+        raise ValueError('color is required.')
+    if cleaned.startswith('#'):
+        return _parse_hex_color(cleaned)
+    if cleaned.lower().startswith(('rgb', 'hsl')):
+        return _parse_function_color(cleaned)
+    if re.fullmatch(r'[0-9a-fA-F]{3,8}', cleaned):
+        return _parse_hex_color(f'#{cleaned}')
+    raise ValueError(f'Unsupported color format: {color}')
+
+
+def _rgb_to_hsl(red: int, green: int, blue: int) -> tuple[float, float, float]:
+    r = red / 255.0
+    g = green / 255.0
+    b = blue / 255.0
+    max_c = max(r, g, b)
+    min_c = min(r, g, b)
+    lightness = (max_c + min_c) / 2
+    if max_c == min_c:
+        return 0.0, 0.0, round(lightness * 100, 2)
+
+    delta = max_c - min_c
+    saturation = delta / (2 - max_c - min_c) if lightness > 0.5 else delta / (max_c + min_c)
+    if max_c == r:
+        hue = ((g - b) / delta) % 6
+    elif max_c == g:
+        hue = ((b - r) / delta) + 2
+    else:
+        hue = ((r - g) / delta) + 4
+    hue *= 60
+    return round(hue, 2), round(saturation * 100, 2), round(lightness * 100, 2)
+
+
+def _hsl_to_rgb(hue: float, saturation: float, lightness: float) -> tuple[int, int, int]:
+    h = (hue % 360) / 360
+    s = saturation / 100
+    l = lightness / 100
+    if s == 0:
+        value = _clamp_byte(l * 255)
+        return value, value, value
+
+    def hue_to_rgb(p: float, q: float, t: float) -> float:
+        if t < 0:
+            t += 1
+        if t > 1:
+            t -= 1
+        if t < 1 / 6:
+            return p + (q - p) * 6 * t
+        if t < 1 / 2:
+            return q
+        if t < 2 / 3:
+            return p + (q - p) * (2 / 3 - t) * 6
+        return p
+
+    q = l * (1 + s) if l < 0.5 else l + s - l * s
+    p = 2 * l - q
+    red = hue_to_rgb(p, q, h + 1 / 3)
+    green = hue_to_rgb(p, q, h)
+    blue = hue_to_rgb(p, q, h - 1 / 3)
+    return _clamp_byte(red * 255), _clamp_byte(green * 255), _clamp_byte(blue * 255)
+
+
+def _color_to_hex(red: int, green: int, blue: int, alpha: float | None = None) -> str:
+    if alpha is None:
+        return f'#{red:02x}{green:02x}{blue:02x}'
+    return f'#{red:02x}{green:02x}{blue:02x}{_clamp_byte(alpha * 255):02x}'
+
+
+def _color_to_rgb(red: int, green: int, blue: int, alpha: float | None = None) -> str:
+    if alpha is None:
+        return f'rgb({red}, {green}, {blue})'
+    return f'rgba({red}, {green}, {blue}, {round(alpha, 4)})'
+
+
+def _color_to_hsl(red: int, green: int, blue: int, alpha: float | None = None) -> str:
+    hue, saturation, lightness = _rgb_to_hsl(red, green, blue)
+    if alpha is None:
+        return f'hsl({hue}, {saturation}%, {lightness}%)'
+    return f'hsla({hue}, {saturation}%, {lightness}%, {round(alpha, 4)})'
+
+
+def _convert_color_formats(color: str, to_format: str = 'all') -> dict:
+    red, green, blue, alpha = _parse_color_string(color)
+    hue, saturation, lightness = _rgb_to_hsl(red, green, blue)
+    formats = {
+        'hex': _color_to_hex(red, green, blue, alpha),
+        'rgb': _color_to_rgb(red, green, blue, alpha),
+        'hsl': _color_to_hsl(red, green, blue, alpha),
+        'rgba': {'r': red, 'g': green, 'b': blue, 'a': alpha},
+        'hsl_values': {'h': hue, 's': saturation, 'l': lightness},
+    }
+    target = (to_format or 'all').strip().lower()
+    if target == 'all':
+        return {'input': color, 'formats': formats}
+    if target not in {'hex', 'rgb', 'hsl'}:
+        raise ValueError('to_format must be hex, rgb, hsl, or all.')
+    return {'input': color, 'format': target, 'value': formats[target]}
+
+
+async def define_term(
+    term: str,
+    language: str = 'en',
+) -> str:
+    """
+    Look up a word or concept using Wiktionary and Wikidata for fast factual grounding.
+
+    Prefer this over web search for definitions, etymology, and concise entity descriptions.
+
+    :param term: The word or phrase to define
+    :param language: Language code for results (default: en)
+    :return: JSON with Wiktionary definitions and Wikidata entity summary when available
+    """
+    try:
+        cleaned = str(term).strip()
+        if not cleaned:
+            return json.dumps({'error': 'term is required.'})
+
+        lang = (language or 'en').strip().lower()[:5] or 'en'
+        wiktionary = await _wiktionary_lookup(cleaned, language=lang)
+        wikidata = await _wikidata_lookup(cleaned, language=lang)
+
+        if not wiktionary and not wikidata:
+            return json.dumps(
+                {
+                    'term': cleaned,
+                    'error': f'No Wiktionary or Wikidata results found for "{cleaned}".',
+                },
+                ensure_ascii=False,
+            )
+
+        payload = {'term': cleaned, 'language': lang}
+        if wiktionary:
+            payload['wiktionary'] = wiktionary
+        if wikidata:
+            payload['wikidata'] = wikidata
+        return json.dumps(payload, ensure_ascii=False)
+    except Exception as e:
+        log.exception(f'define_term error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def unit_convert(
+    amount: float,
+    from_unit: str,
+    to_unit: str,
+) -> str:
+    """
+    Convert a value between compatible units (length, weight, temperature, or data sizes).
+
+    Examples: meters to feet, celsius to fahrenheit, GB to GiB, kg to lb.
+
+    :param amount: Numeric value to convert
+    :param from_unit: Source unit (e.g. km, lb, c, gb, mib)
+    :param to_unit: Target unit (e.g. mi, kg, f, gib)
+    :return: JSON with converted result and unit category
+    """
+    try:
+        result_value = _convert_scalar_unit(float(amount), from_unit, to_unit)
+        category = _unit_category(from_unit)
         return json.dumps(
             {
-                'status': 'success',
-                'message': 'Currency card displayed to the user.',
-                'conversion': currency_data,
+                'amount': float(amount),
+                'from_unit': _normalize_unit(from_unit),
+                'to_unit': _normalize_unit(to_unit),
+                'category': category,
+                'result': round(result_value, 8),
             },
             ensure_ascii=False,
         )
     except Exception as e:
-        log.exception(f'currency_convert error: {e}')
+        log.exception(f'unit_convert error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def json_format(
+    text: str,
+    action: str = 'pretty',
+    indent: int = 2,
+    sort_keys: bool = False,
+) -> str:
+    """
+    Validate, pretty-print, or minify JSON text.
+
+    :param text: Raw JSON string to process
+    :param action: pretty (default), minify, or validate
+    :param indent: Spaces per level when pretty-printing (default: 2, max: 8)
+    :param sort_keys: Sort object keys alphabetically when formatting
+    :return: JSON with validation result and formatted output when applicable
+    """
+    try:
+        if not str(text).strip():
+            return json.dumps({'error': 'text is required.'})
+
+        normalized_action = (action or 'pretty').strip().lower()
+        if normalized_action not in {'pretty', 'minify', 'validate'}:
+            normalized_action = 'pretty'
+
+        if isinstance(sort_keys, str):
+            sort_keys = sort_keys.strip().lower() in {'true', '1', 'yes', 'on'}
+        if isinstance(indent, str):
+            try:
+                indent = int(indent)
+            except ValueError:
+                indent = 2
+
+        result = _format_json_text(
+            str(text),
+            action=normalized_action,
+            indent=indent,
+            sort_keys=bool(sort_keys),
+        )
+        return json.dumps(result, ensure_ascii=False)
+    except Exception as e:
+        log.exception(f'json_format error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def color_convert(
+    color: str,
+    to_format: Optional[str] = 'all',
+) -> str:
+    """
+    Convert a color between hex, rgb/rgba, and hsl/hsla.
+
+    Accepts #hex, rgb(), rgba(), hsl(), and hsla() inputs.
+
+    :param color: Color string to convert
+    :param to_format: Target format: hex, rgb, hsl, or all (default)
+    :return: JSON with converted color value(s)
+    """
+    try:
+        result = _convert_color_formats(color, to_format or 'all')
+        return json.dumps(result, ensure_ascii=False)
+    except Exception as e:
+        log.exception(f'color_convert error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def timezone_convert(
+    time: str,
+    from_timezone: str,
+    to_timezone: Optional[str] = None,
+    date: Optional[str] = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Convert a local time from one timezone to another.
+
+    Use for questions like "what is 3pm Tokyo in my time?". Defaults to the user's
+    profile timezone when to_timezone is omitted.
+
+    :param time: Local time as HH:MM, HH:MM:SS, or ISO-8601 datetime
+    :param from_timezone: Source IANA timezone or common alias (e.g. Asia/Tokyo, Tokyo, UTC)
+    :param to_timezone: Target timezone (defaults to user profile timezone, else UTC)
+    :param date: Optional YYYY-MM-DD for clock times without a date (defaults to today in source tz)
+    :return: JSON with converted ISO timestamps and timezone labels
+    """
+    try:
+        import datetime
+        from zoneinfo import ZoneInfo
+
+        if not str(time).strip():
+            return json.dumps({'error': 'time is required.'})
+        if not str(from_timezone).strip():
+            return json.dumps({'error': 'from_timezone is required.'})
+
+        from_tz = ZoneInfo(_resolve_timezone_name(from_timezone))
+        target_name = to_timezone or (__user__ or {}).get('timezone') or 'UTC'
+        to_tz = ZoneInfo(_resolve_timezone_name(target_name))
+
+        raw_time = str(time).strip()
+        parsed: datetime.datetime | None = None
+
+        try:
+            if 'T' in raw_time or raw_time.endswith('Z') or '+' in raw_time[10:]:
+                parsed = datetime.datetime.fromisoformat(raw_time.replace('Z', '+00:00'))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=from_tz)
+                else:
+                    parsed = parsed.astimezone(from_tz)
+            else:
+                time_part = raw_time
+                date_part = (date or '').strip()
+                if not date_part:
+                    date_part = datetime.datetime.now(from_tz).date().isoformat()
+                parsed = datetime.datetime.fromisoformat(f'{date_part}T{time_part}')
+                parsed = parsed.replace(tzinfo=from_tz)
+        except ValueError as exc:
+            return json.dumps({'error': f'Could not parse time "{time}": {exc}'})
+
+        converted = parsed.astimezone(to_tz)
+        return json.dumps(
+            {
+                'input': {
+                    'local_iso': parsed.isoformat(),
+                    'timezone': str(from_tz),
+                },
+                'output': {
+                    'local_iso': converted.isoformat(),
+                    'timezone': str(to_tz),
+                },
+                'utc_iso': converted.astimezone(datetime.timezone.utc).isoformat(),
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'timezone_convert error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def diff_text(
+    text_a: Optional[str] = None,
+    text_b: Optional[str] = None,
+    file_id_a: Optional[str] = None,
+    file_id_b: Optional[str] = None,
+    artifact_id_a: Optional[str] = None,
+    artifact_id_b: Optional[str] = None,
+    label_a: Optional[str] = None,
+    label_b: Optional[str] = None,
+    context_lines: int = 3,
+    __request__: Request = None,
+    __user__: dict = None,
+    __model_knowledge__: list[dict] = None,
+) -> str:
+    """
+    Compare two text sources and return a unified diff.
+
+    Pass inline text and/or file/artifact ids. Useful for code review and document comparison.
+
+    :param text_a: First text (optional if file_id_a or artifact_id_a provided)
+    :param text_b: Second text (optional if file_id_b or artifact_id_b provided)
+    :param file_id_a: First uploaded file id
+    :param file_id_b: Second uploaded file id
+    :param artifact_id_a: First saved artifact id
+    :param artifact_id_b: Second saved artifact id
+    :param label_a: Optional label for the first side in the diff
+    :param label_b: Optional label for the second side in the diff
+    :param context_lines: Unified diff context lines (default: 3)
+    :return: JSON with unified diff, similarity ratio, and change counts
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        left_text = text_a
+        left_label = label_a
+        right_text = text_b
+        right_label = label_b
+
+        if file_id_a:
+            loaded_text, loaded_label = await _load_file_text_content(
+                file_id_a, __request__, __user__, __model_knowledge__
+            )
+            left_text = loaded_text
+            left_label = left_label or loaded_label
+        if artifact_id_a:
+            loaded_text, loaded_label = await _load_artifact_text_content(artifact_id_a, __user__)
+            left_text = loaded_text
+            left_label = left_label or loaded_label
+
+        if file_id_b:
+            loaded_text, loaded_label = await _load_file_text_content(
+                file_id_b, __request__, __user__, __model_knowledge__
+            )
+            right_text = loaded_text
+            right_label = right_label or loaded_label
+        if artifact_id_b:
+            loaded_text, loaded_label = await _load_artifact_text_content(artifact_id_b, __user__)
+            right_text = loaded_text
+            right_label = right_label or loaded_label
+
+        if left_text is None or right_text is None:
+            return json.dumps({'error': 'Provide text_a/text_b or matching file/artifact ids for both sides.'})
+
+        result = _build_text_diff(
+            str(left_text),
+            str(right_text),
+            label_a=left_label or 'a',
+            label_b=right_label or 'b',
+            context_lines=context_lines,
+        )
+        return json.dumps(result, ensure_ascii=False)
+    except Exception as e:
+        log.exception(f'diff_text error: {e}')
         return json.dumps({'error': str(e)})
 
 

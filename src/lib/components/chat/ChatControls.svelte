@@ -3,30 +3,17 @@
 </script>
 
 <script lang="ts">
-	import { SvelteFlowProvider } from '@xyflow/svelte';
-	import { slide } from 'svelte/transition';
-	import { Pane, PaneResizer } from 'paneforge';
-	import { v4 as uuidv4 } from 'uuid';
+	
+	
+	import {Pane, PaneResizer} from 'paneforge';
+	import {v4 as uuidv4} from 'uuid';
 
-	import { onDestroy, onMount, tick, getContext } from 'svelte';
-	import { get } from 'svelte/store';
-	import {
-		config,
-		terminalServers,
-		mobile,
-		showControls,
-		showCallOverlay,
-		showArtifacts,
-		showEmbeds,
-		settings,
-		showFileNavPath,
-		selectedTerminalId,
-		terminalServersLoaded,
-		user
-	} from '$lib/stores';
+	import {onMount, tick, getContext} from 'svelte';
+	import {get} from 'svelte/store';
+	import {config, terminalServers, showControls, showCallOverlay, showArtifacts, showEmbeds, settings, showFileNavPath, selectedTerminalId, terminalServersLoaded, user} from '$lib/stores';
 
-	import { uploadFile } from '$lib/apis/files';
-	import { toast } from 'svelte-sonner';
+	import {uploadFile} from '$lib/apis/files';
+	import {toast} from 'svelte-sonner';
 
 	import Controls from './Controls/Controls.svelte';
 	import CallOverlay from './MessageInput/CallOverlay.svelte';
@@ -47,7 +34,7 @@
 	export let history;
 	export let models = [];
 
-	export let chatId = null;
+	export let chatId: string | null = null;
 
 	export let chatFiles = [];
 
@@ -174,7 +161,7 @@
 				files = files;
 			}
 			toast.success($i18n.t('File attached to chat'));
-		} catch (e) {
+		} catch (_e) {
 			files = files.filter((f) => f.itemId !== tempItemId);
 			toast.error($i18n.t('Failed to attach file'));
 		}
@@ -207,7 +194,7 @@
 		pane.resize(Math.max(targetPercent, minPercent));
 	};
 
-	const handleMediaQuery = async (e) => {
+	const handleMediaQuery = async (e: Event) => {
 		if (e.matches) {
 			largeScreen = true;
 			if ($showCallOverlay) {

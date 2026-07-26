@@ -1,19 +1,11 @@
 <script>
-	import { createEventDispatcher } from 'svelte';
+	import {createEventDispatcher} from 'svelte';
 
 	const dispatch = createEventDispatcher();
 
-	import { theme } from '$lib/stores';
-	import {
-		Background,
-		Controls,
-		SvelteFlow,
-		BackgroundVariant,
-		ControlButton
-	} from '@xyflow/svelte';
-	import BarsArrowUp from '$lib/components/icons/BarsArrowUp.svelte';
-	import Bars3BottomLeft from '$lib/components/icons/Bars3BottomLeft.svelte';
-	import AlignVertical from '$lib/components/icons/AlignVertical.svelte';
+	import {theme} from '$lib/stores';
+	import {Background, Controls, SvelteFlow, BackgroundVariant, ControlButton} from '@xyflow/svelte';
+import AlignVertical from '$lib/components/icons/AlignVertical.svelte';
 	import AlignHorizontal from '$lib/components/icons/AlignHorizontal.svelte';
 
 	export let nodes;

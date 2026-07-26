@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { getContext, createEventDispatcher, onMount, onDestroy } from 'svelte';
+	import {createEventDispatcher, onMount, onDestroy} from 'svelte';
 
-	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
 	import ChevronDown from '../icons/ChevronDown.svelte';
@@ -30,13 +29,13 @@
 
 	let draggedOver = false;
 
-	const onDragOver = (e) => {
+	const onDragOver = (e: Event) => {
 		e.preventDefault();
 		e.stopPropagation();
 		draggedOver = true;
 	};
 
-	const onDrop = (e) => {
+	const onDrop = (e: Event) => {
 		e.preventDefault();
 		e.stopPropagation();
 
@@ -81,7 +80,7 @@
 							} else {
 								console.log('Dropped text data is empty or not text/plain.');
 							}
-						} catch (error) {
+						} catch (_error) {
 							console.log(
 								'Dropped data is not valid JSON text or is empty. Ignoring drop event for this type of data.'
 							);
@@ -100,7 +99,7 @@
 		}
 	};
 
-	const onDragLeave = (e) => {
+	const onDragLeave = (e: Event) => {
 		e.preventDefault();
 		e.stopPropagation();
 
@@ -185,7 +184,7 @@
 							<Tooltip content={onAddLabel}>
 								<button
 									class="p-0.5 dark:hover:bg-gray-850 rounded-lg touch-auto"
-									on:click={(e) => {}}
+									on:click={(_e) => {}}
 								>
 									<Plus className=" size-3" strokeWidth="2.5" />
 								</button>

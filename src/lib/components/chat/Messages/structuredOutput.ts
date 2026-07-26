@@ -33,11 +33,14 @@ export type OutputDetailToken = {
 		id?: string;
 		name?: string;
 		done?: string;
+		status?: string;
+		context?: string;
 		duration?: string;
 		arguments?: string;
 		files?: string;
 		embeds?: string;
 		output?: string;
+		compact?: string;
 	};
 };
 
@@ -47,6 +50,7 @@ import {
 	serializeAntArtifact
 } from '$lib/utils/ant-artifact';
 import { removeAllDetails } from '$lib/utils';
+import { getToolCallContextFromArguments } from '$lib/utils/toolCallDisplay';
 
 export type OutputDisplayItem =
 	| {
@@ -130,20 +134,39 @@ function getToolResultText(item?: OutputItem): string {
 		.join('');
 }
 
+function resolveToolCallItemStatus(item: OutputItem, hasResult: boolean): string {
+	if (item.status) {
+		return item.status;
+	}
+	return hasResult ? 'completed' : 'in_progress';
+}
+
 function buildToolCallToken(item: OutputItem, toolOutputByCallId: Record<string, OutputItem>) {
 	const callId = item.call_id ?? '';
 	const resultItem = toolOutputByCallId[callId];
-	const isDone = isDoneStatus(item.status) || !!resultItem;
-	const isCancelled = item.status === 'cancelled';
+	const hasResult = !!resultItem;
+	const status = resolveToolCallItemStatus(item, hasResult);
+	const isDone = isDoneStatus(status) || hasResult;
+	const isCancelled = status === 'cancelled';
+	const isFailed = status === 'failed' || status === 'incomplete';
+	const context = getToolCallContextFromArguments(item.arguments ?? '');
 
 	return {
-		summary: isCancelled ? 'Tool Cancelled' : isDone ? 'Tool Executed' : 'Executing...',
+		summary: isCancelled
+			? 'Tool Cancelled'
+			: isFailed
+				? 'Tool Failed'
+				: isDone
+					? 'Tool Executed'
+					: 'Executing...',
 		text: getToolResultText(resultItem),
 		attributes: {
 			type: 'tool_calls',
 			id: callId,
 			name: item.name ?? '',
 			done: isDone ? 'true' : 'false',
+			status,
+			context,
 			arguments: stringifyAttribute(item.arguments ?? ''),
 			files: stringifyAttribute(resultItem?.files),
 			embeds: stringifyAttribute(resultItem?.embeds)
@@ -223,15 +246,20 @@ function getOpenAIToolSummary(item: OutputItem): string {
 }
 
 function buildOpenAIToolToken(item: OutputItem, isLastItem: boolean) {
-	const isDone = isDoneStatus(item.status) || !isLastItem;
+	const status = item.status ?? (!isLastItem ? 'completed' : 'in_progress');
+	const isDone = isDoneStatus(status) || !isLastItem;
+	const context = getOpenAIToolSummary(item);
+
 	return {
 		summary: isDone ? 'Tool Executed' : 'Executing...',
-		text: getOpenAIToolSummary(item),
+		text: context,
 		attributes: {
 			type: 'tool_calls',
 			id: item.id ?? '',
 			name: OPENAI_TOOL_NAMES[item.type ?? ''] ?? item.type ?? '',
 			done: isDone ? 'true' : 'false',
+			status,
+			context,
 			arguments: ''
 		}
 	};
@@ -295,30 +323,84 @@ export function getOrphanArtifactContent(
 	return missing.map(serializeAntArtifact).join('\n\n');
 }
 
+function mergeConsecutiveReasoningTokens(tokens: OutputDetailToken[]): OutputDetailToken[] {
+	const merged: OutputDetailToken[] = [];
+
+	for (const token of tokens) {
+		const previous = merged[merged.length - 1];
+
+		if (
+			token.attributes?.type === 'reasoning' &&
+			previous?.attributes?.type === 'reasoning'
+		) {
+			const previousDuration = Number(previous.attributes.duration) || 0;
+			const currentDuration = Number(token.attributes.duration) || 0;
+			const totalDuration = previousDuration + currentDuration;
+
+			merged[merged.length - 1] = {
+				...previous,
+				text: [previous.text, token.text].filter(Boolean).join('\n'),
+				summary:
+					totalDuration > 0
+						? `Thought for ${totalDuration} seconds`
+						: previous.summary || token.summary,
+				attributes: {
+					...previous.attributes,
+					duration: String(totalDuration),
+					done: token.attributes.done === 'true' ? 'true' : previous.attributes.done
+				}
+			};
+			continue;
+		}
+
+		merged.push(token);
+	}
+
+	return merged;
+}
+
+function markCompactTools(
+	tokens: OutputDetailToken[],
+	hiddenToolNames?: Set<string>
+): OutputDetailToken[] {
+	if (!hiddenToolNames?.size) return tokens;
+
+	return tokens.map((token) => {
+		if (token.attributes?.type !== 'tool_calls') return token;
+
+		const name = token.attributes?.name ?? '';
+		if (!hiddenToolNames.has(name)) return token;
+
+		return {
+			...token,
+			attributes: {
+				...token.attributes,
+				compact: 'true'
+			}
+		};
+	});
+}
+
 function appendGroupedDetailTokens(
 	displayItems: OutputDisplayItem[],
 	tokens: OutputDetailToken[],
 	hiddenToolNames?: Set<string>
 ) {
-	const visibleTokens = hiddenToolNames?.size
-		? tokens.filter((token) => {
-				if (token.attributes?.type !== 'tool_calls') return true;
-				const name = token.attributes?.name ?? '';
-				return !hiddenToolNames.has(name);
-			})
-		: tokens;
+	const displayTokens = mergeConsecutiveReasoningTokens(
+		markCompactTools(tokens, hiddenToolNames)
+	);
 
-	if (visibleTokens.length > 1) {
+	if (displayTokens.length > 1) {
 		displayItems.push({
 			type: 'detail_group',
 			id: `detail-group-${displayItems.length}`,
-			tokens: [...visibleTokens]
+			tokens: [...displayTokens]
 		});
-	} else if (visibleTokens.length === 1) {
+	} else if (displayTokens.length === 1) {
 		displayItems.push({
 			type: 'detail_single',
 			id: `detail-${displayItems.length}`,
-			token: visibleTokens[0]
+			token: displayTokens[0]
 		});
 	}
 }
@@ -329,16 +411,19 @@ export function buildOutputDisplayItems(
 	hiddenToolNames?: Set<string>
 ): OutputDisplayItem[] {
 	const displayItems: OutputDisplayItem[] = [];
-	const reasoningTokens: OutputDetailToken[] = [];
-	const messageItems: OutputDisplayItem[] = [];
-	const toolDetailTokens: OutputDetailToken[] = [];
 	const toolOutputByCallId: Record<string, OutputItem> = {};
+	let detailGroup: OutputDetailToken[] = [];
 
 	for (const item of output) {
 		if (item?.type === 'function_call_output' && item.call_id) {
 			toolOutputByCallId[item.call_id] = item;
 		}
 	}
+
+	const flushDetailGroup = () => {
+		appendGroupedDetailTokens(displayItems, detailGroup, hiddenToolNames);
+		detailGroup = [];
+	};
 
 	output.forEach((item, index) => {
 		if (item?.type === 'function_call_output') {
@@ -348,19 +433,17 @@ export function buildOutputDisplayItems(
 		if (item?.type && GROUPABLE_OUTPUT_TYPES.has(item.type)) {
 			const token = buildDetailToken(item, index === output.length - 1, toolOutputByCallId);
 			if (token) {
-				if (item.type === 'reasoning') {
-					reasoningTokens.push(token);
-				} else {
-					toolDetailTokens.push(token);
-				}
+				detailGroup.push(token);
 			}
 			return;
 		}
 
+		flushDetailGroup();
+
 		if (item?.type === 'message') {
 			const text = getMessageText(item);
 			if (text.trim()) {
-				messageItems.push({
+				displayItems.push({
 					type: 'message',
 					id: item.id ?? `message-${index}`,
 					text
@@ -371,7 +454,7 @@ export function buildOutputDisplayItems(
 
 		const fallbackText = getMessageText(item);
 		if (fallbackText.trim()) {
-			messageItems.push({
+			displayItems.push({
 				type: 'message',
 				id: item.id ?? `output-${index}`,
 				text: fallbackText
@@ -379,10 +462,7 @@ export function buildOutputDisplayItems(
 		}
 	});
 
-	// Reasoning stays above the answer; rich tool output stays below message text.
-	appendGroupedDetailTokens(displayItems, reasoningTokens, hiddenToolNames);
-	displayItems.push(...messageItems);
-	appendGroupedDetailTokens(displayItems, toolDetailTokens, hiddenToolNames);
+	flushDetailGroup();
 
 	const orphanArtifacts = getOrphanArtifactContent(output, content);
 	if (orphanArtifacts.trim()) {

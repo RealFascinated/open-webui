@@ -1,12 +1,12 @@
 <script lang="ts">
 	import dayjs from 'dayjs';
-	import { toast } from 'svelte-sonner';
-	import { tick, getContext, onMount } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {tick, getContext, onMount} from 'svelte';
 
-	import { models, settings } from '$lib/stores';
-	import { user as _user } from '$lib/stores';
-	import { copyToClipboard as _copyToClipboard, formatDate } from '$lib/utils';
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import {settings, mobile} from '$lib/stores';
+	import {user as _user} from '$lib/stores';
+	import {copyToClipboard as _copyToClipboard, formatDate} from '$lib/utils';
+	import {WEBUI_API_BASE_URL, WEBUI_BASE_URL} from '$lib/constants';
 	import equal from 'fast-deep-equal';
 
 	import Name from './Name.svelte';
@@ -47,7 +47,7 @@
 
 	const RAG_FILE_TYPES = ['doc', 'text', 'note', 'chat', 'collection', 'project'];
 
-	const isRagFile = (file) =>
+	const isRagFile = (file: string) =>
 		RAG_FILE_TYPES.includes(file?.type) ||
 		(file?.type === 'file' && !(file?.content_type ?? '').startsWith('image/'));
 
@@ -63,6 +63,7 @@
 	let editScrollContainer: HTMLDivElement;
 
 	let message = structuredClone(history.messages[messageId]);
+	$: showHoverActions = ($settings?.highContrastMode ?? false) || $mobile;
 	$: if (history.messages) {
 		const source = history.messages[messageId];
 		if (source) {
@@ -524,7 +525,7 @@
 						<Tooltip content={$i18n.t('Edit')} placement="bottom">
 							<button
 								aria-label={$i18n.t('Edit')}
-								class="{($settings?.highContrastMode ?? false)
+								class="{showHoverActions
 									? ''
 									: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition edit-user-message-button"
 								on:click={() => {
@@ -552,7 +553,7 @@
 						<Tooltip content={$i18n.t('Copy')} placement="bottom">
 							<button
 								aria-label={$i18n.t('Copy')}
-								class="{($settings?.highContrastMode ?? false)
+								class="{showHoverActions
 									? ''
 									: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 								on:click={() => {
@@ -581,7 +582,7 @@
 							<Tooltip content={$i18n.t('Delete')} placement="bottom">
 								<button
 									aria-label={$i18n.t('Delete')}
-									class="{($settings?.highContrastMode ?? false)
+									class="{showHoverActions
 										? ''
 										: 'invisible group-hover:visible'} p-1 rounded-sm dark:hover:text-white hover:text-black transition"
 									on:click={(e) => {

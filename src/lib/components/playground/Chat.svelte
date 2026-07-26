@@ -2,22 +2,17 @@
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 
-	import { goto } from '$app/navigation';
-	import { onMount, tick, getContext } from 'svelte';
+	import {goto} from '$app/navigation';
+	import {onMount, tick, getContext} from 'svelte';
 
-	import {
-		OLLAMA_API_BASE_URL,
-		OPENAI_API_BASE_URL,
-		WEBUI_API_BASE_URL,
-		WEBUI_BASE_URL
-	} from '$lib/constants';
-	import { WEBUI_NAME, config, user, models, settings } from '$lib/stores';
+	import {WEBUI_BASE_URL} from '$lib/constants';
+	import {config, user, models, settings} from '$lib/stores';
 
-	import { chatCompletion } from '$lib/apis/openai';
+	import {chatCompletion} from '$lib/apis/openai';
 
-	import { splitStream } from '$lib/utils';
+	import {splitStream} from '$lib/utils';
 	import Collapsible from '../common/Collapsible.svelte';
 	import Dropdown from '../common/Dropdown.svelte';
 	import DropdownSub from '../common/DropdownSub.svelte';
@@ -25,20 +20,14 @@
 	import Messages from '$lib/components/playground/Chat/Messages.svelte';
 	import AdvancedParams from '$lib/components/chat/Settings/Advanced/AdvancedParams.svelte';
 	import ChevronUp from '../icons/ChevronUp.svelte';
-	import ChevronDown from '../icons/ChevronDown.svelte';
-	import Pencil from '../icons/Pencil.svelte';
-	import Cog6 from '../icons/Cog6.svelte';
-	import AdjustmentsHorizontal from '../icons/AdjustmentsHorizontal.svelte';
+import Pencil from '../icons/Pencil.svelte';
+import AdjustmentsHorizontal from '../icons/AdjustmentsHorizontal.svelte';
 	import Modal from '../common/Modal.svelte';
 	import XMark from '../icons/XMark.svelte';
-	import Sidebar from '../common/Sidebar.svelte';
-	import ArrowRight from '../icons/ArrowRight.svelte';
-	import Download from '../icons/Download.svelte';
+import Download from '../icons/Download.svelte';
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
 
 	const i18n = getContext('i18n');
-
-	let loaded = false;
 
 	let selectedModelId = '';
 	let loading = false;
@@ -48,7 +37,6 @@
 	let messagesContainerElement: HTMLDivElement;
 
 	let showSystem = false;
-	let showSettings = false;
 	let showControls = false;
 
 	let params: Record<string, unknown> = {};
@@ -314,9 +302,7 @@
 		} else {
 			selectedModelId = '';
 		}
-		loaded = true;
-	});
-</script>
+	});</script>
 
 <Modal size="sm" bind:show={showControls}>
 	<div class="text-gray-700 dark:text-gray-100">

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import { fade } from 'svelte/transition';
 
 	import { flyAndScale } from '$lib/utils/transitions';
@@ -10,7 +10,6 @@
 	export let className = 'bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-4xl';
 
 	let modalElement = null;
-	let mounted = false;
 	// Create focus trap to trap user tabs inside modal
 	// https://www.w3.org/WAI/WCAG21/Understanding/focus-order.html
 	// https://www.w3.org/WAI/WCAG21/Understanding/keyboard.html
@@ -51,17 +50,13 @@
 		return modals.length && modals[modals.length - 1] === modalElement;
 	};
 
-	onMount(() => {
-		mounted = true;
-	});
-
 	let handleOutsidePointerDown;
 	let handleModalFocusIn;
 
 	$: if (show && modalElement) {
 		document.body.appendChild(modalElement);
 		focusTrap = FocusTrap.createFocusTrap(modalElement, {
-			allowOutsideClick: (e) => {
+			allowOutsideClick: (e: Event) => {
 				return (
 					e.target.closest('[data-sonner-toast]') !== null ||
 					e.target.closest('.modal-content') === null
@@ -71,7 +66,7 @@
 		focusTrap.activate();
 
 		// Auto-pause focus trap when interacting with portaled content (e.g. Dropdown)
-		handleOutsidePointerDown = (e) => {
+		handleOutsidePointerDown = (e: Event) => {
 			if (focusTrap && modalElement && !modalElement.contains(e.target)) {
 				focusTrap.pause();
 			}
@@ -110,8 +105,7 @@
 		if (modalElement) {
 			document.body.removeChild(modalElement);
 		}
-	});
-</script>
+	});</script>
 
 {#if show}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->

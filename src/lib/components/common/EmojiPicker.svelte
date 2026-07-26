@@ -17,7 +17,7 @@
 	const i18n = getContext('i18n');
 
 	export let onClose = () => {};
-	export let onSubmit = (name) => {};
+	export let onSubmit = (_name) => {};
 	export const side = 'top';
 	export let align = 'start';
 	export const user = null;

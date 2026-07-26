@@ -63,11 +63,11 @@
 
 	let shiftKey = false;
 
-	const onShiftKeyDown = (e) => {
+	const onShiftKeyDown = (e: Event) => {
 		if (e.key === 'Shift') shiftKey = true;
 	};
 
-	const onShiftKeyUp = (e) => {
+	const onShiftKeyUp = (e: Event) => {
 		if (e.key === 'Shift') shiftKey = false;
 	};
 	let generating = false;
@@ -78,7 +78,7 @@
 		await pinnedChats.set(await getPinnedChatList(localStorage.token));
 	};
 
-	const cloneChatHandler = async (id) => {
+	const cloneChatHandler = async (id: string) => {
 		const chat = chatList?.find((c) => c.id === id);
 		const res = await cloneChatById(
 			localStorage.token,
@@ -97,7 +97,7 @@
 		}
 	};
 
-	const archiveChatHandler = async (id) => {
+	const archiveChatHandler = async (id: string) => {
 		try {
 			await archiveChatById(localStorage.token, id);
 
@@ -110,12 +110,12 @@
 
 			await refreshSidebar();
 			toast.success($i18n.t('Chat archived.'));
-		} catch (error) {
+		} catch (_error) {
 			toast.error($i18n.t('Failed to archive chat.'));
 		}
 	};
 
-	const deleteChatHandler = async (id) => {
+	const deleteChatHandler = async (id: string) => {
 		const res = await deleteChatById(localStorage.token, id).catch((error) => {
 			toast.error(`${error}`);
 			return null;
@@ -151,7 +151,7 @@
 		}
 	};
 
-	const renameHandler = async (id) => {
+	const renameHandler = async (id: string) => {
 		editingChatId = id;
 		editingChatTitle = chatList?.find((c) => c.id === id)?.title ?? '';
 
@@ -268,7 +268,7 @@
 	let query = '';
 	let page = 1;
 
-	let chatList = null;
+	let chatList: Record<string, unknown>[] | null = null;
 
 	let chatListLoading = false;
 	let allChatsLoaded = false;
@@ -278,7 +278,7 @@
 	let selectedIdx = null;
 	let selectedChat = null;
 
-	let selectedModels = [''];
+	let selectedModels: string[] = [''];
 	let history = null;
 	let messages = null;
 
@@ -341,7 +341,7 @@
 
 		const chatId = chatList[selectedChatIdx].id;
 
-		const chat = await getChatById(localStorage.token, chatId).catch(async (error) => {
+		const chat = await getChatById(localStorage.token, chatId).catch(async (_error) => {
 			return null;
 		});
 
@@ -443,7 +443,7 @@
 		generating = false;
 	}
 
-	const onKeyDown = (e) => {
+	const onKeyDown = (e: Event) => {
 		// Ignore keydown fired while confirming an IME composition (e.g. Japanese/Chinese/Korean)
 		// so confirming the composition with Enter doesn't trigger search actions (#26172).
 		if (e.isComposing || e.keyCode === 229) {
@@ -848,7 +848,7 @@
 
 					{#if !allChatsLoaded}
 						<Loader
-							on:visible={(e) => {
+							on:visible={(_e) => {
 								if (!chatListLoading) {
 									loadMoreChats();
 								}

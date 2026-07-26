@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { tick, getContext, onMount, onDestroy } from 'svelte';
-	import { config, settings } from '$lib/stores';
-	import { blobToFile, calculateSHA256, extractCurlyBraceWords } from '$lib/utils';
+	import {toast} from 'svelte-sonner';
+	import {tick, getContext, onMount, onDestroy} from 'svelte';
+	import {config, settings} from '$lib/stores';
+	import {blobToFile} from '$lib/utils';
 
-	import { transcribeAudio } from '$lib/apis/audio';
+	import {transcribeAudio} from '$lib/apis/audio';
 	import XMark from '$lib/components/icons/XMark.svelte';
 
 	import dayjs from 'dayjs';
@@ -24,7 +24,7 @@
 	export let className = ' p-2.5 w-full max-w-full';
 
 	export let onCancel = () => {};
-	export let onConfirm = (data) => {};
+	export let onConfirm = (_data) => {};
 
 	let loading = false;
 	let confirmed = false;
@@ -129,7 +129,7 @@
 		const domainData = new Uint8Array(bufferLength);
 		const timeDomainData = new Uint8Array(analyser.fftSize);
 
-		let lastSoundTime = Date.now();
+		let _lastSoundTime = Date.now();
 
 		const detectSound = () => {
 			const processFrame = () => {
@@ -260,7 +260,7 @@
 			audioChunks = [];
 			analyseAudio(stream);
 		};
-		mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
+		mediaRecorder.ondataavailable = (event: Event) => audioChunks.push(event.data);
 		mediaRecorder.onstop = async () => {
 			console.log('Recording stopped');
 
@@ -314,7 +314,7 @@
 					speechRecognition.start();
 
 					// Event triggered when speech is recognized
-					speechRecognition.onresult = async (event) => {
+					speechRecognition.onresult = async (event: Event) => {
 						// Clear the inactivity timeout
 						clearTimeout(timeoutId);
 
@@ -405,10 +405,9 @@
 	let resizeObserver;
 	let containerWidth;
 
-	let maxVisibleItems = 300;
-	$: maxVisibleItems = Math.floor(containerWidth / 5); // 2px width + 0.5px gap
+	$: _maxVisibleItems = Math.floor(containerWidth / 5); // 2px width + 0.5px gap
 
-	const handleKeyDown = (e) => {
+	const handleKeyDown = (e: Event) => {
 		if (e.key === 'Escape') {
 			e.preventDefault();
 			stopRecording();
@@ -464,7 +463,6 @@
             {loading
 				? ' bg-gray-200 dark:bg-gray-700/50'
 				: 'bg-indigo-400/20 text-indigo-600 dark:text-indigo-300 '} 
-
 
              rounded-full"
 			on:click={async () => {

@@ -1,15 +1,10 @@
 <script lang="ts">
-	import { getContext, createEventDispatcher } from 'svelte';
+	import {getContext} from 'svelte';
 	const i18n = getContext('i18n');
-	const dispatch = createEventDispatcher();
-
-	import { goto } from '$app/navigation';
-	import { chatId, mobile, showSidebar } from '$lib/stores';
-	import { getSharedProjectChats } from '$lib/apis/projects';
+	import {getSharedProjectChats} from '$lib/apis/projects';
 
 	import ChatItem from './ChatItem.svelte';
-	import Collapsible from '../../common/Collapsible.svelte';
-	import ChevronDown from '../../icons/ChevronDown.svelte';
+import ChevronDown from '../../icons/ChevronDown.svelte';
 	import ChevronRight from '../../icons/ChevronRight.svelte';
 	import FolderOpen from '$lib/components/icons/FolderOpen.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';

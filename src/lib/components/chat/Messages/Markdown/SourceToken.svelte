@@ -8,7 +8,6 @@
 	export let sourceIds = [];
 	export let onClick: (...args: unknown[]) => unknown = () => {};
 
-	let containerElement;
 	let openPreview = false;
 
 	// Helper function to return only the domain from a URL

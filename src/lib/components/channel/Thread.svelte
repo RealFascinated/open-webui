@@ -24,7 +24,7 @@
 	let top = false;
 
 	let messagesContainerElement = null;
-	let chatInputElement = null;
+	let chatInputElement: HTMLTextAreaElement | null = null;
 
 	let replyToMessage = null;
 
@@ -62,7 +62,7 @@
 		}
 	};
 
-	const channelEventHandler = async (event) => {
+	const channelEventHandler = async (event: Event) => {
 		console.debug(event);
 		if (event.channel_id === channel.id) {
 			const type = event?.data?.type ?? null;
@@ -136,7 +136,7 @@
 			return;
 		}
 
-		const res = await sendMessage(localStorage.token, channel.id, {
+		const _res = await sendMessage(localStorage.token, channel.id, {
 			parent_id: threadId,
 			reply_to_id: replyToMessage?.id ?? null,
 			content: content,

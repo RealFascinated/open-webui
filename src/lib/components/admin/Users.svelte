@@ -1,16 +1,14 @@
 <script>
-	import { getContext, onMount } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { user } from '$lib/stores';
-	import { page } from '$app/stores';
+	import {onMount} from 'svelte';
+	import {goto} from '$app/navigation';
+	import {user} from '$lib/stores';
+	import {page} from '$app/stores';
 
 	import UserList from './Users/UserList.svelte';
 	import Groups from './Users/Groups.svelte';
 	import AdminSectionNav from './AdminSectionNav.svelte';
 	import AdminPageHeader from './AdminPageHeader.svelte';
 	import AdminTabIcon from './AdminTabIcon.svelte';
-
-	const i18n = getContext('i18n');
 
 	const userTabs = [
 		{

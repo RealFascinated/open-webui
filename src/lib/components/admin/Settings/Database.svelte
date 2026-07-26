@@ -2,13 +2,13 @@
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { downloadDatabase } from '$lib/apis/utils';
-	import { onMount, getContext } from 'svelte';
-	import { config, user } from '$lib/stores';
-	import { toast } from 'svelte-sonner';
-	import { getAllUserChats } from '$lib/apis/chats';
-	import { getAllUsers } from '$lib/apis/users';
-	import { exportConfig, importConfig } from '$lib/apis/configs';
+	import {downloadDatabase} from '$lib/apis/utils';
+	import {onMount, getContext} from 'svelte';
+	import {config} from '$lib/stores';
+	import {toast} from 'svelte-sonner';
+	import {getAllUserChats} from '$lib/apis/chats';
+	import {getAllUsers} from '$lib/apis/users';
+	import {exportConfig, importConfig} from '$lib/apis/configs';
 	import AdminSettingsCard from '../AdminSettingsCard.svelte';
 	import AdminDangerZone from '../AdminDangerZone.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
@@ -57,7 +57,7 @@
 	const importConfigFile = async (file: File) => {
 		const reader = new FileReader();
 
-		reader.onload = async (e) => {
+		reader.onload = async (e: Event) => {
 			const res = await importConfig(localStorage.token, JSON.parse(e.target.result)).catch((error) => {
 				toast.error(`${error}`);
 			});

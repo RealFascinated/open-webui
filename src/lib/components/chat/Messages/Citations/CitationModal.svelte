@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { getContext, onMount, tick } from 'svelte';
+	import {getContext} from 'svelte';
 	import Modal from '$lib/components/common/Modal.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Markdown from '$lib/components/chat/Messages/Markdown.svelte';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
-	import { settings, config } from '$lib/stores';
-	import { injectCsp } from '$lib/utils/csp';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
+	import {settings, config} from '$lib/stores';
+	import {injectCsp} from '$lib/utils/csp';
 
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';

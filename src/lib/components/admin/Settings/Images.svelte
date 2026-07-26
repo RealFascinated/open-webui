@@ -1,18 +1,11 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 
-	import { createEventDispatcher, onMount, getContext } from 'svelte';
-	import { config as backendConfig, user } from '$lib/stores';
+	import {createEventDispatcher, onMount, getContext} from 'svelte';
+	import {config as backendConfig, user} from '$lib/stores';
 
-	import { getBackendConfig } from '$lib/apis';
-	import {
-		getImageGenerationModels,
-		getImageGenerationConfig,
-		updateImageGenerationConfig,
-		getConfig,
-		updateConfig,
-		verifyConfigUrl
-	} from '$lib/apis/images';
+	import {getBackendConfig} from '$lib/apis';
+	import {getImageGenerationModels, getConfig, updateConfig, verifyConfigUrl} from '$lib/apis/images';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -20,11 +13,7 @@
 	import CodeEditorModal from '$lib/components/common/CodeEditorModal.svelte';
 	import AdminSaveBar from '../AdminSaveBar.svelte';
 	import AdminSettingsCard from '../AdminSettingsCard.svelte';
-	import {
-		GEMINI_WEB_IMAGE_MODELS,
-		defaultModelForImageEngine,
-		isOpenAIImageModelId
-	} from '$lib/constants/geminiWebImageModels';
+	import {GEMINI_WEB_IMAGE_MODELS, defaultModelForImageEngine, isOpenAIImageModelId} from '$lib/constants/geminiWebImageModels';
 	const dispatch = createEventDispatcher();
 
 	const i18n = getContext('i18n');
@@ -257,7 +246,7 @@
 					type: node.type,
 					key: node.key,
 					node_ids:
-						node.node_ids.trim() === '' ? [] : node.node_ids.split(',').map((id) => id.trim())
+						node.node_ids.trim() === '' ? [] : node.node_ids.split(',').map((id: string) => id.trim())
 				};
 			});
 		}
@@ -274,7 +263,7 @@
 					type: node.type,
 					key: node.key,
 					node_ids:
-						node.node_ids.trim() === '' ? [] : node.node_ids.split(',').map((id) => id.trim())
+						node.node_ids.trim() === '' ? [] : node.node_ids.split(',').map((id: string) => id.trim())
 				};
 			});
 		}

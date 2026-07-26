@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import dayjs from 'dayjs';
-
-	import { onMount, getContext, createEventDispatcher } from 'svelte';
+	import {toast} from 'svelte-sonner';
+import {getContext, createEventDispatcher} from 'svelte';
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
@@ -85,7 +83,7 @@
 									voiceInput = false;
 								}}
 								onConfirm={(data) => {
-									const { text, filename } = data;
+									const { text, _filename } = data;
 									content = `${content}${text} `;
 
 									voiceInput = false;
@@ -149,7 +147,5 @@
 		-webkit-appearance: none;
 		margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
 	}
-
-
 
 </style>

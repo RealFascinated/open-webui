@@ -1,10 +1,10 @@
 <script lang="ts">
 	import DOMPurify from 'dompurify';
-	import { marked } from 'marked';
+	import {marked} from 'marked';
 
-	import { getAdminDetails, userSignOut } from '$lib/apis/auths';
-	import { onMount, tick, getContext } from 'svelte';
-	import { config } from '$lib/stores';
+	import {getAdminDetails, userSignOut} from '$lib/apis/auths';
+	import {onMount, getContext} from 'svelte';
+	import {config} from '$lib/stores';
 
 	const i18n = getContext('i18n');
 

@@ -77,6 +77,11 @@ def build_task_metadata(task: str, form_data: dict) -> dict:
 
 
 async def run_task_completion(request: Request, payload: dict, user, models):
+    from open_webui.utils.llamacpp_tokens import apply_task_thinking_policy
+
+    metadata = payload.get('metadata')
+    model = models.get(payload.get('model', ''))
+    apply_task_thinking_policy(payload, metadata, model=model)
     payload = await process_pipeline_inlet_filter(request, payload, user, models)
     return await generate_chat_completion(
         request,

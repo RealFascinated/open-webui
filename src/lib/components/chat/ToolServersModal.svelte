@@ -7,7 +7,7 @@
 	import XMark from '$lib/components/icons/XMark.svelte';
 
 	export let show = false;
-	export let selectedToolIds = [];
+	export let selectedToolIds: string[] = [];
 
 	let selectedTools = [];
 

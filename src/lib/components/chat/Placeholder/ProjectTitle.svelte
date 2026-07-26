@@ -1,30 +1,21 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
+	import {getContext} from 'svelte';
 	const i18n = getContext('i18n');
-
-	import DOMPurify from 'dompurify';
-
-	import fileSaver from 'file-saver';
+import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 
-	import { selectedProject } from '$lib/stores';
+	import {selectedProject} from '$lib/stores';
 
-	import {
-		deleteProjectById,
-		getProjectById,
-		updateProjectById,
-		createNewProject
-	} from '$lib/apis/projects';
-	import { getChatsByProjectId } from '$lib/apis/chats';
+	import {deleteProjectById, getProjectById, updateProjectById, createNewProject} from '$lib/apis/projects';
+	import {getChatsByProjectId} from '$lib/apis/chats';
 
 	import ProjectModal from '$lib/components/layout/Sidebar/Projects/ProjectModal.svelte';
 	import ProjectShareModal from '$lib/components/layout/Sidebar/Projects/ProjectShareModal.svelte';
 
 	import Folder from '$lib/components/icons/Folder.svelte';
-	import XMark from '$lib/components/icons/XMark.svelte';
-	import ProjectMenu from '$lib/components/layout/Sidebar/Projects/ProjectMenu.svelte';
+import ProjectMenu from '$lib/components/layout/Sidebar/Projects/ProjectMenu.svelte';
 	import EllipsisHorizontal from '$lib/components/icons/EllipsisHorizontal.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import Emoji from '$lib/components/common/Emoji.svelte';
@@ -33,8 +24,8 @@
 	export let project = null;
 	export let readOnly: boolean = false;
 
-	export let onUpdate: (...args: unknown[]) => unknown = (projectId) => {};
-	export let onDelete: (...args: unknown[]) => unknown = (projectId) => {};
+	export let onUpdate: (...args: unknown[]) => unknown = (_projectId) => {};
+	export let onDelete: (...args: unknown[]) => unknown = (_projectId) => {};
 
 	let showProjectModal = false;
 	let showCreateSubProjectModal = false;
@@ -266,7 +257,7 @@
 					<button
 						class="p-1.5 dark:hover:bg-gray-850 rounded-full touch-auto"
 						aria-label={$i18n.t('Project options')}
-						on:click={(e) => {}}
+						on:click={(_e) => {}}
 					>
 						<EllipsisHorizontal className="size-4" strokeWidth="2.5" />
 					</button>

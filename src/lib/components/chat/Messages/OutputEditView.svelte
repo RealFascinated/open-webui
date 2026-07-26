@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { getContext, onDestroy, tick } from 'svelte';
-	import { slide } from 'svelte/transition';
-	import { quintOut } from 'svelte/easing';
+	import {getContext, onDestroy, tick} from 'svelte';
+	
+	
 
-	import { basicSetup, EditorView } from 'codemirror';
-	import { keymap } from '@codemirror/view';
-	import { Compartment, EditorState } from '@codemirror/state';
-	import { json } from '@codemirror/lang-json';
-	import { indentWithTab } from '@codemirror/commands';
-	import { indentUnit } from '@codemirror/language';
-	import { oneDark } from '@codemirror/theme-one-dark';
+	import {basicSetup, EditorView} from 'codemirror';
+	import {keymap} from '@codemirror/view';
+	import {Compartment, EditorState} from '@codemirror/state';
+	import {json} from '@codemirror/lang-json';
+	import {indentWithTab} from '@codemirror/commands';
+	import {indentUnit} from '@codemirror/language';
+	import {oneDark} from '@codemirror/theme-one-dark';
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 
@@ -44,7 +44,7 @@
 						'.cm-scroller': { maxHeight: '320px', overflow: 'auto' },
 						'&.cm-focused': { outline: 'none' }
 					}),
-					EditorView.updateListener.of((e) => {
+					EditorView.updateListener.of((e: Event) => {
 						if (e.docChanged) {
 							try {
 								const parsed = JSON.parse(e.state.doc.toString());
@@ -253,7 +253,7 @@
 	{:else}
 		<!-- Visual editor: playground-style rows -->
 		<div class="space-y-2 p-2 pt-3">
-			{#each displayItems as di, idx}
+			{#each displayItems as di, _idx}
 				<div class="flex gap-2 group">
 					<!-- Role label -->
 					<div class="flex items-start pt-1.5">

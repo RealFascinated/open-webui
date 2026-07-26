@@ -1,13 +1,13 @@
 <script lang="ts">
 	import dayjs from 'dayjs';
-	import { onMount, tick, getContext } from 'svelte';
-	import { createEventDispatcher } from 'svelte';
+	import {onMount, tick, getContext} from 'svelte';
+	
 
-	import { mobile, models, settings } from '$lib/stores';
+	import {mobile, models, settings} from '$lib/stores';
 
-	import { generateMoACompletion } from '$lib/apis';
-	import { updateChatById } from '$lib/apis/chats';
-	import { createOpenAITextStream } from '$lib/apis/streaming';
+	
+	
+	
 
 	import ResponseMessage from './ResponseMessage.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -17,9 +17,7 @@
 	import Name from './Name.svelte';
 	import Skeleton from './Skeleton.svelte';
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
-	import ProfileImage from './ProfileImage.svelte';
-	import { WEBUI_BASE_URL } from '$lib/constants';
-	import equal from 'fast-deep-equal';
+import equal from 'fast-deep-equal';
 	const i18n = getContext('i18n');
 	dayjs.extend(localizedFormat);
 
@@ -31,6 +29,7 @@
 	export let isLastMessage;
 	export let readOnly = false;
 	export let editCodeBlock = true;
+	export let autoScroll = true;
 
 	export let setInputText: (...args: unknown[]) => unknown = () => {};
 	export let updateChat: (...args: unknown[]) => unknown;
@@ -51,10 +50,6 @@
 	export let triggerScroll: (...args: unknown[]) => unknown;
 
 	export let topPadding = false;
-
-	const dispatch = createEventDispatcher();
-
-	let currentMessageId;
 	let parentMessage;
 	let groupedMessageIds = {};
 	let groupedMessageIdsIdx = {};
@@ -149,7 +144,6 @@
 		console.log('multiresponse:initHandler');
 		await tick();
 
-		currentMessageId = messageId;
 		parentMessage = history.messages[messageId].parentId
 			? history.messages[history.messages[messageId].parentId]
 			: null;
@@ -157,7 +151,7 @@
 		groupedMessageIds = parentMessage?.models.reduce((a, model, modelIdx) => {
 			// Find all messages that are children of the parent message and have the same model
 			let modelMessageIds = parentMessage?.childrenIds
-				.map((id) => history.messages[id])
+				.map((id: string) => history.messages[id])
 				.filter((m) => m?.modelIdx === modelIdx)
 				.map((m) => m.id);
 
@@ -165,7 +159,7 @@
 			// Find all messages that are children of the parent message and have the same model
 			if (modelMessageIds.length === 0) {
 				let modelMessages = parentMessage?.childrenIds
-					.map((id) => history.messages[id])
+					.map((id: string) => history.messages[id])
 					.filter((m) => m?.model === model);
 
 				modelMessages.forEach((m) => {
@@ -182,7 +176,7 @@
 		}, {});
 
 		groupedMessageIdsIdx = parentMessage?.models.reduce((a, model, modelIdx) => {
-			const idx = groupedMessageIds[modelIdx].messageIds.findIndex((id) => id === messageId);
+			const idx = groupedMessageIds[modelIdx].messageIds.findIndex((id: string) => id === messageId);
 			if (idx !== -1) {
 				return {
 					...a,
@@ -320,6 +314,7 @@
 									{addMessages}
 									{readOnly}
 									{topPadding}
+									{autoScroll}
 								/>
 							{/if}
 						{/key}
@@ -383,6 +378,7 @@
 										{readOnly}
 										{editCodeBlock}
 										{topPadding}
+										{autoScroll}
 									/>
 								{/if}
 							{/key}

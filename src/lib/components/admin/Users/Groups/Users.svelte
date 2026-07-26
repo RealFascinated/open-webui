@@ -27,7 +27,7 @@
 	export const userCount = 0;
 
 	let users = null;
-	let total = null;
+	let total: number | null = null;
 
 	let query = '';
 	let searchDebounceTimer: ReturnType<typeof setTimeout>;

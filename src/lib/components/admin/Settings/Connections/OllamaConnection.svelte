@@ -1,15 +1,13 @@
 <script lang="ts">
-	import { getContext, tick } from 'svelte';
+	import {getContext} from 'svelte';
 	const i18n = getContext('i18n');
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
-	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
-	import AddConnectionModal from '$lib/components/AddConnectionModal.svelte';
+import AddConnectionModal from '$lib/components/AddConnectionModal.svelte';
 
 	import Cog6 from '$lib/components/icons/Cog6.svelte';
-	import Wrench from '$lib/components/icons/Wrench.svelte';
-	import ManageOllamaModal from './ManageOllamaModal.svelte';
+import ManageOllamaModal from './ManageOllamaModal.svelte';
 	import Download from '$lib/components/icons/Download.svelte';
 
 	export let onDelete = () => {};

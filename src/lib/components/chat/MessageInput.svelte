@@ -1,9 +1,9 @@
 <script lang="ts">
 	import DOMPurify from 'dompurify';
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 
-	import { marked } from 'marked';
-	import { v4 as uuidv4 } from 'uuid';
+	import {marked} from 'marked';
+	import {v4 as uuidv4} from 'uuid';
 	import dayjs from '$lib/dayjs';
 	import duration from 'dayjs/plugin/duration';
 	import relativeTime from 'dayjs/plugin/relativeTime';
@@ -11,16 +11,19 @@
 	dayjs.extend(duration);
 	dayjs.extend(relativeTime);
 
-	import { onMount, tick, getContext, createEventDispatcher } from 'svelte';
+	import {onMount, tick, getContext, createEventDispatcher} from 'svelte';
+	import type {Component} from 'svelte';
+	import {get, type Writable} from 'svelte/store';
 
-	import { createPicker, getAuthToken } from '$lib/utils/google-drive-picker';
-	import { pickAndDownloadFile } from '$lib/utils/onedrive-file-picker';
-	import { KokoroWorker } from '$lib/workers/KokoroWorker';
+	import {createPicker} from '$lib/utils/google-drive-picker';
+	import {pickAndDownloadFile} from '$lib/utils/onedrive-file-picker';
+	import {KokoroWorker} from '$lib/workers/KokoroWorker';
 
 	const dispatch = createEventDispatcher();
 
 	import {
 		type Model,
+		type Settings,
 		mobile,
 		settings,
 		models,
@@ -32,39 +35,27 @@
 		terminalServers,
 		user as _user,
 		showControls,
-		showSettings,
 		selectedTerminalId,
 		TTSWorker,
 		temporaryChatEnabled
 	} from '$lib/stores';
+	import type {ChatFile, ChatHistory, ChatMessage, Handler} from '$lib/types';
+	import type {AppConfig} from '$lib/types/config';
+	import type {UsageModel} from '$lib/utils/usage';
 
-	import {
-		convertHeicToJpeg,
-		compressImage,
-		createMessagesList,
-		extractContentFromFile,
-		extractCurlyBraceWords,
-		extractInputVariables,
-		getAge,
-		getCurrentDateTime,
-		getFormattedDate,
-		getFormattedTime,
-		getUserPosition,
-		getUserTimezone,
-		getWeekday
-	} from '$lib/utils';
-	import { uploadFile } from '$lib/apis/files';
-	import { generateAutoCompletion } from '$lib/apis';
-	import { deleteFileById } from '$lib/apis/files';
-	import { getChatById } from '$lib/apis/chats';
-	import { getProjectById } from '$lib/apis/projects';
-	import { getNoteById } from '$lib/apis/notes';
-	import { getSessionUser } from '$lib/apis/auths';
+	import {convertHeicToJpeg, compressImage, createMessagesList, extractContentFromFile, extractCurlyBraceWords, extractInputVariables, getAge, getCurrentDateTime, getFormattedDate, getFormattedTime, getUserPosition, getUserTimezone, getWeekday} from '$lib/utils';
+	import {uploadFile} from '$lib/apis/files';
+	import {generateAutoCompletion} from '$lib/apis';
+	
+	import {getChatById} from '$lib/apis/chats';
+	import {getProjectById} from '$lib/apis/projects';
+	import {getNoteById} from '$lib/apis/notes';
+	import {getSessionUser} from '$lib/apis/auths';
 
-	import { WEBUI_BASE_URL, WEBUI_API_BASE_URL, PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
+	import {WEBUI_API_BASE_URL, PASTED_TEXT_CHARACTER_LIMIT} from '$lib/constants';
 
-	import { createNoteHandler } from '../notes/utils';
-	import { getSuggestionRenderer } from '../common/RichTextInput/suggestions';
+	import {createNoteHandler} from '../notes/utils';
+	import {getSuggestionRenderer} from '../common/RichTextInput/suggestions';
 
 	import InputMenu from './MessageInput/InputMenu.svelte';
 	import VoiceRecording from './MessageInput/VoiceRecording.svelte';
@@ -80,90 +71,174 @@
 	import InputVariablesModal from './MessageInput/InputVariablesModal.svelte';
 	import Voice from '../icons/Voice.svelte';
 	import PlusAlt from '../icons/PlusAlt.svelte';
-	import Dropdown from '../common/Dropdown.svelte';
-
-	import CommandSuggestionList from './MessageInput/CommandSuggestionList.svelte';
+import CommandSuggestionList from './MessageInput/CommandSuggestionList.svelte';
 	import ValvesModal from '../workspace/common/ValvesModal.svelte';
 	import Note from '../icons/Note.svelte';
-	import { goto } from '$app/navigation';
+	import {goto} from '$app/navigation';
 	import InputModal from '../common/InputModal.svelte';
 	import Expand from '../icons/Expand.svelte';
 	import QueuedMessageItem from './MessageInput/QueuedMessageItem.svelte';
 	import TaskList from './Messages/ResponseMessage/TaskList.svelte';
 	import UsageMenu from './MessageInput/UsageMenu.svelte';
 	import ModelThinkingMenu from './MessageInput/ModelThinkingMenu.svelte';
-	import { getLatestConversationUsage, resolveUsageModel } from '$lib/utils/usage';
+	import {getLatestConversationUsage, resolveUsageModel} from '$lib/utils/usage';
 
 	const i18n = getContext('i18n');
 
-	export let onUpload: (...args: unknown[]) => unknown = (e) => {};
-	export let onChange: (...args: unknown[]) => unknown = () => {};
-	export let onWebSearchToggle: (...args: unknown[]) => unknown = () => {};
+	type RichTextInputContent = {
+		md: string;
+		html: string;
+		json?: unknown;
+	};
 
-	export let createMessagePair: (...args: unknown[]) => unknown;
-	export let stopResponse: (...args: unknown[]) => unknown;
+	type RichTextInputHandle = {
+		setText: (text?: string, options?: { focus?: boolean }) => void | Promise<void>;
+		setContent: (content: unknown) => void;
+		replaceVariables: (variables: Record<string, unknown>) => void;
+		replaceCommandWithText: (text: string) => void | Promise<void>;
+		insertContent: (content: string, options?: { focus?: boolean }) => void | Promise<void>;
+		getWordAtDocPos: () => string;
+		focus: () => void;
+		blur: () => void;
+	};
+
+	type InputFileItem = Omit<ChatFile, 'id' | 'type' | 'content_type'> & {
+		type?: string;
+		content_type?: string;
+		file?: unknown;
+		id?: string | null;
+		url?: string;
+		name?: string;
+		collection_name?: string;
+		status?: string;
+		size?: number;
+		error?: string;
+		itemId?: string;
+		content?: string;
+	};
+
+	type ModelFilter = { id: string; [key: string]: unknown };
+
+	type ModelWithFilters = Model & { filters?: ModelFilter[] };
+
+	type SuggestionCommandEvent = {
+		type: string;
+		data: unknown;
+	};
+
+	type ChatTask = {
+		id: string;
+		content: string;
+		status: string;
+	};
+
+	type MessageInputSettings = Settings & {
+		showFormattingToolbar?: boolean;
+		insertPromptAsRichText?: boolean;
+		imageCompressionSize?: { width?: string | number | null; height?: string | number | null };
+	};
+
+	type PickerFileData = {
+		blob: Blob;
+		name: string;
+	};
+
+	type ClipboardCapableWindow = Window & {
+		clipboardData?: DataTransfer | null;
+	};
+
+	type LegacyNavigator = Navigator & {
+		msMaxTouchPoints?: number;
+	};
+
+	type RichTextDetailEvent<T extends Event = Event> = CustomEvent<{ event: T }>;
+
+	const toDimensionNumber = (
+		value: string | number | null | undefined
+	): number | undefined => {
+		if (value === null || value === undefined || value === '') return undefined;
+		const num = typeof value === 'number' ? value : Number(value);
+		return Number.isFinite(num) ? num : undefined;
+	};
+
+	const toFileBlob = (value: Blob | Blob[] | File): Blob =>
+		Array.isArray(value) ? value[0] : value;
+
+	const suggestionComponent = CommandSuggestionList as unknown as Component;
+
+	const toChatDirection = (
+		direction: string | undefined
+	): 'ltr' | 'rtl' | 'auto' | null | undefined => {
+		if (direction === 'LTR') return 'ltr';
+		if (direction === 'RTL') return 'rtl';
+		if (direction === 'auto') return 'auto';
+		return direction?.toLowerCase() as 'ltr' | 'rtl' | 'auto' | undefined;
+	};
+
+	const getMessageInputSettings = (): MessageInputSettings => $settings as MessageInputSettings;
+
+	export let onUpload: Handler = () => {};
+	export let onChange: Handler = () => {};
+	export let onWebSearchToggle: Handler = () => {};
+
+	export let createMessagePair: Handler;
+	export let stopResponse: Handler;
 
 	export let autoScroll = false;
 	export let generating = false;
 	export let uploadPending = false;
 
 	export let atSelectedModel: Model | undefined = undefined;
-	export let selectedModels: [''];
+	export let selectedModels: string[] = [''];
 
-	let selectedModelIds = [];
+	let selectedModelIds: string[] = [];
 	$: selectedModelIds = atSelectedModel !== undefined ? [atSelectedModel.id] : selectedModels;
 
 	$: currentModel = atSelectedModel ?? $models.find((model) => model.id === selectedModelIds[0]);
 	$: latestUsageInfo = getLatestConversationUsage(history?.messages);
 	$: conversationUsage = latestUsageInfo?.usage ?? null;
 	$: usageModel = resolveUsageModel(
-		(latestUsageInfo?.modelId
+		((latestUsageInfo?.modelId
 			? $models.find((model) => model.id === latestUsageInfo.modelId)
-			: null) ?? currentModel,
-		$models
+			: null) ?? currentModel) as UsageModel,
+		$models as UsageModel[]
 	);
 
-	export let history;
-	export const taskIds = null;
+	export let history: ChatHistory;
+	export let chatId: string | null = null;
+	export let onContextCompacted: Handler = () => {};
 
 	$: responseInProgress = Object.values(history?.messages ?? {}).some(
-		(message) => message?.role === 'assistant' && message?.done != true
+		(message: ChatMessage) => message?.role === 'assistant' && message?.done != true
 	);
 	$: isActive = generating || responseInProgress;
 
 	export let prompt = '';
-	export let files = [];
+	export let files: InputFileItem[] = [];
 
-	export let selectedToolIds = [];
-	export let selectedSkillIds = [];
-	export let selectedFilterIds = [];
+	export let selectedToolIds: string[] = [];
+	export let selectedSkillIds: string[] = [];
+	export let selectedFilterIds: string[] = [];
 
 	export let webSearchEnabled = false;
 
-	export const pendingOAuthTools = [];
-
-	export let messageQueue: { id: string; prompt: string; files: unknown[] }[] = [];
+	export let messageQueue: { id: string; prompt: string; files: ChatFile[] }[] = [];
 	export let onQueueSendNow: (id: string) => void = () => {};
 	export let onQueueEdit: (id: string) => void = () => {};
 	export let onQueueDelete: (id: string) => void = () => {};
 
-	export let chatTasks = [];
+	export let chatTasks: ChatTask[] = [];
 
-	let inputContent = null;
+	let inputContent: RichTextInputContent | null = null;
 
 	let showInputVariablesModal = false;
-	let inputVariablesModalCallback = (variableValues) => {};
-	let inputVariables = {};
-	let inputVariableValues = {};
+	let inputVariablesModalCallback = (_variableValues: Record<string, unknown>) => {};
+	let inputVariables: Record<string, unknown> = {};
+	let inputVariableValues: Record<string, unknown> = {};
 
 	let showValvesModal = false;
 	let selectedValvesType = 'tool'; // 'tool' or 'function'
-	let selectedValvesItemId = null;
-	let integrationsMenuCloseOnOutsideClick = true;
-
-	$: if (!showValvesModal) {
-		integrationsMenuCloseOnOutsideClick = true;
-	}
+	let selectedValvesItemId: string | null = null;
 
 	$: onChange({
 		prompt,
@@ -204,7 +279,7 @@
 
 	const textVariableHandler = async (text: string) => {
 		if (text.includes('{{CLIPBOARD}}')) {
-			const clipboardText = await navigator.clipboard.readText().catch((err) => {
+			const clipboardText = await navigator.clipboard.readText().catch((_err) => {
 				toast.error($i18n.t('Failed to read clipboard contents'));
 				return '{{CLIPBOARD}}';
 			});
@@ -234,7 +309,7 @@
 			let location;
 			try {
 				location = await getUserPosition();
-			} catch (error) {
+			} catch (_error) {
 				toast.error($i18n.t('Location access not allowed'));
 				location = 'LOCATION_UNKNOWN';
 			}
@@ -329,8 +404,8 @@
 		const chatInput = document.getElementById('chat-input');
 
 		if (chatInput) {
-			chatInputElement.replaceVariables(variables);
-			chatInputElement.focus();
+			getChatInputHandle()?.replaceVariables(variables);
+			if (shouldFocusChatInput()) getChatInputHandle()?.focus();
 		}
 	};
 
@@ -342,10 +417,7 @@
 				text = await textVariableHandler(text || '');
 			}
 
-			chatInputElement?.setText(text);
-			if (!$showCallOverlay) {
-				chatInputElement?.focus();
-			}
+			getChatInputHandle()?.setText(text ?? '', { focus: shouldFocusChatInput() });
 
 			if (text !== '') {
 				text = await inputVariableHandler(text);
@@ -361,17 +433,17 @@
 		let word = '';
 
 		if (chatInput) {
-			word = chatInputElement?.getWordAtDocPos();
+			word = getChatInputHandle()?.getWordAtDocPos() ?? '';
 		}
 
 		return word;
 	};
 
-	const replaceCommandWithText = (text) => {
+	const replaceCommandWithText = (text: string) => {
 		const chatInput = document.getElementById('chat-input');
 		if (!chatInput) return;
 
-		chatInputElement?.replaceCommandWithText(text);
+		getChatInputHandle()?.replaceCommandWithText(text);
 	};
 
 	const insertTextAtCursor = async (text: string) => {
@@ -383,7 +455,7 @@
 		if (command) {
 			replaceCommandWithText(text);
 		} else {
-			chatInputElement?.insertContent(text);
+			getChatInputHandle()?.insertContent(text, { focus: shouldFocusChatInput() });
 		}
 
 		await tick();
@@ -396,14 +468,14 @@
 		}
 
 		await tick();
-		if (chatInput) {
+		if (chatInput && shouldFocusChatInput()) {
 			chatInput.focus();
 			chatInput.dispatchEvent(new Event('input'));
 
 			const words = extractCurlyBraceWords(prompt);
 
 			if (words.length > 0) {
-				const word = words.at(0);
+				const _word = words.at(0);
 				await tick();
 			} else {
 				chatInput.scrollTop = chatInput.scrollHeight;
@@ -415,7 +487,7 @@
 	export let showCommands = false;
 	$: showCommands =
 		['/', '#', '@', '$', ':'].includes(command?.charAt(0)) || '\\#' === command?.slice(0, 2);
-	let suggestions = null;
+	let suggestions: Record<string, unknown>[] | null = null;
 
 	let loaded = false;
 	let recording = false;
@@ -446,20 +518,30 @@
 		return false;
 	}
 
-	let chatInputContainerElement;
-	let chatInputElement;
+	let chatInputElement: unknown = null;
 
-	let filesInputElement;
-	let commandsElement;
+	const getChatInputHandle = () => chatInputElement as RichTextInputHandle | null;
 
-	let inputFiles;
+	const shouldFocusChatInput = () => !$showCallOverlay;
+
+	const blurChatInput = () => {
+		getChatInputHandle()?.blur?.();
+		(document.activeElement as HTMLElement | null)?.blur?.();
+	};
+
+	$: if ($showCallOverlay) {
+		blurChatInput();
+	}
+
+	let filesInputElement: HTMLInputElement | null = null;
+
+	let inputFiles: FileList | null = null;
 
 	let showInputModal = false;
 
 	export let dragged = false;
 	let shiftKey = false;
 
-	let user = null;
 	export let placeholder = '';
 
 	type ModelCapability = 'vision' | 'file_upload' | 'web_search' | 'terminal';
@@ -474,7 +556,7 @@
 		modelIds: string[],
 		capability: ModelCapability,
 		capabilitiesById: ModelCapabilitiesById
-	) => modelIds.filter((id) => capabilitiesById[id]?.[capability] ?? true);
+	) => modelIds.filter((id: string) => capabilitiesById[id]?.[capability] ?? true);
 
 	let visionCapableModels = [];
 	$: visionCapableModels = getCapableModelIds(selectedModelIds, 'vision', modelCapabilitiesById);
@@ -509,24 +591,37 @@
 				(($terminalServers ?? []).some((t) => !t.id) ||
 					($settings?.terminalServers ?? []).some((s) => s.url))));
 
-	let toggleFilters = [];
+	let toggleFilters: ModelFilter[] = [];
 	$: toggleFilters = (atSelectedModel?.id ? [atSelectedModel.id] : selectedModels)
-		.map((id) => ($models.find((model) => model.id === id) || {})?.filters ?? [])
-		.reduce((acc, filters) => acc.filter((f1) => filters.some((f2) => f2.id === f1.id)));
+		.map(
+			(id: string) =>
+				(($models.find((model) => model.id === id) ?? {}) as ModelWithFilters).filters ?? []
+		)
+		.reduce(
+			(acc: ModelFilter[], filters: ModelFilter[]) =>
+				acc.filter((f1) => filters.some((f2) => f2.id === f1.id)),
+			[] as ModelFilter[]
+		);
 
 	let showToolsButton = false;
 	$: showToolsButton = ($tools ?? []).length > 0 || ($toolServers ?? []).length > 0;
 
 	let showSkillsButton = false;
-	$: showSkillsButton = ($skills ?? []).some((skill) => skill.is_active);
+	$: showSkillsButton = Boolean(($skills ?? []).some((skill) => skill.is_active));
 
 	let showWebSearchButton = false;
-	$: showWebSearchButton =
+	$: showWebSearchButton = Boolean(
 		selectedModelIds.length === webSearchCapableModels.length &&
-		$config?.features?.enable_web_search &&
-		($_user.role === 'admin' || $_user?.permissions?.features?.web_search);
+			$config?.features?.enable_web_search &&
+			($_user?.role === 'admin' || $_user?.permissions?.features?.web_search)
+	);
 
-	let showIntegrationsButton = false;
+	$: inputMenuToggleFilters = toggleFilters as {
+		id: string;
+		name: string;
+		description?: string;
+		icon?: string;
+	}[];
 	$: showIntegrationsButton =
 		showToolsButton ||
 		showSkillsButton ||
@@ -539,7 +634,7 @@
 
 	const scrollToBottom = () => {
 		const element = document.getElementById('messages-container');
-		element.scrollTo({
+		element?.scrollTo({
 			top: element.scrollHeight,
 			behavior: 'smooth'
 		});
@@ -549,7 +644,7 @@
 		try {
 			// Request screen media
 			const mediaStream = await navigator.mediaDevices.getDisplayMedia({
-				video: { cursor: 'never' },
+				video: true,
 				audio: false
 			});
 			// Once the user selects a screen, temporarily create a video element
@@ -563,6 +658,7 @@
 			canvas.height = video.videoHeight;
 			// Grab a single frame from the video stream using the canvas
 			const context = canvas.getContext('2d');
+			if (!context) return;
 			context.drawImage(video, 0, 0, canvas.width, canvas.height);
 			// Stop all video tracks (stop screen sharing) after capturing the image
 			mediaStream.getTracks().forEach((track) => track.stop());
@@ -583,7 +679,11 @@
 		}
 	};
 
-	const uploadFileHandler = async (file, process = true, itemData = {}) => {
+	const uploadFileHandler = async (
+		file: File,
+		process = true,
+		itemData: Partial<InputFileItem> = {}
+	) => {
 		if ($_user?.role !== 'admin' && !($_user?.permissions?.chat?.file_upload ?? true)) {
 			toast.error($i18n.t('You do not have permission to upload files.'));
 			return null;
@@ -595,7 +695,7 @@
 		}
 
 		const tempItemId = uuidv4();
-		const fileItem = {
+		const fileItem: InputFileItem = {
 			type: 'file',
 			file: '',
 			id: null,
@@ -646,7 +746,7 @@
 
 					fileItem.status = 'uploaded';
 					fileItem.file = uploadedFile;
-					fileItem.id = uploadedFile.id;
+					fileItem.id = uploadedFile.id != null ? String(uploadedFile.id) : undefined;
 					fileItem.collection_name =
 						uploadedFile?.meta?.collection_name || uploadedFile?.collection_name;
 					fileItem.content_type = uploadedFile.meta?.content_type || uploadedFile.content_type;
@@ -683,7 +783,7 @@
 
 				fileItem.status = 'uploaded';
 				fileItem.type = 'text';
-				fileItem.content = content;
+				fileItem.content = typeof content === 'string' ? content : String(content);
 				fileItem.id = uuidv4(); // Temporary ID for the file
 
 				files = files;
@@ -691,22 +791,20 @@
 		}
 	};
 
-	const inputFilesHandler = async (inputFiles) => {
+	const inputFilesHandler = async (inputFiles: File[]) => {
 		console.log('Input files handler called with:', inputFiles);
 
-		if (
-			($config?.file?.max_count ?? null) !== null &&
-			files.length + inputFiles.length > $config?.file?.max_count
-		) {
+		const maxCount = $config?.file?.max_count;
+		if (maxCount != null && files.length + inputFiles.length > maxCount) {
 			toast.error(
 				$i18n.t(`You can only chat with a maximum of {{maxCount}} file(s) at a time.`, {
-					maxCount: $config?.file?.max_count
+					maxCount
 				})
 			);
 			return;
 		}
 
-		inputFiles.forEach(async (file) => {
+		inputFiles.forEach(async (file: File) => {
 			console.log('Processing file:', {
 				name: file.name,
 				type: file.type,
@@ -730,17 +828,21 @@
 				return;
 			}
 
-			if (file['type'].startsWith('image/')) {
+			if (file.type.startsWith('image/')) {
 				if (visionCapableModels.length === 0) {
 					toast.error($i18n.t('Selected model(s) do not support image inputs'));
 					return;
 				}
 
-				const compressImageHandler = async (imageUrl, settings = {}, config = {}) => {
+				const compressImageHandler = async (
+					imageUrl: string,
+					inputSettings: MessageInputSettings = getMessageInputSettings(),
+					inputConfig: AppConfig | undefined = $config
+				) => {
 					// Quick shortcut so we don’t do unnecessary work.
-					const settingsCompression = settings?.imageCompression ?? false;
-					const configWidth = config?.file?.image_compression?.width ?? null;
-					const configHeight = config?.file?.image_compression?.height ?? null;
+					const settingsCompression = inputSettings?.imageCompression ?? false;
+					const configWidth = inputConfig?.file?.image_compression?.width ?? null;
+					const configHeight = inputConfig?.file?.image_compression?.height ?? null;
 
 					// If neither settings nor config wants compression, return original URL.
 					if (!settingsCompression && !configWidth && !configHeight) {
@@ -748,20 +850,20 @@
 					}
 
 					// Default to null (no compression unless set)
-					let width = null;
-					let height = null;
+					let width: number | undefined;
+					let height: number | undefined;
 
 					// If user/settings want compression, pick their preferred size.
 					if (settingsCompression) {
-						width = settings?.imageCompressionSize?.width ?? null;
-						height = settings?.imageCompressionSize?.height ?? null;
+						width = toDimensionNumber(inputSettings?.imageCompressionSize?.width);
+						height = toDimensionNumber(inputSettings?.imageCompressionSize?.height);
 					}
 
 					// Apply config limits as an upper bound if any
-					if (configWidth && (width === null || width > configWidth)) {
+					if (configWidth != null && (width == null || width > configWidth)) {
 						width = configWidth;
 					}
-					if (configHeight && (height === null || height > configHeight)) {
+					if (configHeight != null && (height == null || height > configHeight)) {
 						height = configHeight;
 					}
 
@@ -774,11 +876,14 @@
 
 				let reader = new FileReader();
 
-				reader.onload = async (event) => {
-					let imageUrl = event.target.result;
+				reader.onload = async (event: ProgressEvent<FileReader>) => {
+					const result = event.target?.result;
+					if (typeof result !== 'string') return;
+
+					let imageUrl: string = result;
 
 					// Compress the image if settings or config require it
-					imageUrl = await compressImageHandler(imageUrl, $settings, $config);
+					imageUrl = await compressImageHandler(imageUrl, getMessageInputSettings(), $config);
 
 					if ($temporaryChatEnabled) {
 						files = [
@@ -796,7 +901,11 @@
 					}
 				};
 
-				reader.readAsDataURL(file['type'] === 'image/heic' ? await convertHeicToJpeg(file) : file);
+				reader.readAsDataURL(
+					file.type === 'image/heic'
+						? toFileBlob(await convertHeicToJpeg(file))
+						: file
+				);
 			} else {
 				uploadFileHandler(file);
 			}
@@ -811,8 +920,8 @@
 
 		const res = await createNoteHandler(
 			dayjs().format('YYYY-MM-DD'),
-			inputContent?.md,
-			inputContent?.html
+			inputContent?.md ?? '',
+			inputContent?.html ?? ''
 		);
 
 		if (res) {
@@ -968,130 +1077,98 @@
 		shiftKey = false;
 	};
 
+	const handleSuggestionSelect = (e: SuggestionCommandEvent) => {
+		const { type, data } = e;
+
+		if (type === 'model') {
+			atSelectedModel = data as Model;
+		}
+
+		if (shouldFocusChatInput()) document.getElementById('chat-input')?.focus();
+	};
+
+	const handleSuggestionUpload = (e: SuggestionCommandEvent) => {
+		const { type, data } = e;
+
+		if (type === 'file') {
+			const fileData = data as InputFileItem;
+			if (files.find((f) => f.id === fileData.id)) {
+				return;
+			}
+			files = [
+				...files,
+				{
+					...fileData,
+					status: 'processed'
+				}
+			];
+		} else {
+			if (files.find((f) => f.url === data || f.name === data)) {
+				return;
+			}
+			onUpload(e);
+		}
+	};
+
+	const handleInputModalChange = (content: RichTextInputContent) => {
+		console.log(content);
+		getChatInputHandle()?.setContent(content?.json ?? null);
+	};
+
+	const uploadOneDriveHandler: Handler = async (authorityType) => {
+		try {
+			const fileData = (await pickAndDownloadFile(
+				authorityType as 'personal' | 'organizations' | undefined
+			)) as PickerFileData | null;
+			if (fileData) {
+				const file = new File([fileData.blob], fileData.name, {
+					type: fileData.blob.type || 'application/octet-stream'
+				});
+				await uploadFileHandler(file);
+			} else {
+				console.log('No file was selected from OneDrive');
+			}
+		} catch (error: unknown) {
+			console.error('OneDrive Error:', error);
+		}
+	};
+
 	onMount(() => {
 		suggestions = [
 			{
 				char: '@',
-				render: getSuggestionRenderer(CommandSuggestionList, {
+				render: getSuggestionRenderer(suggestionComponent, {
 					i18n,
-					onSelect: (e) => {
-						const { type, data } = e;
-
-						if (type === 'model') {
-							atSelectedModel = data;
-						}
-
-						document.getElementById('chat-input')?.focus();
-					},
-
+					onSelect: handleSuggestionSelect,
 					insertTextHandler: insertTextAtCursor,
-					onUpload: (e) => {
-						const { type, data } = e;
-
-						if (type === 'file') {
-							if (files.find((f) => f.id === data.id)) {
-								return;
-							}
-							files = [
-								...files,
-								{
-									...data,
-									status: 'processed'
-								}
-							];
-						} else {
-							if (files.find((f) => f.url === data || f.name === data)) {
-								return;
-							}
-							onUpload(e);
-						}
-					}
+					onUpload: handleSuggestionUpload
 				})
 			},
 			{
 				char: '/',
-				render: getSuggestionRenderer(CommandSuggestionList, {
+				render: getSuggestionRenderer(suggestionComponent, {
 					i18n,
-					onSelect: (e) => {
-						const { type, data } = e;
-
-						if (type === 'model') {
-							atSelectedModel = data;
-						}
-
-						document.getElementById('chat-input')?.focus();
-					},
-
+					onSelect: handleSuggestionSelect,
 					insertTextHandler: insertTextAtCursor,
-					onUpload: (e) => {
-						const { type, data } = e;
-
-						if (type === 'file') {
-							if (files.find((f) => f.id === data.id)) {
-								return;
-							}
-							files = [
-								...files,
-								{
-									...data,
-									status: 'processed'
-								}
-							];
-						} else {
-							if (files.find((f) => f.url === data || f.name === data)) {
-								return;
-							}
-							onUpload(e);
-						}
-					}
+					onUpload: handleSuggestionUpload
 				})
 			},
 			{
 				char: '#',
-				render: getSuggestionRenderer(CommandSuggestionList, {
+				render: getSuggestionRenderer(suggestionComponent, {
 					i18n,
-					onSelect: (e) => {
-						const { type, data } = e;
-
-						if (type === 'model') {
-							atSelectedModel = data;
-						}
-
-						document.getElementById('chat-input')?.focus();
-					},
-
+					onSelect: handleSuggestionSelect,
 					insertTextHandler: insertTextAtCursor,
-					onUpload: (e) => {
-						const { type, data } = e;
-
-						if (type === 'file') {
-							if (files.find((f) => f.id === data.id)) {
-								return;
-							}
-							files = [
-								...files,
-								{
-									...data,
-									status: 'processed'
-								}
-							];
-						} else {
-							if (files.find((f) => f.url === data || f.name === data)) {
-								return;
-							}
-							onUpload(e);
-						}
-					}
+					onUpload: handleSuggestionUpload
 				})
 			},
 			{
 				char: '$',
-				render: getSuggestionRenderer(CommandSuggestionList, {
+				render: getSuggestionRenderer(suggestionComponent, {
 					i18n,
-					onSelect: (e) => {
-						document.getElementById('chat-input')?.focus();
+					onSelect: (_e: SuggestionCommandEvent) => {
+						if (shouldFocusChatInput()) document.getElementById('chat-input')?.focus();
 					},
-
 					insertTextHandler: insertTextAtCursor,
 					onUpload: () => {}
 				})
@@ -1099,18 +1176,33 @@
 			{
 				char: ':',
 				allowSpaces: false,
-				command: ({ editor, range, props }) => {
+				command: ({
+					editor,
+					range,
+					props
+				}: {
+					editor: {
+						chain: () => {
+							focus: () => {
+								deleteRange: (range: unknown) => {
+									insertContent: (emoji: string) => { run: () => void };
+								};
+							};
+						};
+					};
+					range: unknown;
+					props: { id: string };
+				}) => {
 					// Convert the Unicode hex codepoint (e.g. "1F44B") to the actual emoji character (👋)
 					const codepoint = props.id;
 					const emoji = String.fromCodePoint(parseInt(codepoint, 16));
 					editor.chain().focus().deleteRange(range).insertContent(emoji).run();
 				},
-				render: getSuggestionRenderer(CommandSuggestionList, {
+				render: getSuggestionRenderer(suggestionComponent, {
 					i18n,
-					onSelect: (e) => {
-						document.getElementById('chat-input')?.focus();
+					onSelect: (_e: SuggestionCommandEvent) => {
+						if (shouldFocusChatInput()) document.getElementById('chat-input')?.focus();
 					},
-
 					insertTextHandler: insertTextAtCursor,
 					onUpload: () => {}
 				})
@@ -1119,8 +1211,9 @@
 		loaded = true;
 
 		window.setTimeout(() => {
-			const chatInput = document.getElementById('chat-input');
-			chatInput?.focus();
+			if (shouldFocusChatInput()) {
+				document.getElementById('chat-input')?.focus();
+			}
 		}, 0);
 
 		window.addEventListener('keydown', onKeyDown);
@@ -1165,33 +1258,27 @@
 <InputVariablesModal
 	bind:show={showInputVariablesModal}
 	variables={inputVariables}
-	onSave={inputVariablesModalCallback}
+	onSave={inputVariablesModalCallback as unknown as (_e: Event) => void}
 />
 
 <ValvesModal
 	bind:show={showValvesModal}
 	userValves={true}
 	type={selectedValvesType}
-	id={selectedValvesItemId ?? null}
+	id={selectedValvesItemId as never}
 	on:save={async () => {
 		await tick();
-	}}
-	on:close={() => {
-		integrationsMenuCloseOnOutsideClick = true;
 	}}
 />
 
 <InputModal
 	bind:show={showInputModal}
-	bind:value={prompt}
-	bind:inputContent
-	onChange={(content) => {
-		console.log(content);
-		chatInputElement?.setContent(content?.json ?? null);
-	}}
+	value={prompt as never}
+	inputContent={inputContent as never}
+	onChange={handleInputModalChange as () => void}
 	onClose={async () => {
 		await tick();
-		chatInputElement?.focus();
+		if (shouldFocusChatInput()) getChatInputHandle()?.focus();
 	}}
 />
 
@@ -1255,7 +1342,9 @@
 								toast.error($i18n.t(`File not found.`));
 							}
 
-							filesInputElement.value = '';
+							if (filesInputElement) {
+								filesInputElement.value = '';
+							}
 						}}
 					/>
 
@@ -1266,17 +1355,17 @@
 								recording = false;
 
 								await tick();
-								document.getElementById('chat-input')?.focus();
+								if (shouldFocusChatInput()) document.getElementById('chat-input')?.focus();
 							}}
 							onConfirm={async (data) => {
-								const { text, filename } = data;
+								const { text, _filename } = data;
 
 								recording = false;
 
 								await tick();
 								await insertTextAtCursor(`${text}`);
 								await tick();
-								document.getElementById('chat-input')?.focus();
+								if (shouldFocusChatInput()) document.getElementById('chat-input')?.focus();
 
 								if ($settings?.speechAutoSend ?? false) {
 									dispatch('submit', prompt);
@@ -1328,7 +1417,7 @@
 							class="flex-1 flex flex-col relative w-full shadow-lg rounded-3xl border {$temporaryChatEnabled
 								? 'border-dashed border-gray-100 dark:border-gray-800 hover:border-gray-200 focus-within:border-gray-200 hover:dark:border-gray-700 focus-within:dark:border-gray-700'
 								: ' border-gray-100/30 dark:border-gray-850/30 hover:border-gray-200 focus-within:border-gray-100 hover:dark:border-gray-800 focus-within:dark:border-gray-800'}  transition px-1 bg-white/5 dark:bg-gray-500/5 backdrop-blur-sm dark:text-gray-100"
-							dir={$settings?.chatDirection ?? 'auto'}
+							dir={toChatDirection($settings?.chatDirection)}
 						>
 							{#if atSelectedModel !== undefined}
 								<div class="px-3 pt-3 text-left w-full flex flex-col z-10">
@@ -1337,7 +1426,7 @@
 											<img
 												alt="model profile"
 												class="size-3.5 max-w-[28px] object-cover rounded-full"
-												src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${$models.find((model) => model.id === atSelectedModel.id).id}&lang=${$i18n.language}`}
+												src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${$models.find((model) => model.id === atSelectedModel?.id)?.id ?? ''}&lang=${$i18n.language}`}
 											/>
 											<div class="translate-y-[0.5px]">
 												<span class="">{atSelectedModel.name}</span>
@@ -1360,14 +1449,14 @@
 							{#if files.length > 0}
 								<div
 									class="mx-2 mt-2.5 pb-1.5 flex items-center flex-wrap gap-2"
-									dir={$settings?.chatDirection ?? 'auto'}
+									dir={toChatDirection($settings?.chatDirection)}
 								>
 									{#each files as file, fileIdx}
-										{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
+										{#if file.type === 'image' || String(file?.content_type ?? '').startsWith('image/')}
 											{@const fileUrl =
-												file.url.startsWith('data') || file.url.startsWith('http')
+												(file.url?.startsWith('data') || file.url?.startsWith('http')
 													? file.url
-													: `${WEBUI_API_BASE_URL}/files/${file.url}${file?.content_type ? '/content' : ''}`}
+													: `${WEBUI_API_BASE_URL}/files/${file.url ?? ''}${file?.content_type ? '/content' : ''}`) ?? ''}
 											<div class=" relative group">
 												<div class="relative flex items-center">
 													<Image
@@ -1427,15 +1516,15 @@
 											</div>
 										{:else}
 											<FileItem
-												item={file}
-												name={file.name}
-												type={file.type}
-												size={file?.size}
+												item={file as never}
+												name={file.name ?? ''}
+												type={file.type ?? 'file'}
+												size={file.size ?? 0}
 												loading={file.status === 'uploading'}
 												dismissible={true}
 												edit={true}
 												small={true}
-												modal={['file', 'collection'].includes(file?.type)}
+												modal={['file', 'collection'].includes(file?.type ?? '')}
 												on:dismiss={async () => {
 													// Remove from UI state
 													files.splice(fileIdx, 1);
@@ -1466,7 +1555,7 @@
 												<button
 													type="button"
 													class="p-1 rounded-lg hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
-													aria-label="Expand input"
+													aria-label={$i18n.t('Expand input')}
 													on:click={async () => {
 														showInputModal = true;
 													}}
@@ -1479,45 +1568,56 @@
 
 									{#if suggestions}
 										{#key $settings?.richTextInput ?? true}
-											{#key $settings?.showFormattingToolbar ?? false}
+											{#key getMessageInputSettings().showFormattingToolbar ?? false}
 												<RichTextInput
 													bind:this={chatInputElement}
 													id="chat-input"
-													editable={!showInputModal}
-													onChange={(content) => {
+													editable={!showInputModal && !$showCallOverlay}
+											autofocusEnabled={!$showCallOverlay}
+													onChange={((
+														content: RichTextInputContent
+													) => {
 														prompt = content.md;
 														inputContent = content;
 														command = getCommand();
-													}}
+													}) as unknown as (_e: Event) => void}
 													json={true}
 													richText={$settings?.richTextInput ?? true}
 													messageInput={true}
-													showFormattingToolbar={$settings?.showFormattingToolbar ?? false}
+													showFormattingToolbar={getMessageInputSettings().showFormattingToolbar ?? false}
 													floatingMenuPlacement={'top-start'}
-													insertPromptAsRichText={$settings?.insertPromptAsRichText ?? false}
+													insertPromptAsRichText={getMessageInputSettings().insertPromptAsRichText ?? false}
 													shiftEnter={!($settings?.ctrlEnterToSend ?? false) &&
 														!$mobile &&
 														!(
 															'ontouchstart' in window ||
 															navigator.maxTouchPoints > 0 ||
-															navigator.msMaxTouchPoints > 0
+															((navigator as LegacyNavigator).msMaxTouchPoints ?? 0) > 0
 														)}
 													placeholder={placeholder ? placeholder : $i18n.t('Send a Message')}
 													largeTextAsFile={($settings?.largeTextAsFile ?? false) && !shiftKey}
 													autocomplete={$config?.features?.enable_autocomplete_generation &&
 														($settings?.promptAutocomplete ?? false)}
-													generateAutoCompletion={async (text) => {
+													generateAutoCompletion={((async (text: string) => {
 														if (selectedModelIds.length === 0 || !selectedModelIds.at(0)) {
+															return null;
+														}
+
+														const modelId = selectedModelIds.at(0);
+														if (!modelId) {
 															return null;
 														}
 
 														const res = await generateAutoCompletion(
 															localStorage.token,
-															selectedModelIds.at(0),
+															modelId,
 															text,
 															history?.currentId
-																? createMessagesList(history, history.currentId)
-																: null
+																? (createMessagesList(
+																		history,
+																		history.currentId
+																	) as object[])
+																: undefined
 														).catch((error) => {
 															console.log(error);
 
@@ -1526,26 +1626,26 @@
 
 														console.log(res);
 														return res;
-													}}
-													{suggestions}
+													}) as Handler)}
+													suggestions={suggestions as never}
 													oncompositionstart={() => (isComposing = true)}
 													oncompositionend={(e) => {
 														compositionEndedAt = e.timeStamp;
 														isComposing = false;
 													}}
-													on:keydown={async (e) => {
-														e = e.detail.event;
+													on:keydown={async (e: RichTextDetailEvent<KeyboardEvent>) => {
+														const event = e.detail.event;
 
-														const isCtrlPressed = e.ctrlKey || e.metaKey; // metaKey is for Cmd key on Mac
+														const isCtrlPressed = event.ctrlKey || event.metaKey; // metaKey is for Cmd key on Mac
 														const suggestionsContainerElement =
 															document.getElementById('suggestions-container');
 
-														if (e.key === 'Escape') {
+														if (event.key === 'Escape') {
 															stopResponse();
 														}
 
-														if (prompt === '' && e.key == 'ArrowUp') {
-															e.preventDefault();
+														if (prompt === '' && event.key == 'ArrowUp') {
+															event.preventDefault();
 
 															const userMessageElement = [
 																...document.getElementsByClassName('user-message')
@@ -1555,7 +1655,7 @@
 																userMessageElement.scrollIntoView({ block: 'center' });
 																const editButton = [
 																	...document.getElementsByClassName('edit-user-message-button')
-																]?.at(-1);
+																]?.at(-1) as HTMLElement | undefined;
 
 																editButton?.click();
 															}
@@ -1567,10 +1667,10 @@
 																!(
 																	'ontouchstart' in window ||
 																	navigator.maxTouchPoints > 0 ||
-																	navigator.msMaxTouchPoints > 0
+																	((navigator as LegacyNavigator).msMaxTouchPoints ?? 0) > 0
 																)
 															) {
-																if (inOrNearComposition(e)) {
+																if (inOrNearComposition(event)) {
 																	return;
 																}
 
@@ -1580,11 +1680,13 @@
 																// either when Enter is pressed or when Ctrl+Enter is pressed.
 																const enterPressed =
 																	($settings?.ctrlEnterToSend ?? false)
-																		? (e.key === 'Enter' || e.keyCode === 13) && isCtrlPressed
-																		: (e.key === 'Enter' || e.keyCode === 13) && !e.shiftKey;
+																		? (event.key === 'Enter' || event.keyCode === 13) &&
+																			isCtrlPressed
+																		: (event.key === 'Enter' || event.keyCode === 13) &&
+																			!event.shiftKey;
 
 																if (enterPressed) {
-																	e.preventDefault();
+																	event.preventDefault();
 																	if (prompt !== '' || files.length > 0) {
 																		dispatch('submit', prompt);
 																	}
@@ -1592,7 +1694,7 @@
 															}
 														}
 
-														if (e.key === 'Escape') {
+														if (event.key === 'Escape') {
 															console.log('Escape');
 															atSelectedModel = undefined;
 															selectedToolIds = [];
@@ -1601,11 +1703,13 @@
 															webSearchEnabled = false;
 														}
 													}}
-													on:paste={async (e) => {
-														e = e.detail.event;
-														console.log(e);
+													on:paste={async (e: RichTextDetailEvent<ClipboardEvent>) => {
+														const event = e.detail.event;
+														console.log(event);
 
-														const clipboardData = e.clipboardData || window.clipboardData;
+														const clipboardData =
+															event.clipboardData ||
+															(window as ClipboardCapableWindow).clipboardData;
 
 														if (clipboardData && clipboardData.items) {
 															for (const item of clipboardData.items) {
@@ -1614,7 +1718,7 @@
 																		const text = clipboardData.getData('text/plain');
 
 																		if (text.length > PASTED_TEXT_CHARACTER_LIMIT) {
-																			e.preventDefault();
+																			event.preventDefault();
 																			const blob = new Blob([text], { type: 'text/plain' });
 																			const file = new File(
 																				[blob],
@@ -1631,7 +1735,7 @@
 																	const file = item.getAsFile();
 																	if (file) {
 																		await inputFilesHandler([file]);
-																		e.preventDefault();
+																		event.preventDefault();
 																	}
 																}
 															}
@@ -1655,25 +1759,24 @@
 										{onWebSearchToggle}
 										{showTerminalButton}
 										{showIntegrationsButton}
-										{toggleFilters}
+										toggleFilters={inputMenuToggleFilters}
 										bind:selectedToolIds
 										bind:selectedSkillIds
 										bind:selectedFilterIds
-										onShowValves={(e) => {
-											const { type, id } = e;
+										onShowValves={(e: unknown) => {
+											const { type, id } = e as { type: string; id: string };
 											selectedValvesType = type;
 											selectedValvesItemId = id;
 											showValvesModal = true;
-											integrationsMenuCloseOnOutsideClick = false;
 										}}
 										{screenCaptureHandler}
-										{inputFilesHandler}
+										inputFilesHandler={inputFilesHandler as Handler}
 										uploadFilesHandler={() => {
-											filesInputElement.click();
+											filesInputElement?.click();
 										}}
 										uploadGoogleDriveHandler={async () => {
 											try {
-												const fileData = await createPicker();
+												const fileData = (await createPicker()) as PickerFileData | null;
 												if (fileData) {
 													const file = new File([fileData.blob], fileData.name, {
 														type: fileData.blob.type
@@ -1682,36 +1785,23 @@
 												} else {
 													console.log('No file was selected from Google Drive');
 												}
-											} catch (error) {
+											} catch (error: unknown) {
 												console.error('Google Drive Error:', error);
+												const message = error instanceof Error ? error.message : String(error);
 												toast.error(
 													$i18n.t('Error accessing Google Drive: {{error}}', {
-														error: error.message
+														error: message
 													})
 												);
 											}
 										}}
-										uploadOneDriveHandler={async (authorityType) => {
-											try {
-												const fileData = await pickAndDownloadFile(authorityType);
-												if (fileData) {
-													const file = new File([fileData.blob], fileData.name, {
-														type: fileData.blob.type || 'application/octet-stream'
-													});
-													await uploadFileHandler(file);
-												} else {
-													console.log('No file was selected from OneDrive');
-												}
-											} catch (error) {
-												console.error('OneDrive Error:', error);
-											}
-										}}
+										uploadOneDriveHandler={uploadOneDriveHandler}
 										{onUpload}
 										onClose={async () => {
 											await tick();
 
 											const chatInput = document.getElementById('chat-input');
-											chatInput?.focus();
+											if (shouldFocusChatInput()) chatInput?.focus();
 										}}
 									>
 										<button
@@ -1778,7 +1868,13 @@
 											{/if}
 
 											{#if conversationUsage}
-												<UsageMenu usage={conversationUsage} model={usageModel} />
+												<UsageMenu
+													usage={conversationUsage}
+													model={usageModel}
+													{chatId}
+													generating={generating || responseInProgress}
+													on:compacted={() => onContextCompacted()}
+												/>
 											{/if}
 
 											{#if $_user?.role === 'admin' || ($_user?.permissions?.chat?.stt ?? true)}
@@ -1814,7 +1910,7 @@
 																toast.error($i18n.t('Permission denied when accessing microphone'));
 															}
 														}}
-														aria-label="Voice Input"
+														aria-label={$i18n.t('Voice Input')}
 													>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
@@ -1845,7 +1941,7 @@
 																return;
 															}
 
-															if ($config.audio.stt.engine === 'web') {
+															if ($config?.audio?.stt?.engine === 'web') {
 																toast.error(
 																	$i18n.t('Call feature is not supported when using Web STT engine')
 																);
@@ -1854,7 +1950,7 @@
 															}
 															// check if user has access to getUserMedia
 															try {
-																let stream = await navigator.mediaDevices.getUserMedia({
+																let stream: MediaStream | null = await navigator.mediaDevices.getUserMedia({
 																	audio: true
 																});
 																// If the user grants the permission, proceed to show the call overlay
@@ -1866,22 +1962,31 @@
 
 																stream = null;
 
-																if ($settings.audio?.tts?.engine === 'browser-kokoro') {
+																const ttsSettings = getMessageInputSettings().audio?.tts as
+																	| Record<string, unknown>
+																	| undefined;
+																if (ttsSettings?.engine === 'browser-kokoro') {
 																	// If the user has not initialized the TTS worker, initialize it
-																	if (!$TTSWorker) {
-																		await TTSWorker.set(
-																			new KokoroWorker({
-																				dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'
-																			})
-																		);
-
-																		await $TTSWorker.init();
+																	if (!get(TTSWorker)) {
+																		const engineConfig = ttsSettings?.engineConfig as
+																			| Record<string, unknown>
+																			| undefined;
+																		const dtype =
+																			typeof engineConfig?.dtype === 'string'
+																				? engineConfig.dtype
+																				: 'fp32';
+																		await (
+																			TTSWorker as Writable<KokoroWorker | null>
+																		).set(new KokoroWorker(dtype));
 																	}
+
+																	const worker = get(TTSWorker as Writable<KokoroWorker | null>);
+																	await worker?.init();
 																}
 
 																showCallOverlay.set(true);
 																showControls.set(true);
-															} catch (err) {
+															} catch (_err) {
 																// If the user denies the permission or an error occurs, show an error message
 																toast.error(
 																	$i18n.t('Permission denied when accessing media devices')
@@ -1903,6 +2008,10 @@
 												>
 													<button
 														id="send-message-button"
+														aria-label={uploadPending
+															? $i18n.t('Waiting for upload...')
+															: $i18n.t('Send message')}
+														aria-busy={uploadPending}
 														class="{!(prompt === '' && files.length === 0) || uploadPending
 															? 'bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 '
 															: 'text-white bg-gray-200 dark:text-gray-900 dark:bg-gray-700 disabled'} transition rounded-full p-1.5 self-center"
@@ -1936,7 +2045,9 @@
 						{#if $config?.license_metadata?.input_footer}
 							<div class=" text-xs text-gray-500 text-center line-clamp-1 marked">
 								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-								{@html DOMPurify.sanitize(marked($config?.license_metadata?.input_footer))}
+								{@html DOMPurify.sanitize(
+									marked(String($config?.license_metadata?.input_footer ?? ''))
+								)}
 							</div>
 						{:else}
 							<div class="mb-1" ></div>

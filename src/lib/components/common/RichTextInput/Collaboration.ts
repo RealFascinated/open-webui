@@ -10,6 +10,7 @@ import {
 import type { Socket } from 'socket.io-client';
 import type { SessionUser } from '$lib/stores';
 import { Editor, Extension } from '@tiptap/core';
+import type { JSONContent } from '@tiptap/core';
 import { keymap } from 'prosemirror-keymap';
 import { tick } from 'svelte';
 
@@ -48,7 +49,7 @@ export class SocketIOCollaborationProvider {
 		private readonly documentId: string,
 		private readonly socket: Socket,
 		private readonly user: SessionUser,
-		private readonly initialContent: string | null = null
+		private readonly initialContent: string | JSONContent | null = null
 	) {
 		this.setupEventListeners();
 	}

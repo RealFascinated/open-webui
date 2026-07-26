@@ -9,7 +9,7 @@
 
 	onMount(() => {
 		observer = new IntersectionObserver(
-			(entries, observer) => {
+			(entries, _observer) => {
 				entries.forEach((entry) => {
 					if (entry.isIntersecting) {
 						intervalId = setInterval(() => {

@@ -11,7 +11,6 @@
 
 	import {
 		updateAutomationById,
-		toggleAutomationById,
 		runAutomationById,
 		deleteAutomationById,
 		getAutomationRuns,
@@ -105,17 +104,6 @@
 			toast.error(e?.detail ?? `${e}` ?? 'Failed to save');
 		} finally {
 			saving = false;
-		}
-	};
-
-	const toggleHandler = async () => {
-		const res = await toggleAutomationById(localStorage.token, automation.id).catch((err) => {
-			toast.error(`${err}`);
-			return null;
-		});
-		if (res) {
-			is_active = res.is_active;
-			automation = res;
 		}
 	};
 

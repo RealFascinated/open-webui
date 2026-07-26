@@ -36,11 +36,11 @@
 				role: message.role === 'user' ? $i18n.t('a user') : $i18n.t('an assistant')
 			})}
 			rows="1"
-			on:input={(e) => {
+			on:input={(_e) => {
 				textAreaElement.style.height = '';
 				textAreaElement.style.height = textAreaElement.scrollHeight + 'px';
 			}}
-			on:focus={(e) => {
+			on:focus={(_e) => {
 				textAreaElement.style.height = '';
 				textAreaElement.style.height = textAreaElement.scrollHeight + 'px';
 

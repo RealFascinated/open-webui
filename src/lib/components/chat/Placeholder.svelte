@@ -1,29 +1,20 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { marked } from 'marked';
+	
+	import {marked} from 'marked';
 	import DOMPurify from 'dompurify';
 
-	import { onMount, getContext, tick, createEventDispatcher } from 'svelte';
-	import { getChatGreetingKey, type ChatGreetingKey } from '$lib/utils/chatGreeting';
-	import { blur, fade } from 'svelte/transition';
+	import {onMount, getContext, createEventDispatcher} from 'svelte';
+	import {getChatGreetingKey, type ChatGreetingKey} from '$lib/utils/chatGreeting';
+	import {fade} from 'svelte/transition';
 
 	const dispatch = createEventDispatcher();
 
-	import { getChatList } from '$lib/apis/chats';
-	import { updateProjectById } from '$lib/apis/projects';
+	import {getChatList} from '$lib/apis/chats';
+	
 
-	import {
-		config,
-		user,
-		models as _models,
-		temporaryChatEnabled,
-		selectedProject,
-		chats,
-		currentChatPage,
-		type Model
-	} from '$lib/stores';
-	import { sanitizeResponseContent, extractCurlyBraceWords } from '$lib/utils';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {config, user, models as _models, temporaryChatEnabled, selectedProject, chats, currentChatPage, type Model} from '$lib/stores';
+	import {sanitizeResponseContent} from '$lib/utils';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 
 	import Suggestions from './Suggestions.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -40,26 +31,26 @@
 	export let autoScroll = false;
 
 	export let atSelectedModel: Model | undefined;
-	export let selectedModels: [''];
+	export let selectedModels: string[] = [''];
 
 	export let history;
 
 	export let prompt = '';
 	export let files = [];
-	export let messageInput = null;
+	export let messageInput: MessageInput | null = null;
 
-	export let selectedToolIds = [];
-	export let selectedSkillIds = [];
-	export let selectedFilterIds = [];
-	export let pendingOAuthTools = [];
+	export let selectedToolIds: string[] = [];
+	export let selectedSkillIds: string[] = [];
+	export let selectedFilterIds: string[] = [];
+	export let pendingOAuthTools: Array<{ id: string; name: string; serverId: string; authType: string | null }> = [];
 
 	export let showCommands = false;
 
 	export let webSearchEnabled = false;
 
-	export let onUpload: (...args: unknown[]) => unknown = (e) => {};
-	export let onSelect = (e) => {};
-	export let onChange = (e) => {};
+	export let onUpload: (...args: unknown[]) => unknown = (_e: Event) => {};
+	export let onSelect = (_e: Event) => {};
+	export let onChange = (_e: Event) => {};
 	export let onWebSearchToggle: (...args: unknown[]) => unknown = () => {};
 
 	export let toolServers = [];
@@ -78,7 +69,7 @@
 		selectedModelIdx = models.length - 1;
 	}
 
-	$: models = selectedModels.map((id) => $_models.find((m) => m.id === id));
+	$: models = selectedModels.map((id: string) => $_models.find((m) => m.id === id));
 
 	// True when viewing a shared folder the current user doesn't own AND lacks write access
 	$: folderReadOnly =
@@ -111,7 +102,7 @@
 				<ProjectTitle
 					project={$selectedProject}
 					readOnly={folderNotOwned}
-					onUpdate={async (project) => {
+					onUpdate={async (_project) => {
 						await chats.set(await getChatList(localStorage.token, $currentChatPage));
 						currentChatPage.set(1);
 					}}
@@ -225,7 +216,7 @@
 					<MessageInput
 						bind:this={messageInput}
 						{history}
-						{selectedModels}
+						bind:selectedModels
 						bind:files
 						bind:prompt
 						bind:autoScroll

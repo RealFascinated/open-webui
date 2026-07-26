@@ -147,6 +147,7 @@ async def probe_web_search_reachability(config: Any) -> tuple[bool, str | None]:
                 content_type = (response.headers.get('Content-Type') or '').lower()
                 if 'json' not in content_type:
                     return False, 'SearXNG did not return JSON'
+                await response.json()
         except Exception as exc:
             log.debug('SearXNG health probe failed: %s', exc)
             return False, str(exc)
@@ -222,8 +223,41 @@ async def get_web_search_status(config: Any) -> dict[str, Any]:
         }
 
     host = None
+    searxng_details = None
     if engine == 'searxng':
         host = _format_probe_host(getattr(config, 'SEARXNG_QUERY_URL', None))
+        query_url = getattr(config, 'SEARXNG_QUERY_URL', None)
+        if query_url:
+            if '<query>' in query_url:
+                query_url = query_url.split('?')[0]
+            try:
+                session = await get_session()
+                async with session.get(
+                    query_url,
+                    headers={
+                        'User-Agent': 'Open WebUI (https://github.com/open-webui/open-webui) Health Check',
+                        'Accept': 'application/json',
+                    },
+                    params={'q': 'open-webui-health', 'format': 'json', 'pageno': 1},
+                    timeout=5,
+                ) as response:
+                    if response.status < 400 and 'json' in (response.headers.get('Content-Type') or '').lower():
+                        payload = await response.json()
+                        if isinstance(payload, dict):
+                            failures = []
+                            for entry in payload.get('unresponsive_engines') or []:
+                                if isinstance(entry, (list, tuple)) and entry:
+                                    name = str(entry[0])
+                                    reason = str(entry[1]) if len(entry) > 1 else ''
+                                    failures.append(f'{name}: {reason}' if reason else name)
+                            searxng_details = {
+                                'results_count': len(payload.get('results') or []),
+                                'answers_count': len(payload.get('answers') or []),
+                                'infoboxes_count': len(payload.get('infoboxes') or []),
+                                'engine_failures': failures,
+                            }
+            except Exception as exc:
+                log.debug('SearXNG extended health probe failed: %s', exc)
     elif engine == 'yacy':
         host = _format_probe_host(getattr(config, 'YACY_QUERY_URL', None))
     elif engine == 'external':
@@ -243,4 +277,5 @@ async def get_web_search_status(config: Any) -> dict[str, Any]:
         'detail': label if healthy else 'Unreachable',
         'host': host,
         'error': probe_error,
+        **({'searxng': searxng_details} if searxng_details else {}),
     }

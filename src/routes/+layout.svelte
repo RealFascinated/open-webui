@@ -1,87 +1,131 @@
-<script>
-	import { io } from 'socket.io-client';
-	import { spring } from 'svelte/motion';
-	import { createPyodideWorker } from '$lib/pyodide/createPyodideWorker';
-	import { Toaster, toast } from 'svelte-sonner';
+<script lang="ts">
+	import {io} from 'socket.io-client';
+	import {spring} from 'svelte/motion';
+	import type {ComponentType} from 'svelte';
+	import {createPyodideWorker} from '$lib/pyodide/createPyodideWorker';
+	import {Toaster, toast} from 'svelte-sonner';
 
 	let loadingProgress = spring(0, {
 		stiffness: 0.05
 	});
 
-	import { onMount, tick, setContext, onDestroy } from 'svelte';
-	import {
-		config,
-		user,
-		settings,
-		theme,
-		WEBUI_NAME,
-		WEBUI_VERSION,
-		WEBUI_DEPLOYMENT_ID,
-		mobile,
-		socket,
-		socketConnected,
-		chatId,
-		chats,
-		currentChatPage,
-		tags,
-		temporaryChatEnabled,
-		isLastActiveTab,
-		isApp,
-		appInfo,
-		appData,
-		models,
-		toolServers,
-		playingNotificationSound,
-		channels,
-		channelId,
-		terminalServers,
-		showControls,
-		showFileNavPath,
-		showFileNavDir,
-		pyodideWorker,
-		desktopEvent
-	} from '$lib/stores';
-	import { getFileContentById } from '$lib/apis/files';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { beforeNavigate } from '$app/navigation';
-	import { updated } from '$app/state';
+	import {onMount, tick, setContext, onDestroy} from 'svelte';
+	import {config, user, settings, theme, WEBUI_NAME, WEBUI_VERSION, WEBUI_DEPLOYMENT_ID, mobile, socket, socketConnected, chatId, chats, currentChatPage, tags, temporaryChatEnabled, isLastActiveTab, isApp, appInfo, appData, models, toolServers, playingNotificationSound, channels, channelId, terminalServers, showControls, showFileNavPath, showFileNavDir, pyodideWorker, desktopEvent, type DesktopEvent, type SessionUser, type AppConfig, type ToolServerData} from '$lib/stores';
+	import {getFileContentById} from '$lib/apis/files';
+	import {goto} from '$app/navigation';
+	import {page} from '$app/stores';
+	import {beforeNavigate} from '$app/navigation';
+	import {updated} from '$app/state';
 
-	import i18n, { initI18n, getLanguages, changeLanguage } from '$lib/i18n';
+	import i18n, {initI18n, getLanguages, changeLanguage} from '$lib/i18n';
 
 	import '../tailwind.css';
 	import '../app.css';
 	import 'tippy.js/dist/tippy.css';
 
-	import { executeToolServer, getBackendConfig, getModels, getVersion } from '$lib/apis';
-	import { getSessionUser, updateUserTimezone, userSignOut } from '$lib/apis/auths';
-	import { getAllTags, getChatList } from '$lib/apis/chats';
-	import {
-		addOpenAIConnection,
-		removeOpenAIConnection,
-		addTerminalConnection,
-		removeTerminalConnection
-	} from '$lib/utils/connections';
+	import {executeToolServer, getBackendConfig, getModels, getVersion} from '$lib/apis';
+	import {getSessionUser, updateUserTimezone, userSignOut} from '$lib/apis/auths';
+	import {getAllTags, getChatList} from '$lib/apis/chats';
+	import {addOpenAIConnection, removeOpenAIConnection, addTerminalConnection, removeTerminalConnection} from '$lib/utils/connections';
 
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL, WEBUI_HOSTNAME } from '$lib/constants';
-	import {
-		bestMatchingLanguage,
-		cleanText,
-		displayFileHandler,
-		getUserTimezone,
-		removeAllDetails
-	} from '$lib/utils';
-	import { setTextScale } from '$lib/utils/text-scale';
+	import {WEBUI_API_BASE_URL, WEBUI_BASE_URL} from '$lib/constants';
+	import {bestMatchingLanguage, cleanText, displayFileHandler, getUserTimezone, removeAllDetails} from '$lib/utils';
+	
 
 	import NotificationToast from '$lib/components/NotificationToast.svelte';
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import SyncStatsModal from '$lib/components/chat/Settings/SyncStatsModal.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
-	import { getOutputText } from '$lib/components/chat/Messages/structuredOutput';
-	import { getUserSettings } from '$lib/apis/users';
+	import {getOutputText, type OutputItem} from '$lib/components/chat/Messages/structuredOutput';
+	
 	import dayjs from 'dayjs';
-	import { getChannels } from '$lib/apis/channels';
+	import {getChannels} from '$lib/apis/channels';
+	import type { Writable } from 'svelte/store';
+
+	type SessionUserWithExpiry = SessionUser & { expires_at?: number };
+	type SocketPayload = Record<string, unknown>;
+	type ChatSocketEvent = {
+		chat_id: string;
+		message_id?: string;
+		data?: { type?: string; data?: SocketPayload };
+	};
+	type ChannelSocketEvent = {
+		channel_id: string;
+		message_id?: string | null;
+		created_at?: number;
+		user: { id: string; name: string };
+		channel?: { type?: string; name?: string };
+		data?: { type?: string; data?: SocketPayload };
+	};
+	type ChannelSummary = {
+		id: string;
+		type?: string | null;
+		name?: string;
+		unread_count?: number;
+		last_message_at?: number;
+	};
+	type PyodideFileRef = {
+		id?: string;
+		filename?: string;
+		name?: string;
+	};
+	type PyodideExecutionResult = {
+		stdout: string | null;
+		stderr: string | null;
+		result: unknown;
+	};
+	type PyodideWorkerMessage = {
+		id?: string;
+		type?: string;
+		stdout?: string;
+		stderr?: string;
+		result?: unknown;
+	};
+	type ToolExecuteData = {
+		server?: { url?: string };
+		name?: string;
+		params?: Record<string, unknown>;
+		session_id?: string;
+		files?: PyodideFileRef[];
+	};
+	type ResolvedToolServer = {
+		url: string;
+		auth_type?: string;
+		key?: string;
+		path?: string;
+	};
+	type ToolExecutionResponse = Record<string, unknown> & {
+		exists?: boolean;
+		path?: string;
+		error?: string;
+	};
+	type ElectronAPI = {
+		send: (msg: Record<string, unknown>) => Promise<Record<string, unknown> | null | undefined>;
+		onEvent?: (handler: (event: DesktopEvent) => void) => void;
+		load?: (page: string) => void;
+	};
+	interface LayoutWindow extends Window {
+		WEBUI_VERSION?: string;
+		applyTheme?: () => void;
+		electronAPI?: ElectronAPI;
+	}
+	interface LegacyNavigator extends Navigator {
+		userLanguage?: string;
+	}
+	type SyncStatsEventData = {
+		requestId?: string;
+		searchParams?: Record<string, unknown>;
+		lastSyncedChatUpdatedAt?: string;
+		type?: string;
+	} | null;
+	type DesktopAppInfo = Record<string, unknown>;
+
+	const getLayoutWindow = (): LayoutWindow => window as LayoutWindow;
+	const NotificationToastComponent = NotificationToast as unknown as ComponentType;
+	const sortChannels = (a: ChannelSummary, b: ChannelSummary) =>
+		['', null, 'group', 'dm'].indexOf(a.type ?? '') -
+		['', null, 'group', 'dm'].indexOf(b.type ?? '');
 
 	const unregisterServiceWorkers = async () => {
 		if ('serviceWorker' in navigator) {
@@ -110,26 +154,26 @@
 	const bc = new BroadcastChannel('active-tab-channel');
 
 	let loaded = false;
-	let tokenTimer = null;
+	let tokenTimer: ReturnType<typeof setInterval> | null = null;
 	let isAuthRedirectInProgress = false;
 
 	let showRefresh = false;
 	let showToolConfirmDialog = false;
 	let toolConfirmTitle = '';
 	let toolConfirmMessage = '';
-	let toolConfirmCallback = null;
+	let toolConfirmCallback: ((confirmed: boolean) => void) | null = null;
 
 	let showSyncStatsModal = false;
-	let syncStatsEventData = null;
+	let syncStatsEventData: SyncStatsEventData = null;
 
-	let heartbeatInterval = null;
-	let disconnectToastTimer = null;
+	let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+	let disconnectToastTimer: ReturnType<typeof setTimeout> | null = null;
 	let disconnectWarningShown = false;
 
 	const BREAKPOINT = 768;
 	const DISCONNECT_TOAST_DELAY_MS = 2000;
 
-	const setupSocket = async (enableWebsocket) => {
+	const setupSocket = async (enableWebsocket: boolean) => {
 		const _socket = io(`${WEBUI_BASE_URL}` || undefined, {
 			reconnection: true,
 			reconnectionDelay: 1000,
@@ -196,7 +240,7 @@
 
 			if (version !== null) {
 				WEBUI_VERSION.set(version);
-				window.WEBUI_VERSION = version;
+				getLayoutWindow().WEBUI_VERSION = version;
 			}
 
 			console.log('version', version);
@@ -257,10 +301,15 @@
 		return worker;
 	};
 
-	const executePythonAsWorker = async (id, code, cb, files = []) => {
-		let result = null;
-		let stdout = null;
-		let stderr = null;
+	const executePythonAsWorker = async (
+		id: string,
+		code: string,
+		cb: ((result: PyodideExecutionResult) => void) | undefined,
+		files: PyodideFileRef[] = []
+	) => {
+		let result: unknown = null;
+		let stdout: string | null = null;
+		let stderr: string | null = null;
 
 		let executing = true;
 		let packages = [
@@ -282,7 +331,7 @@
 		const worker = getOrCreateWorker();
 
 		// Fetch file content from the server and prepare for the worker
-		let filePayloads = [];
+		const filePayloads: { name: string; data: ArrayBuffer }[] = [];
 		if (files && files.length > 0) {
 			for (const file of files) {
 				try {
@@ -308,6 +357,18 @@
 			files: filePayloads.length > 0 ? filePayloads : undefined
 		});
 
+		const serializeResult = (): PyodideExecutionResult =>
+			JSON.parse(
+				JSON.stringify(
+					{
+						stdout,
+						stderr,
+						result
+					},
+					(_key, value) => (typeof value === 'bigint' ? value.toString() : value)
+				)
+			);
+
 		// Timeout for this specific execution (not the worker itself)
 		let timeoutId = setTimeout(() => {
 			if (executing) {
@@ -318,25 +379,12 @@
 				worker.terminate();
 				pyodideWorker.set(null);
 
-				if (cb) {
-					cb(
-						JSON.parse(
-							JSON.stringify(
-								{
-									stdout: stdout,
-									stderr: stderr,
-									result: result
-								},
-								(_key, value) => (typeof value === 'bigint' ? value.toString() : value)
-							)
-						)
-					);
-				}
+				cb?.(serializeResult());
 			}
 		}, 60000);
 
 		// Use addEventListener so multiple concurrent executions don't clobber each other
-		const onMessage = (event) => {
+		const onMessage = (event: MessageEvent<PyodideWorkerMessage>) => {
 			const { id: eventId, ...data } = event.data;
 			// Only handle responses for this execution ID
 			if (eventId !== id) return;
@@ -352,44 +400,18 @@
 			if (data['stderr']) stderr = data['stderr'];
 			if (data['result']) result = data['result'];
 
-			if (cb) {
-				cb(
-					JSON.parse(
-						JSON.stringify(
-							{
-								stdout: stdout,
-								stderr: stderr,
-								result: result
-							},
-							(_key, value) => (typeof value === 'bigint' ? value.toString() : value)
-						)
-					)
-				);
-			}
+			cb?.(serializeResult());
 
 			executing = false;
 		};
 
-		const onError = (event) => {
-			console.log('pyodideWorker.onerror', event);
+		const onError = () => {
+			console.log('pyodideWorker.onerror');
 			clearTimeout(timeoutId);
 			worker.removeEventListener('message', onMessage);
 			worker.removeEventListener('error', onError);
 
-			if (cb) {
-				cb(
-					JSON.parse(
-						JSON.stringify(
-							{
-								stdout: stdout,
-								stderr: stderr,
-								result: result
-							},
-							(_key, value) => (typeof value === 'bigint' ? value.toString() : value)
-						)
-					)
-				);
-			}
+			cb?.(serializeResult());
 			executing = false;
 		};
 
@@ -397,8 +419,17 @@
 		worker.addEventListener('error', onError);
 	};
 
-	const resolveToolServer = (serverUrl) => {
-		let toolServer = $settings?.toolServers?.find((server) => server.url === serverUrl);
+	const resolveToolServer = (serverUrl: string) => {
+		let toolServer: ResolvedToolServer | undefined;
+		const settingsToolServer = $settings?.toolServers?.find((server) => server.url === serverUrl);
+		if (settingsToolServer?.url) {
+			toolServer = {
+				url: settingsToolServer.url,
+				auth_type: settingsToolServer.auth_type,
+				key: settingsToolServer.key,
+				path: settingsToolServer.path
+			};
+		}
 		if (!toolServer) {
 			const terminalServer = ($settings?.terminalServers ?? []).find(
 				(server) => server.url === serverUrl
@@ -417,19 +448,28 @@
 			$toolServers?.find((server) => server.url === serverUrl) ??
 			$terminalServers?.find((server) => server.url === serverUrl);
 
-		let token = null;
+		let token: string | null = null;
 		if (toolServer) {
 			const auth_type = toolServer?.auth_type ?? 'bearer';
-			if (auth_type === 'bearer') token = toolServer?.key;
+			if (auth_type === 'bearer') token = toolServer?.key ?? null;
 			else if (auth_type === 'session') token = localStorage.token;
 		}
 
 		return { toolServer, toolServerData, token };
 	};
 
-	const cancelledToolChatIds = new Set();
+	const cancelledToolChatIds = new Set<string>();
 
-	const executeTool = async (data, cb, chatId) => {
+	const hasExecutableOpenApi = (
+		serverData: ToolServerData | undefined
+	): serverData is ToolServerData & { openapi: NonNullable<ToolServerData['openapi']> } =>
+		Boolean(serverData?.openapi);
+
+	const executeTool = async (
+		data: ToolExecuteData,
+		cb: ((result: unknown) => void) | undefined,
+		chatId: string | undefined
+	) => {
 		if (chatId && cancelledToolChatIds.has(chatId)) {
 			if (cb) {
 				cb({ error: 'Cancelled' });
@@ -437,51 +477,57 @@
 			return;
 		}
 
-		const { toolServer, toolServerData, token } = resolveToolServer(data.server?.url);
+		const { toolServer, toolServerData, token } = resolveToolServer(data.server?.url ?? '');
 
 		console.log('executeTool', data, toolServer);
 
-		if (toolServer) {
+		if (toolServer && token && hasExecutableOpenApi(toolServerData) && data?.name) {
+			const executionData = {
+				openapi: toolServerData.openapi,
+				info: toolServerData.info ?? {},
+				specs: toolServerData.specs ?? []
+			} as Parameters<typeof executeToolServer>[4];
+
 			const res = await executeToolServer(
 				token,
 				toolServer.url,
-				data?.name,
-				data?.params,
-				toolServerData,
+				data.name,
+				data?.params ?? {},
+				executionData,
 				chatId
 			);
 
 			if (chatId && cancelledToolChatIds.has(chatId)) {
-				if (cb) {
-					cb({ error: 'Cancelled' });
-				}
+				cb?.({ error: 'Cancelled' });
 				return;
 			}
 
 			console.log('executeToolServer', res);
 
+			const [toolResponse] = res;
+			const toolResult = toolResponse as ToolExecutionResponse;
+
 			if (data?.name === 'display_file' && data?.params?.path) {
-				if (res?.exists !== false) {
-					displayFileHandler(data.params.path, { showControls, showFileNavPath });
+				if (toolResult?.exists !== false) {
+					displayFileHandler(String(data.params.path), { showControls, showFileNavPath });
 				}
 			}
 
 			if (['write_file'].includes(data?.name) && data?.params?.path) {
-				showFileNavDir.set(res?.path ?? data.params.path);
+				showFileNavDir.set(toolResult?.path ?? String(data.params.path));
 			}
 
-			if (cb) {
-				cb(structuredClone(res));
-			}
+			cb?.(structuredClone(res));
 		} else {
-			if (cb) {
-				cb({ error: 'Tool Server Not Found' });
-			}
+			cb?.({ error: 'Tool Server Not Found' });
 		}
 	};
 
-	const chatEventHandler = async (event, cb) => {
-		const chat = $page.url.pathname.includes(`/c/${event.chat_id}`);
+	const chatEventHandler = async (
+		event: ChatSocketEvent,
+		cb?: (result?: unknown) => void
+	) => {
+		const _chat = $page.url.pathname.includes(`/c/${event.chat_id}`);
 
 		// Skip events from temporary chats that are not the current chat.
 		// This prevents notifications from being sent to other tabs/devices
@@ -492,8 +538,9 @@
 		}
 
 		let isInBackground = document.visibilityState !== 'visible';
-		if (window.electronAPI) {
-			const res = await window.electronAPI.send({
+		const electronAPI = getLayoutWindow().electronAPI;
+		if (electronAPI) {
+			const res = await electronAPI.send({
 				type: 'window:isFocused'
 			});
 			if (res) {
@@ -513,19 +560,20 @@
 
 		// Calendar alerts are not chat-scoped, handle before chat_id checks
 		if (type === 'calendar:alert' && data) {
+			const minutesUntil = Number(data.minutes_until ?? 0);
 			const timeStr =
-				data.minutes_until <= 0
+				minutesUntil <= 0
 					? $i18n.t('Starting now')
-					: data.minutes_until === 1
+					: minutesUntil === 1
 						? $i18n.t('Starting in 1 minute')
-						: $i18n.t('Starting in {{count}} minutes', { count: data.minutes_until });
+						: $i18n.t('Starting in {{count}} minutes', { count: minutesUntil });
 
-			toast.custom(NotificationToast, {
+			toast.custom(NotificationToastComponent, {
 				componentProps: {
 					onClick: () => {
 						goto('/calendar');
 					},
-					title: data.title,
+					title: String(data.title ?? ''),
 					content: timeStr
 				},
 				duration: 30000,
@@ -534,7 +582,7 @@
 
 			if ($isLastActiveTab) {
 				if ($settings?.notificationEnabled ?? false) {
-					new Notification(`${data.title} • Open WebUI`, {
+					new Notification(`${String(data.title ?? '')} • Open WebUI`, {
 						body: timeStr,
 						icon: `${WEBUI_BASE_URL}/static/favicon.png`
 					});
@@ -546,22 +594,27 @@
 		// Session-targeted RPC calls (code execution, tool calls)
 		// must ALWAYS be processed regardless of active chat or tab visibility,
 		// because the backend's sio.call blocks waiting for our callback response.
-		if (data?.session_id === $socket.id) {
-			if (type === 'execute:python') {
+		if (data?.session_id === $socket?.id) {
+			if (type === 'execute:python' && data) {
 				console.log('execute:python', data);
-				executePythonAsWorker(data.id, data.code, cb, data.files || []);
+				executePythonAsWorker(
+					String(data.id ?? ''),
+					String(data.code ?? ''),
+					cb,
+					Array.isArray(data.files) ? (data.files as PyodideFileRef[]) : []
+				);
 				return;
-			} else if (type === 'execute:tool') {
+			} else if (type === 'execute:tool' && data) {
 				console.log('execute:tool', data);
-				executeTool(data, cb, event.chat_id);
+				executeTool(data as ToolExecuteData, cb, event.chat_id);
 				return;
 			}
 		}
 
 		if (type === 'confirmation' && typeof cb === 'function') {
-			toolConfirmTitle = data?.title ?? $i18n.t('Confirm');
-			toolConfirmMessage = data?.message ?? '';
-			toolConfirmCallback = cb;
+			toolConfirmTitle = String(data?.title ?? $i18n.t('Confirm'));
+			toolConfirmMessage = String(data?.message ?? '');
+			toolConfirmCallback = (confirmed: boolean) => cb(confirmed);
 			showToolConfirmDialog = true;
 			return;
 		}
@@ -575,9 +628,16 @@
 
 		if ((event.chat_id !== $chatId && !$temporaryChatEnabled) || isInBackground) {
 			if (type === 'chat:completion') {
-				const { done, content, output, title } = data;
-				const displayTitle = title || $i18n.t('New Chat');
-				const contentPreview = cleanText(removeAllDetails(getOutputText(output) || content || ''));
+				const done = Boolean(data?.done);
+				const content = data?.content;
+				const output = data?.output;
+				const title = data?.title;
+				const displayTitle = String(title || $i18n.t('New Chat'));
+				const contentPreview = cleanText(
+					removeAllDetails(
+						getOutputText(output as OutputItem[] | null | undefined) || String(content || '')
+					)
+				);
 
 				if (done) {
 					if (
@@ -602,7 +662,7 @@
 						}
 					}
 
-					toast.custom(NotificationToast, {
+					toast.custom(NotificationToastComponent, {
 						componentProps: {
 							onClick: () => {
 								goto(`/c/${event.chat_id}`);
@@ -623,7 +683,7 @@
 		}
 	};
 
-	const channelEventHandler = async (event) => {
+	const channelEventHandler = async (event: ChannelSocketEvent) => {
 		console.log('channelEventHandler', event);
 		if (event.data?.type === 'typing') {
 			return;
@@ -631,17 +691,12 @@
 
 		// handle channel created event
 		if (event.data?.type === 'channel:created') {
-			const res = await getChannels(localStorage.token).catch(async (error) => {
+			const res = await getChannels(localStorage.token).catch(async (_error) => {
 				return null;
 			});
 
 			if (res) {
-				await channels.set(
-					res.sort(
-						(a, b) =>
-							['', null, 'group', 'dm'].indexOf(a.type) - ['', null, 'group', 'dm'].indexOf(b.type)
-					)
-				);
+				await channels.set((res as ChannelSummary[]).sort(sortChannels) as never);
 			}
 
 			return;
@@ -651,8 +706,9 @@
 		const channel = $page.url.pathname.includes(`/channels/${event.channel_id}`);
 
 		let isInBackground = document.visibilityState !== 'visible';
-		if (window.electronAPI) {
-			const res = await window.electronAPI.send({
+		const electronAPI = getLayoutWindow().electronAPI;
+		if (electronAPI) {
+			const res = await electronAPI.send({
 				type: 'window:isFocused'
 			});
 			if (res) {
@@ -664,11 +720,15 @@
 			await tick();
 			const type = event?.data?.type ?? null;
 			const data = event?.data?.data ?? null;
+			const channelList = $channels as ChannelSummary[] | null;
 
-			if ($channels) {
-				if ($channels.find((ch) => ch.id === event.channel_id) && $channelId !== event.channel_id) {
+			if (channelList) {
+				if (
+					channelList.find((ch) => ch.id === event.channel_id) &&
+					$channelId !== event.channel_id
+				) {
 					channels.set(
-						$channels.map((ch) => {
+						channelList.map((ch) => {
 							if (ch.id === event.channel_id) {
 								if (type === 'message') {
 									return {
@@ -679,44 +739,39 @@
 								}
 							}
 							return ch;
-						})
+						}) as never
 					);
 				} else {
-					const res = await getChannels(localStorage.token).catch(async (error) => {
+					const res = await getChannels(localStorage.token).catch(async (_error) => {
 						return null;
 					});
 
 					if (res) {
-						await channels.set(
-							res.sort(
-								(a, b) =>
-									['', null, 'group', 'dm'].indexOf(a.type) -
-									['', null, 'group', 'dm'].indexOf(b.type)
-							)
-						);
+						await channels.set((res as ChannelSummary[]).sort(sortChannels) as never);
 					}
 				}
 			}
 
-			if (type === 'message') {
-				const title = `${data?.user?.name}${event?.channel?.type !== 'dm' ? ` (#${event?.channel?.name})` : ''}`;
+			if (type === 'message' && data) {
+				const messageUser = data.user as { name?: string; id?: string } | undefined;
+				const title = `${messageUser?.name ?? ''}${event?.channel?.type !== 'dm' ? ` (#${event?.channel?.name ?? ''})` : ''}`;
 
 				if ($isLastActiveTab) {
 					if ($settings?.notificationEnabled ?? false) {
 						new Notification(`${title} • Open WebUI`, {
-							body: data?.content,
-							icon: `${WEBUI_API_BASE_URL}/users/${data?.user?.id}/profile/image`
+							body: String(data?.content ?? ''),
+							icon: `${WEBUI_API_BASE_URL}/users/${messageUser?.id}/profile/image`
 						});
 					}
 				}
 
-				toast.custom(NotificationToast, {
+				toast.custom(NotificationToastComponent, {
 					componentProps: {
 						onClick: () => {
 							goto(`/channels/${event.channel_id}`);
 						},
-						content: data?.content,
-						title: `${title}`
+						content: String(data?.content ?? ''),
+						title
 					},
 					duration: 15000,
 					unstyled: true
@@ -726,7 +781,7 @@
 	};
 
 	const TOKEN_EXPIRY_BUFFER = 60; // seconds
-	const resolveFetchUrl = (input) => {
+	const resolveFetchUrl = (input: RequestInfo | URL) => {
 		if (input instanceof Request) {
 			return new URL(input.url, window.location.origin);
 		}
@@ -734,7 +789,7 @@
 		return new URL(input, window.location.origin);
 	};
 
-	const resolveFetchHeaders = (input, init) => {
+	const resolveFetchHeaders = (input: RequestInfo | URL, init?: RequestInit) => {
 		if (init?.headers) {
 			return new Headers(init.headers);
 		}
@@ -746,7 +801,7 @@
 		return new Headers();
 	};
 
-	const isAuthenticatedBackendFetch = (input, init) => {
+	const isAuthenticatedBackendFetch = (input: RequestInfo | URL, init?: RequestInit) => {
 		try {
 			const requestUrl = resolveFetchUrl(input);
 			const backendOrigin = new URL(WEBUI_BASE_URL || '/', window.location.origin).origin;
@@ -765,7 +820,7 @@
 		}
 
 		isAuthRedirectInProgress = true;
-		user.set(null);
+		user.set(undefined);
 		localStorage.removeItem('token');
 		toast.error($i18n.t('Session expired. Please sign in again.'));
 
@@ -775,7 +830,7 @@
 		});
 	};
 
-	const isCurrentSessionUnauthorized = async (originalFetch) => {
+	const isCurrentSessionUnauthorized = async (originalFetch: typeof fetch) => {
 		return originalFetch(`${WEBUI_API_BASE_URL}/auths/`, {
 			method: 'GET',
 			headers: {
@@ -784,12 +839,12 @@
 			},
 			credentials: 'include'
 		})
-			.then((res) => res.status === 401)
+			.then((res: Response) => res.status === 401)
 			.catch(() => false);
 	};
 
 	const checkTokenExpiry = async () => {
-		const exp = $user?.expires_at; // token expiry time in unix timestamp
+		const exp = ($user as SessionUserWithExpiry | undefined)?.expires_at;
 		const now = Math.floor(Date.now() / 1000); // current time in unix timestamp
 
 		if (!exp) {
@@ -799,24 +854,28 @@
 
 		if (now >= exp - TOKEN_EXPIRY_BUFFER) {
 			const res = await userSignOut();
-			user.set(null);
+			user.set(undefined);
 			localStorage.removeItem('token');
 
 			location.href = res?.redirect_url ?? '/auth';
 		}
 	};
 
-	const desktopEventHandler = async (event) => {
+	const desktopEventHandler = async (event: DesktopEvent) => {
+		const eventData = (event.data ?? {}) as Record<string, unknown>;
 		// Events that don't require auth
 		if (event.type === 'page:reload') {
 			location.reload();
 			return;
 		}
-		if (event.type === 'page:navigate' && event.data?.path) {
-			await goto(event.data.path);
+		if (event.type === 'page:navigate' && eventData.path) {
+			await goto(String(eventData.path));
 			return;
 		}
-		if (event.type === 'query' && (event.data?.query || event.data?.files?.length)) {
+		if (
+			event.type === 'query' &&
+			(eventData.query || (Array.isArray(eventData.files) && eventData.files.length))
+		) {
 			desktopEvent.set(event);
 			await goto('/');
 			return;
@@ -826,8 +885,8 @@
 			await goto('/');
 			return;
 		}
-		if (event.type === 'theme:update' && event.data?.theme) {
-			const newTheme = event.data.theme;
+		if (event.type === 'theme:update' && eventData.theme) {
+			const newTheme = String(eventData.theme);
 			localStorage.setItem('theme', newTheme);
 			theme.set(newTheme);
 
@@ -849,9 +908,7 @@
 		if (event.type === 'models:refresh') {
 			const token = localStorage.token;
 			if (token) {
-				models.set(
-					await getModels(token)
-				);
+				models.set(await getModels(token));
 			}
 			return;
 		}
@@ -864,24 +921,24 @@
 
 		try {
 			if (event.type === 'connections:terminal') {
-				if (event.data.action === 'add') {
+				if (eventData.action === 'add') {
 					await addTerminalConnection(token, {
-						url: event.data.url,
-						key: event.data.key,
+						url: String(eventData.url ?? ''),
+						key: String(eventData.key ?? ''),
 						name: 'Local Open Terminal'
 					});
-				} else if (event.data.action === 'remove') {
-					await removeTerminalConnection(token, event.data.url);
+				} else if (eventData.action === 'remove') {
+					await removeTerminalConnection(token, String(eventData.url ?? ''));
 				}
 			} else if (event.type === 'connections:openai') {
-				if (event.data.action === 'add') {
+				if (eventData.action === 'add') {
 					await addOpenAIConnection(token, {
-						url: event.data.url,
-						key: event.data.key,
-						config: event.data.config
+						url: String(eventData.url ?? ''),
+						key: String(eventData.key ?? ''),
+						config: eventData.config as Record<string, unknown> | undefined
 					});
-				} else if (event.data.action === 'remove') {
-					await removeOpenAIConnection(token, event.data.url);
+				} else if (eventData.action === 'remove') {
+					await removeOpenAIConnection(token, String(eventData.url ?? ''));
 				}
 			}
 		} catch (e) {
@@ -889,7 +946,7 @@
 		}
 	};
 
-	const windowMessageEventHandler = async (event) => {
+	const windowMessageEventHandler = async (event: MessageEvent) => {
 		if (
 			!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'].includes(
 				event.origin
@@ -899,14 +956,14 @@
 		}
 
 		if (event.data === 'export:stats' || event.data?.type === 'export:stats') {
-			syncStatsEventData = event.data;
+			syncStatsEventData = event.data as SyncStatsEventData;
 			showSyncStatsModal = true;
 		}
 	};
 
-	onMount(async () => {
+	onMount(() => {
 		const originalFetch = window.fetch.bind(window);
-		window.fetch = async (input, init) => {
+		window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 			const response = await originalFetch(input, init);
 
 			if (
@@ -925,17 +982,17 @@
 
 		let touchstartY = 0;
 
-		function isNavOrDescendant(el) {
+		function isNavOrDescendant(el: EventTarget | null): boolean {
 			const nav = document.querySelector('nav'); // change selector if needed
-			return nav && (el === nav || nav.contains(el));
+			return Boolean(nav && el instanceof Node && (el === nav || nav.contains(el)));
 		}
 
-		const touchstartHandler = (e) => {
+		const touchstartHandler = (e: TouchEvent) => {
 			if (!isNavOrDescendant(e.target)) return;
 			touchstartY = e.touches[0].clientY;
 		};
 
-		const touchmoveHandler = (e) => {
+		const touchmoveHandler = (e: TouchEvent) => {
 			if (!isNavOrDescendant(e.target)) return;
 			const touchY = e.touches[0].clientY;
 			const touchDiff = touchY - touchstartY;
@@ -945,7 +1002,7 @@
 			}
 		};
 
-		const touchendHandler = (e) => {
+		const touchendHandler = (e: TouchEvent) => {
 			if (!isNavOrDescendant(e.target)) return;
 			if (showRefresh) {
 				showRefresh = false;
@@ -957,228 +1014,227 @@
 		document.addEventListener('touchmove', touchmoveHandler, { passive: false });
 		document.addEventListener('touchend', touchendHandler);
 
-		if (typeof window !== 'undefined') {
-			if (window.applyTheme) {
-				window.applyTheme();
-			}
+		const layoutWindow = getLayoutWindow();
+		if (typeof window !== 'undefined' && layoutWindow.applyTheme) {
+			layoutWindow.applyTheme();
 		}
 
-		if (window?.electronAPI) {
-			const info = await window.electronAPI.send({
-				type: 'app:info'
-			});
-
-			if (info) {
-				isApp.set(true);
-				appInfo.set(info);
-
-				const data = await window.electronAPI.send({
-					type: 'app:data'
+		void (async () => {
+			if (layoutWindow.electronAPI) {
+				const info = await layoutWindow.electronAPI.send({
+					type: 'app:info'
 				});
 
-				if (data) {
-					appData.set(data);
-				}
-			}
+				if (info) {
+					isApp.set(true);
+					(appInfo as Writable<DesktopAppInfo | null>).set(info);
 
-			// Listen for desktop service lifecycle events (scalable protocol)
-			if (window.electronAPI.onEvent) {
-				window.electronAPI.onEvent(desktopEventHandler);
-			}
-		}
-
-		// Listen for messages on the BroadcastChannel
-		bc.onmessage = (event) => {
-			if (event.data === 'active') {
-				isLastActiveTab.set(false); // Another tab became active
-			}
-		};
-
-		// Set yourself as the last active tab when this tab is focused
-		const handleVisibilityChange = () => {
-			if (document.visibilityState === 'visible') {
-				isLastActiveTab.set(true); // This tab is now the active tab
-				bc.postMessage('active'); // Notify other tabs that this tab is active
-
-				// Check token expiry when the tab becomes active
-				checkTokenExpiry();
-			}
-		};
-
-		// Add event listener for visibility state changes
-		document.addEventListener('visibilitychange', handleVisibilityChange);
-
-		// Call visibility change handler initially to set state on load
-		handleVisibilityChange();
-
-		theme.set(localStorage.theme);
-
-		mobile.set(window.innerWidth < BREAKPOINT);
-
-		const onResize = () => {
-			if (window.innerWidth < BREAKPOINT) {
-				mobile.set(true);
-			} else {
-				mobile.set(false);
-			}
-		};
-		window.addEventListener('resize', onResize);
-
-		user.subscribe(async (value) => {
-			if (value) {
-				$socket?.off('events', chatEventHandler);
-				$socket?.off('events:channel', channelEventHandler);
-
-				$socket?.on('events', chatEventHandler);
-				$socket?.on('events:channel', channelEventHandler);
-
-				// Set up the token expiry check
-				if (tokenTimer) {
-					clearInterval(tokenTimer);
-				}
-				tokenTimer = setInterval(checkTokenExpiry, 15000);
-			} else {
-				$socket?.off('events', chatEventHandler);
-				$socket?.off('events:channel', channelEventHandler);
-			}
-		});
-
-		let backendConfig = null;
-		try {
-			backendConfig = await getBackendConfig();
-			console.log('Backend config:', backendConfig);
-		} catch (error) {
-			if (error?.authRedirect) {
-				// Forward-auth proxy is redirecting to an external login page.
-				// Full-page navigation lets the browser follow the redirect natively.
-				window.location.href = '/';
-				return;
-			}
-			console.error('Error loading backend config:', error);
-		}
-		// Initialize i18n even if we didn't get a backend config,
-		// so `/error` can show something that's not `undefined`.
-
-		initI18n(localStorage?.locale);
-		if (!localStorage.locale) {
-			const languages = await getLanguages();
-			const browserLanguages = navigator.languages
-				? navigator.languages
-				: [navigator.language || navigator.userLanguage];
-			const lang = backendConfig?.default_locale
-				? backendConfig.default_locale
-				: bestMatchingLanguage(languages, browserLanguages, 'en-US');
-			changeLanguage(lang);
-			dayjs.locale(lang);
-		}
-
-		if (backendConfig) {
-			// Save Backend Status to Store
-			await config.set(backendConfig);
-			await WEBUI_NAME.set(backendConfig.name);
-
-			if ($config) {
-				await setupSocket($config.features?.enable_websocket ?? true);
-
-				const currentUrl = `${window.location.pathname}${window.location.search}`;
-				const encodedUrl = encodeURIComponent(currentUrl);
-
-				if (localStorage.token) {
-					// Get Session User Info
-					const sessionUser = await getSessionUser(localStorage.token).catch((error) => {
-						toast.error(`${error}`);
-						return null;
+					const data = await layoutWindow.electronAPI.send({
+						type: 'app:data'
 					});
 
-					if (sessionUser) {
-						await user.set(sessionUser);
-						try {
-							await config.set(await getBackendConfig());
-						} catch (error) {
-							console.error('Error refreshing backend config:', error);
-						}
-
-						// Keep user timezone in sync on every app load/refresh
-						const timezone = getUserTimezone();
-						if (timezone) {
-							updateUserTimezone(localStorage.token, timezone);
-						}
-
-						// Relay auth token to desktop app for API access
-						if (window.electronAPI?.send) {
-							window.electronAPI
-								.send({
-									type: 'token:update',
-									token: localStorage.token
-								})
-								.catch(() => {});
-						}
-					} else {
-						// Redirect Invalid Session User to /auth Page
-						localStorage.removeItem('token');
-						await goto(`/auth?redirect=${encodedUrl}`);
-					}
-				} else {
-					// Don't redirect if we're already on the auth page
-					// Needed because we pass in tokens from OAuth logins via URL fragments
-					if ($page.url.pathname !== '/auth') {
-						await goto(`/auth?redirect=${encodedUrl}`);
+					if (data) {
+						(appData as Writable<DesktopAppInfo | null>).set(data);
 					}
 				}
+
+				// Listen for desktop service lifecycle events (scalable protocol)
+				layoutWindow.electronAPI.onEvent?.(desktopEventHandler);
 			}
-		} else {
-			// Redirect to /error when Backend Not Detected
-			await goto(`/error`);
-		}
 
-		await tick();
+			// Listen for messages on the BroadcastChannel
+			bc.onmessage = (event: MessageEvent) => {
+				if (event.data === 'active') {
+					isLastActiveTab.set(false); // Another tab became active
+				}
+			};
 
-		if (
-			document.documentElement.classList.contains('her') &&
-			document.getElementById('progress-bar')
-		) {
-			loadingProgress.subscribe((value) => {
-				const progressBar = document.getElementById('progress-bar');
+			// Set yourself as the last active tab when this tab is focused
+			const handleVisibilityChange = () => {
+				if (document.visibilityState === 'visible') {
+					isLastActiveTab.set(true); // This tab is now the active tab
+					bc.postMessage('active'); // Notify other tabs that this tab is active
 
-				if (progressBar) {
-					progressBar.style.width = `${value}%`;
+					// Check token expiry when the tab becomes active
+					checkTokenExpiry();
+				}
+			};
+
+			// Add event listener for visibility state changes
+			document.addEventListener('visibilitychange', handleVisibilityChange);
+
+			// Call visibility change handler initially to set state on load
+			handleVisibilityChange();
+
+			theme.set(localStorage.theme);
+
+			mobile.set(window.innerWidth < BREAKPOINT);
+
+			const onResize = () => {
+				if (window.innerWidth < BREAKPOINT) {
+					mobile.set(true);
+				} else {
+					mobile.set(false);
+				}
+			};
+			window.addEventListener('resize', onResize);
+
+			user.subscribe(async (value: SessionUser | undefined) => {
+				if (value) {
+					$socket?.off('events', chatEventHandler);
+					$socket?.off('events:channel', channelEventHandler);
+
+					$socket?.on('events', chatEventHandler);
+					$socket?.on('events:channel', channelEventHandler);
+
+					// Set up the token expiry check
+					if (tokenTimer) {
+						clearInterval(tokenTimer);
+					}
+					tokenTimer = setInterval(checkTokenExpiry, 15000);
+				} else {
+					$socket?.off('events', chatEventHandler);
+					$socket?.off('events:channel', channelEventHandler);
 				}
 			});
 
-			await loadingProgress.set(100);
+			let backendConfig: AppConfig | null = null;
+			try {
+				backendConfig = await getBackendConfig();
+				console.log('Backend config:', backendConfig);
+			} catch (error: unknown) {
+				if (
+					error &&
+					typeof error === 'object' &&
+					'authRedirect' in error &&
+					(error as { authRedirect?: boolean }).authRedirect
+				) {
+					// Forward-auth proxy is redirecting to an external login page.
+					// Full-page navigation lets the browser follow the redirect natively.
+					window.location.href = '/';
+					return;
+				}
+				console.error('Error loading backend config:', error);
+			}
+			// Initialize i18n even if we didn't get a backend config,
+			// so `/error` can show something that's not `undefined`.
 
-			document.getElementById('splash-screen')?.remove();
+			initI18n(localStorage?.locale);
+			if (!localStorage.locale) {
+				const languages = await getLanguages();
+				const legacyNavigator = navigator as LegacyNavigator;
+				const browserLanguages = navigator.languages
+					? [...navigator.languages]
+					: [navigator.language || legacyNavigator.userLanguage || 'en-US'];
+				const lang = backendConfig?.default_locale
+					? backendConfig.default_locale
+					: bestMatchingLanguage(languages, browserLanguages, 'en-US');
+				changeLanguage(lang);
+				dayjs.locale(lang);
+			}
 
-			const audio = new Audio(`/audio/greeting.mp3`);
-			const playAudio = () => {
-				audio.play();
-				document.removeEventListener('click', playAudio);
-			};
+			if (backendConfig) {
+				// Save Backend Status to Store
+				await config.set(backendConfig);
+				await WEBUI_NAME.set(backendConfig.name);
 
-			document.addEventListener('click', playAudio);
+				if ($config) {
+					await setupSocket($config.features?.enable_websocket ?? true);
 
-			loaded = true;
-		} else {
-			document.getElementById('splash-screen')?.remove();
-			loaded = true;
-		}
+					const currentUrl = `${window.location.pathname}${window.location.search}`;
+					const encodedUrl = encodeURIComponent(currentUrl);
 
-		// Auto-show SyncStatsModal when opened with ?sync=true (from community)
-		if (
-			(window.opener ?? false) &&
-			$page.url.searchParams.get('sync') === 'true' &&
-			($config?.features?.enable_community_sharing ?? false)
-		) {
-			showSyncStatsModal = true;
-		}
+					if (localStorage.token) {
+						// Get Session User Info
+						const sessionUser = await getSessionUser(localStorage.token).catch((error) => {
+							toast.error(`${error}`);
+							return null;
+						});
+
+						if (sessionUser) {
+							await user.set(sessionUser);
+							try {
+								await config.set(await getBackendConfig());
+							} catch (error) {
+								console.error('Error refreshing backend config:', error);
+							}
+
+							// Keep user timezone in sync on every app load/refresh
+							const timezone = getUserTimezone();
+							if (timezone) {
+								updateUserTimezone(localStorage.token, timezone);
+							}
+
+							// Relay auth token to desktop app for API access
+							layoutWindow.electronAPI?.send?.({
+								type: 'token:update',
+								token: localStorage.token
+							}).catch(() => {});
+						} else {
+							// Redirect Invalid Session User to /auth Page
+							localStorage.removeItem('token');
+							await goto(`/auth?redirect=${encodedUrl}`);
+						}
+					} else {
+						// Don't redirect if we're already on the auth page
+						// Needed because we pass in tokens from OAuth logins via URL fragments
+						if ($page.url.pathname !== '/auth') {
+							await goto(`/auth?redirect=${encodedUrl}`);
+						}
+					}
+				}
+			} else {
+				// Redirect to /error when Backend Not Detected
+				await goto(`/error`);
+			}
+
+			await tick();
+
+			if (
+				document.documentElement.classList.contains('her') &&
+				document.getElementById('progress-bar')
+			) {
+				loadingProgress.subscribe((value) => {
+					const progressBar = document.getElementById('progress-bar');
+
+					if (progressBar) {
+						progressBar.style.width = `${value}%`;
+					}
+				});
+
+				await loadingProgress.set(100);
+
+				document.getElementById('splash-screen')?.remove();
+
+				const audio = new Audio(`/audio/greeting.mp3`);
+				const playAudio = () => {
+					audio.play();
+					document.removeEventListener('click', playAudio);
+				};
+
+				document.addEventListener('click', playAudio);
+
+				loaded = true;
+			} else {
+				document.getElementById('splash-screen')?.remove();
+				loaded = true;
+			}
+
+			// Auto-show SyncStatsModal when opened with ?sync=true (from community)
+			if (
+				(window.opener ?? false) &&
+				$page.url.searchParams.get('sync') === 'true' &&
+				($config?.features?.enable_community_sharing ?? false)
+			) {
+				showSyncStatsModal = true;
+			}
+		})();
 
 		return () => {
-			window.removeEventListener('resize', onResize);
 			window.removeEventListener('message', windowMessageEventHandler);
 			document.removeEventListener('touchstart', touchstartHandler);
 			document.removeEventListener('touchmove', touchmoveHandler);
 			document.removeEventListener('touchend', touchendHandler);
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
 		};
 	});
 
@@ -1223,7 +1279,7 @@
 {/if}
 
 {#if $config?.features.enable_community_sharing}
-	<SyncStatsModal bind:show={showSyncStatsModal} eventData={syncStatsEventData} />
+	<SyncStatsModal bind:show={showSyncStatsModal} eventData={syncStatsEventData as null} />
 {/if}
 
 <ConfirmDialog

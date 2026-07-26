@@ -2,7 +2,7 @@
 	export let show = false;
 	export let selectedModelId = '';
 
-	import { marked } from 'marked';
+	import {marked} from 'marked';
 	// Configure marked with extensions
 	marked.use({
 		breaks: true,
@@ -30,47 +30,44 @@
 		}
 	});
 
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 
-	import { goto } from '$app/navigation';
-	import { onMount, tick, getContext } from 'svelte';
+	
+	import {onMount, tick, getContext} from 'svelte';
 
-	import { WEBUI_BASE_URL } from '$lib/constants';
-	import { WEBUI_NAME, config, user, models, settings } from '$lib/stores';
+	import {WEBUI_BASE_URL} from '$lib/constants';
+	import {models} from '$lib/stores';
 
-	import { chatCompletion } from '$lib/apis/openai';
+	import {chatCompletion} from '$lib/apis/openai';
 
-	import { splitStream } from '$lib/utils';
+	import {splitStream} from '$lib/utils';
 
 	import Messages from '$lib/components/notes/NoteEditor/Chat/Messages.svelte';
 	import MessageInput from '$lib/components/channel/MessageInput.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import Pencil from '$lib/components/icons/Pencil.svelte';
-	import PencilSquare from '$lib/components/icons/PencilSquare.svelte';
+import PencilSquare from '$lib/components/icons/PencilSquare.svelte';
 
 	const i18n = getContext('i18n');
 
-	export let editor = null;
+	export let editor: unknown = null;
 
 	export let editing = false;
 	export let streaming = false;
 	export let stopResponseFlag = false;
 
-	export let note = null;
+	export let note: Record<string, unknown> | null = null;
 	export let selectedContent = null;
 
 	export let files = [];
 	export let messages = [];
 
-	export let onInsert = (content) => {};
+	export let onInsert = (_content) => {};
 	export let onStop = () => {};
 	export let onEdited = () => {};
 
 	export const insertNoteHandler = () => {};
 	export let scrollToBottomHandler = () => {};
-
-	let loaded = false;
 
 	let loading = false;
 
@@ -78,7 +75,7 @@
 
 	let system = '';
 	let editEnabled = false;
-	let chatInputElement = null;
+	let chatInputElement: HTMLTextAreaElement | null = null;
 
 	const DEFAULT_DOCUMENT_EDITOR_PROMPT = `You are an expert document editor.
 
@@ -165,7 +162,7 @@ Based on the user's instruction, update and enhance the existing notes or select
 		system +=
 			`<notes>${note?.data?.content?.md ?? ''}</notes>` +
 			(files && files.length > 0
-				? `\n<context>${files.map((file) => `${file.name}: ${file?.file?.data?.content ?? 'Could not extract content'}\n`).join('')}</context>`
+				? `\n<context>${files.map((file: string) => `${file.name}: ${file?.file?.data?.content ?? 'Could not extract content'}\n`).join('')}</context>`
 				: '') +
 			(selectedContent ? `\n<selection>${selectedContent?.text}</selection>` : '');
 
@@ -297,8 +294,8 @@ Based on the user's instruction, update and enhance the existing notes or select
 		}
 	};
 
-	const submitHandler = async (e) => {
-		const { content, data } = e;
+	const submitHandler = async (e: Event) => {
+		const { content, _data } = e;
 		if (selectedModelId && content) {
 			messages.push({
 				role: 'user',
@@ -324,12 +321,9 @@ Based on the user's instruction, update and enhance the existing notes or select
 	onMount(async () => {
 		editEnabled = localStorage.getItem('noteEditEnabled') === 'true';
 
-		loaded = true;
-
 		await tick();
 		scrollToBottom();
-	});
-</script>
+	});</script>
 
 <div class="flex items-center mb-1.5 pt-1.5">
 	<div class="flex items-center mr-1">

@@ -1,15 +1,14 @@
 <script lang="ts">
-	import { getContext, onMount } from 'svelte';
+	import {getContext, onMount} from 'svelte';
 
 	const i18n = getContext('i18n');
 
-	import { getGroups, getGroupById, getGroupInfoById } from '$lib/apis/groups';
-	import { getUserInfoById } from '$lib/apis/users';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {getGroups, getGroupInfoById} from '$lib/apis/groups';
+	import {getUserInfoById} from '$lib/apis/users';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import Badge from '$lib/components/common/Badge.svelte';
-	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
-	import Plus from '$lib/components/icons/Plus.svelte';
+import Plus from '$lib/components/icons/Plus.svelte';
 	import AddAccessModal from './AddAccessModal.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
@@ -295,7 +294,7 @@
 	};
 
 	const ensureUsersByIds = async (userIds: string[]) => {
-		const pendingIds = userIds.filter((id) => !userById[id] && !resolvingUserIds.has(id));
+		const pendingIds = userIds.filter((id: string) => !userById[id] && !resolvingUserIds.has(id));
 		if (!pendingIds.length) return;
 
 		for (const id of pendingIds) {
@@ -303,7 +302,7 @@
 		}
 
 		const fetched = await Promise.all(
-			pendingIds.map(async (id) => {
+			pendingIds.map(async (id: string) => {
 				const user = await getUserInfoById(localStorage.token, id).catch((error) => {
 					console.error(error);
 					return null;
@@ -338,7 +337,7 @@
 	// expression so Svelte tracks the dependency.
 	const ensureGroupsByIds = async (groupIds: string[]) => {
 		const pendingIds = groupIds.filter(
-			(id) => !groups.find((g) => g.id === id) && !resolvingGroupIds.has(id)
+			(id: string) => !groups.find((g) => g.id === id) && !resolvingGroupIds.has(id)
 		);
 		if (!pendingIds.length) return;
 
@@ -347,7 +346,7 @@
 		}
 
 		const fetched = await Promise.all(
-			pendingIds.map(async (id) => {
+			pendingIds.map(async (id: string) => {
 				const group = await getGroupInfoById(localStorage.token, id).catch((error) => {
 					console.error(error);
 					return null;
@@ -374,14 +373,14 @@
 	$: readGroupIds = (accessGrants, getPrincipalIdsByPermission('group', 'read'));
 	$: writeGroupIds = (accessGrants, getPrincipalIdsByPermission('group', 'write'));
 	$: readUserIds =
-		(accessGrants, getPrincipalIdsByPermission('user', 'read').filter((id) => id !== '*'));
+		(accessGrants, getPrincipalIdsByPermission('user', 'read').filter((id: string) => id !== '*'));
 	$: writeUserIds =
-		(accessGrants, getPrincipalIdsByPermission('user', 'write').filter((id) => id !== '*'));
+		(accessGrants, getPrincipalIdsByPermission('user', 'write').filter((id: string) => id !== '*'));
 
 	$: selectedUserIds = Array.from(new Set([...readUserIds, ...writeUserIds]));
 
 	$: selectedUsers = selectedUserIds
-		.map((id) => {
+		.map((id: string) => {
 			return userById[id] ?? { id, name: id, email: '' };
 		})
 		.sort((a, b) => a.name.localeCompare(b.name));

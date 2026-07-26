@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { getModels, getTaskConfig, updateTaskConfig } from '$lib/apis';
-	import { getChatConfig, updateChatConfig } from '$lib/apis/chats';
-	import { config, settings } from '$lib/stores';
-	import { createEventDispatcher, onMount, getContext } from 'svelte';
-	import { toast } from 'svelte-sonner';
+	import {getModels, getTaskConfig, updateTaskConfig} from '$lib/apis';
+	import {getChatConfig, updateChatConfig} from '$lib/apis/chats';
+	
+	import {createEventDispatcher, onMount, getContext} from 'svelte';
+	import {toast} from 'svelte-sonner';
 
-	import { getBaseModels } from '$lib/apis/models';
+	import {getBaseModels} from '$lib/apis/models';
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';

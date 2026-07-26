@@ -26,6 +26,7 @@ from open_webui.events import EVENTS, publish_event, publish_model_provider_requ
 from open_webui.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
     AIOHTTP_CLIENT_TIMEOUT,
+    AIOHTTP_CLIENT_TIMEOUT_STREAM_IDLE,
     AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST,
     BYPASS_MODEL_ACCESS_CONTROL,
     ENABLE_FORWARD_USER_INFO_HEADERS,
@@ -50,7 +51,14 @@ from open_webui.utils.anthropic import (
     is_anthropic_url,
 )
 from open_webui.socket.main import get_event_emitter
-from open_webui.utils.llamacpp_tokens import compute_context_breakdown, normalize_llamacpp_base
+from open_webui.utils.llamacpp_tokens import (
+    LLAMACPP_CONVERSATION_ID_HEADER,
+    apply_llamacpp_provider_payload,
+    apply_task_thinking_policy,
+    compute_context_breakdown,
+    llamacpp_conversation_id,
+    normalize_llamacpp_base,
+)
 from open_webui.utils.headers import get_custom_headers, include_user_info_headers
 from open_webui.utils.misc import (
     convert_logit_bias_input_to_json,
@@ -1377,6 +1385,14 @@ async def generate_chat_completion(
 
     is_responses = api_config.get('api_type') == 'responses'
     is_anthropic = is_anthropic_url(url)
+
+    if (
+        api_config.get('provider') == 'llama.cpp'
+        and not is_responses
+        and not is_anthropic
+        and (conversation_id := llamacpp_conversation_id((metadata or {}).get('chat_id'), payload.get('model')))
+    ):
+        headers[LLAMACPP_CONVERSATION_ID_HEADER] = conversation_id
     request_metadata = metadata or getattr(request.state, 'metadata', None) or {}
 
     if api_config.get('azure') or api_config.get('provider') == 'azure':
@@ -1426,6 +1442,7 @@ async def generate_chat_completion(
                 )
 
     if not is_responses and not is_anthropic and api_config.get('provider') == 'llama.cpp':
+        apply_llamacpp_provider_payload(payload)
         await _attach_llamacpp_context_breakdown(
             request,
             payload=payload,
@@ -1436,6 +1453,8 @@ async def generate_chat_completion(
             headers=headers,
             cookies=cookies,
         )
+
+    apply_task_thinking_policy(payload, metadata, model=model, api_config=api_config)
 
     payload = json.dumps(payload)
 
@@ -1453,7 +1472,7 @@ async def generate_chat_completion(
             headers=headers,
             cookies=cookies,
             ssl=AIOHTTP_CLIENT_SESSION_SSL,
-            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
+            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT, sock_read=AIOHTTP_CLIENT_TIMEOUT_STREAM_IDLE),
         )
 
         # Check if response is SSE
@@ -1611,7 +1630,7 @@ async def embeddings(request: Request, form_data: dict, user):
             data=body,
             headers=headers,
             cookies=cookies,
-            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
+            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT, sock_read=AIOHTTP_CLIENT_TIMEOUT_STREAM_IDLE),
             ssl=AIOHTTP_CLIENT_SESSION_SSL,
         )
 
@@ -1737,7 +1756,7 @@ async def responses(
             headers=headers,
             cookies=cookies,
             ssl=AIOHTTP_CLIENT_SESSION_SSL,
-            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
+            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT, sock_read=AIOHTTP_CLIENT_TIMEOUT_STREAM_IDLE),
         )
 
         # Check if response is SSE
@@ -1858,7 +1877,7 @@ async def proxy(path: str, request: Request, user=Depends(get_verified_user)):
             headers=headers,
             cookies=cookies,
             ssl=AIOHTTP_CLIENT_SESSION_SSL,
-            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
+            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT, sock_read=AIOHTTP_CLIENT_TIMEOUT_STREAM_IDLE),
         )
 
         # Check if response is SSE

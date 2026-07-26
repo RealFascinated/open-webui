@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { onMount, tick, getContext } from 'svelte';
+	import {onMount, tick, getContext} from 'svelte';
 
-	import { decodeString } from '$lib/utils';
-	import { knowledge } from '$lib/stores';
+	import {decodeString} from '$lib/utils';
+	
 
-	import { getKnowledgeBases, searchKnowledgeFilesById } from '$lib/apis/knowledge';
+	import {getKnowledgeBases, searchKnowledgeFilesById} from '$lib/apis/knowledge';
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Database from '$lib/components/icons/Database.svelte';
@@ -16,7 +16,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let onSelect = (e) => {};
+	export let onSelect = (_e: Event) => {};
 
 	let loaded = false;
 	let selectedIdx = 0;
@@ -91,8 +91,7 @@
 	};
 
 	let page = 1;
-	let items = null;
-	let total = null;
+	let items: Record<string, unknown>[] | null = null;
 
 	let itemsLoading = false;
 	let allItemsLoaded = false;
@@ -110,7 +109,6 @@
 	const reset = () => {
 		page = 1;
 		items = null;
-		total = null;
 		allItemsLoaded = false;
 		itemsLoading = false;
 	};
@@ -129,7 +127,6 @@
 
 		if (res) {
 			console.log(res);
-			total = res.total;
 			const pageItems = res.items;
 
 			if ((pageItems ?? []).length === 0) {
@@ -154,8 +151,7 @@
 	onMount(async () => {
 		await tick();
 		loaded = true;
-	});
-</script>
+	});</script>
 
 {#if loaded && items !== null}
 	<div class="flex flex-col gap-0.5">
@@ -239,7 +235,7 @@
 								{$i18n.t('No files in this knowledge base.')}
 							</div>
 						{:else}
-							{#each selectedFileItems as file, fileIdx (file.id)}
+							{#each selectedFileItems as file, _fileIdx (file.id)}
 								<button
 									class=" px-2.5 py-1 rounded-xl w-full text-left flex justify-between items-center text-sm hover:bg-gray-50 hover:dark:bg-gray-800 hover:dark:text-gray-100"
 									type="button"
@@ -268,7 +264,7 @@
 
 							{#if !selectedFileAllItemsLoaded && !selectedFileItemsLoading}
 								<Loader
-									on:visible={async (e) => {
+									on:visible={async (_e) => {
 										if (!selectedFileItemsLoading) {
 											await loadMoreSelectedFileItems();
 										}
@@ -289,7 +285,7 @@
 
 			{#if !allItemsLoaded}
 				<Loader
-					on:visible={(e) => {
+					on:visible={(_e) => {
 						if (!itemsLoading) {
 							loadMoreItems();
 						}

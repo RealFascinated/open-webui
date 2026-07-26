@@ -1,9 +1,6 @@
 <script lang="ts">
-	import { getContext, createEventDispatcher, onDestroy } from 'svelte';
-	import { useSvelteFlow, useNodesInitialized, useStore, SvelteFlowProvider } from '@xyflow/svelte';
-
-	const dispatch = createEventDispatcher();
-
+	
+	import {SvelteFlowProvider} from '@xyflow/svelte';
 	import View from './Overview/View.svelte';
 
 	export let history;

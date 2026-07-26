@@ -1487,6 +1487,39 @@ export const exportSingleChatStats = async (token: string, chatId: string) => {
 	return res;
 };
 
+export const compactChatById = async (
+	token: string,
+	id: string,
+	model?: string | null
+) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/compact`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(model ? { model } : {})
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			error = err;
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
 export const downloadChatStats = async (
 	token: string = '',
 	updated_at: number | null = null

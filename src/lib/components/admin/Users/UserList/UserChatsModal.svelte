@@ -1,25 +1,21 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { getContext } from 'svelte';
+	
+	import {getContext} from 'svelte';
 
 	import dayjs from 'dayjs';
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
 
 	dayjs.extend(localizedFormat);
 
-	import { getChatListByUserId, deleteChatById, getArchivedChatList } from '$lib/apis/chats';
-
-	import Modal from '$lib/components/common/Modal.svelte';
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import Spinner from '$lib/components/common/Spinner.svelte';
-	import ChatsModal from '$lib/components/layout/ChatsModal.svelte';
+	import {getChatListByUserId} from '$lib/apis/chats';
+import ChatsModal from '$lib/components/layout/ChatsModal.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let show = false;
 	export let user;
 
-	let chatList = null;
+	let chatList: Record<string, unknown>[] | null = null;
 	let page = 1;
 
 	let query = '';

@@ -2,6 +2,8 @@ import { APP_NAME } from '$lib/constants';
 import { type Writable, writable } from 'svelte/store';
 import type { ModelConfig } from '$lib/apis';
 import type { Banner } from '$lib/types';
+import type { UserPermissions } from '$lib/types/permissions';
+import type { AppConfig } from '$lib/types/config';
 import type { Socket } from 'socket.io-client';
 import type { AudioQueue } from '$lib/utils/audio';
 
@@ -15,7 +17,10 @@ export const WEBUI_NAME = writable(APP_NAME);
 export const WEBUI_VERSION = writable(null);
 export const WEBUI_DEPLOYMENT_ID = writable(null);
 
-export const config: Writable<Config | undefined> = writable(undefined);
+export type { AppConfig, PromptSuggestion } from '$lib/types/config';
+export type { AppConfig as Config } from '$lib/types/config';
+
+export const config: Writable<AppConfig | undefined> = writable(undefined);
 export const user: Writable<SessionUser | undefined> = writable(undefined);
 
 // Electron App
@@ -58,20 +63,20 @@ export const chatTitle = writable('');
 export const channels = writable([]);
 export const channelId = writable(null);
 
-export const chats = writable(null);
-export const pinnedChats = writable([]);
-export const pinnedNotes = writable([]);
-export const tags = writable([]);
-export const projects = writable([]);
+export const chats: Writable<Record<string, unknown>[] | null> = writable(null);
+export const pinnedChats: Writable<Record<string, unknown>[]> = writable([]);
+export const pinnedNotes: Writable<Record<string, unknown>[]> = writable([]);
+export const tags: Writable<Record<string, unknown>[]> = writable([]);
+export const projects: Writable<Record<string, unknown>[]> = writable([]);
 
-export const selectedProject = writable(null);
+export const selectedProject: Writable<Record<string, unknown> | null> = writable(null);
 
 export const models: Writable<Model[]> = writable([]);
 
-export const knowledge: Writable<null | Document[]> = writable(null);
-export const tools = writable(null);
-export const skills = writable(null);
-export const functions = writable(null);
+export const knowledge: Writable<null | KnowledgeDocument[]> = writable(null);
+export const tools: Writable<Record<string, unknown>[] | null> = writable(null);
+export const skills: Writable<Record<string, unknown>[] | null> = writable(null);
+export const functions: Writable<Record<string, unknown>[] | null> = writable(null);
 
 export const toolServers: Writable<ToolServerData[]> = writable([]);
 export const terminalServers: Writable<TerminalServerConnection[]> = writable([]);
@@ -176,6 +181,7 @@ type BaseModel = {
 	id: string;
 	name: string;
 	info?: ModelConfig;
+	filters?: Array<{ id: string; [key: string]: unknown }>;
 	owned_by: 'ollama' | 'openai' | 'arena';
 };
 
@@ -252,13 +258,16 @@ type TerminalServerConnection = {
 	path?: string;
 };
 
-type Settings = {
+export type Settings = {
 	toolServers?: ToolServerConnection[];
 	terminalServers?: TerminalServerConnection[];
 	showUpdateToast?: boolean;
 	showChangelog?: boolean;
 	showEmojiInCall?: boolean;
 	voiceInterruption?: boolean;
+	voiceSilenceTimeoutMs?: number;
+	voiceVadSensitivity?: 'low' | 'medium' | 'high';
+	voiceStreamingStt?: boolean;
 	collapseCodeBlocks?: boolean;
 	expandDetails?: boolean;
 	notificationSound?: boolean;
@@ -280,7 +289,7 @@ type Settings = {
 	memory?: boolean;
 	autoTags?: boolean;
 	autoFollowUps?: boolean;
-	splitLargeChunks?(body: unknown, splitLargeChunks: unknown): unknown;
+	splitLargeChunks?: boolean;
 	backgroundImageUrl?: null;
 	landingPageMode?: string;
 	iframeSandboxAllowForms?: boolean;
@@ -308,6 +317,10 @@ type Settings = {
 	recentEmojis?: string[];
 	pinnedMenuItems?: string[];
 	pinnedNotesOrder?: string[];
+	insertSuggestionPrompt?: boolean;
+	temporaryChatByDefault?: boolean;
+	tools?: string[];
+	enableMessageQueue?: boolean;
 
 	seed?: number;
 	temperature?: string;
@@ -341,64 +354,15 @@ type TitleSettings = {
 	prompt?: string;
 };
 
-type Document = {
+export type KnowledgeDocument = {
 	collection_name: string;
 	filename: string;
 	name: string;
 	title: string;
 };
 
-type Config = {
-	license_metadata: Record<string, unknown> | null;
-	status: boolean;
-	name: string;
-	version: string;
-	default_locale: string;
-	default_models: string;
-	default_prompt_suggestions: PromptSuggestion[];
-	features: {
-		auth: boolean;
-		auth_trusted_header: boolean;
-		enable_api_keys: boolean;
-		enable_signup: boolean;
-		enable_login_form: boolean;
-		enable_web_search?: boolean;
-		enable_web_search_confirmation?: boolean;
-		web_search_confirmation_content?: string;
-		enable_google_drive_integration: boolean;
-		enable_onedrive_integration: boolean;
-		enable_image_generation: boolean;
-		enable_admin_export: boolean;
-		enable_admin_chat_access: boolean;
-		enable_admin_analytics: boolean;
-		enable_community_sharing: boolean;
-		enable_memories: boolean;
-		enable_autocomplete_generation: boolean;
-		enable_version_update_check: boolean;
-		enable_pyodide_file_persistence?: boolean;
-		enable_projects?: boolean;
-		project_max_file_count?: number;
-	};
-	oauth: {
-		providers: {
-			[key: string]: string;
-		};
-		auto_redirect?: boolean;
-	};
-	ui?: {
-		pending_user_overlay_title?: string;
-		pending_user_overlay_content?: string;
-		iframe_csp?: string;
-	};
-};
-
-type PromptSuggestion = {
-	content: string;
-	title: [string, string];
-};
-
 export type SessionUser = {
-	permissions: Record<string, unknown>;
+	permissions: UserPermissions;
 	id: string;
 	email: string;
 	name: string;

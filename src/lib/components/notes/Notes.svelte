@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { marked } from 'marked';
-	import { toast } from 'svelte-sonner';
+	import {marked} from 'marked';
+	import {toast} from 'svelte-sonner';
 	import fileSaver from 'file-saver';
 
 	const { saveAs } = fileSaver;
@@ -23,32 +23,23 @@
 		}
 	}
 
-	import { onMount, getContext, onDestroy } from 'svelte';
+	import {onMount, getContext} from 'svelte';
 
 	const i18n = getContext('i18n');
 	// Assuming $i18n.languages is an array of language codes
 	$: loadLocale($i18n.languages);
 
-	import { goto } from '$app/navigation';
-	import { WEBUI_NAME, config, user, pinnedNotes } from '$lib/stores';
-	import {
-		createNewNote,
-		deleteNoteById,
-		getNoteById,
-		getNoteList,
-		searchNotes,
-		toggleNotePinnedStatusById,
-		getPinnedNoteList
-	} from '$lib/apis/notes';
-	import { capitalizeFirstLetter, copyToClipboard, getTimeRange } from '$lib/utils';
-	import { downloadPdf, createNoteHandler } from './utils';
+	import {goto} from '$app/navigation';
+	import {WEBUI_NAME, pinnedNotes} from '$lib/stores';
+	import {createNewNote, deleteNoteById, getNoteById, searchNotes, toggleNotePinnedStatusById, getPinnedNoteList} from '$lib/apis/notes';
+	import {capitalizeFirstLetter, copyToClipboard, getTimeRange} from '$lib/utils';
+	import {downloadPdf, createNoteHandler} from './utils';
 
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import Search from '../icons/Search.svelte';
 	import Plus from '../icons/Plus.svelte';
-	import ChevronRight from '../icons/ChevronRight.svelte';
-	import Spinner from '../common/Spinner.svelte';
+import Spinner from '../common/Spinner.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import NoteMenu from './Notes/NoteMenu.svelte';
 	import FilesOverlay from '../chat/MessageInput/FilesOverlay.svelte';
@@ -58,14 +49,11 @@
 
 	let loaded = false;
 
-	let importFiles = '';
 	let selectedNote = null;
 	let showDeleteConfirm = false;
 
-	let notes = {};
-
-	let items = null;
-	let total = null;
+	let items: Record<string, unknown>[] | null = null;
+	let total: number | null = null;
 
 	let query = '';
 	let searchDebounceTimer: ReturnType<typeof setTimeout>;
@@ -104,7 +92,7 @@
 		}
 	};
 
-	const deleteNoteHandler = async (id) => {
+	const deleteNoteHandler = async (id: string) => {
 		const res = await deleteNoteById(localStorage.token, id).catch((error) => {
 			toast.error(`${error}`);
 			return null;
@@ -126,7 +114,7 @@
 			}
 
 			const reader = new FileReader();
-			reader.onload = async (event) => {
+			reader.onload = async (event: Event) => {
 				const content = event.target.result;
 				let name = file.name.replace(/\.md$/, '');
 
@@ -167,7 +155,6 @@
 		total = null;
 		allItemsLoaded = false;
 		itemsLoading = false;
-		notes = {};
 	};
 
 	const loadMoreItems = async () => {
@@ -263,7 +250,7 @@
 
 	let dragged = false;
 
-	const onDragOver = (e) => {
+	const onDragOver = (e: Event) => {
 		e.preventDefault();
 
 		// Check if a file is being dragged.
@@ -278,7 +265,7 @@
 		dragged = false;
 	};
 
-	const onDrop = async (e) => {
+	const onDrop = async (e: Event) => {
 		e.preventDefault();
 		console.log(e);
 
@@ -313,8 +300,7 @@
 				dropzoneElement?.removeEventListener('dragleave', onDragLeave);
 			}
 		};
-	});
-</script>
+	});</script>
 
 <svelte:head>
 	<title>
@@ -481,7 +467,7 @@
 									<div
 										class="{groupedNotes.length - 1 !== idx ? 'mb-3' : ''} gap-1.5 flex flex-col"
 									>
-										{#each notesList as note, idx (note.id)}
+										{#each notesList as note, _idx (note.id)}
 											<div
 												class=" flex cursor-pointer w-full px-3.5 py-1.5 border border-gray-50 dark:border-gray-850/30 bg-transparent dark:hover:bg-gray-850 hover:bg-white rounded-2xl transition"
 											>
@@ -575,7 +561,7 @@
 											? 'mb-5'
 											: ''} gap-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
 									>
-										{#each notesList as note, idx (note.id)}
+										{#each notesList as note, _idx (note.id)}
 											<div
 												class=" flex space-x-4 cursor-pointer w-full px-4.5 py-4 border border-gray-50 dark:border-gray-850/30 bg-transparent dark:hover:bg-gray-850 hover:bg-white rounded-2xl transition"
 											>
@@ -675,7 +661,7 @@
 
 							{#if !allItemsLoaded}
 								<Loader
-									on:visible={(e) => {
+									on:visible={(_e) => {
 										if (!itemsLoading) {
 											loadMoreItems();
 										}

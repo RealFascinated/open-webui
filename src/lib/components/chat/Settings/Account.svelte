@@ -1,28 +1,25 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { onMount, getContext } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {onMount, getContext} from 'svelte';
 
-	import { user, config, settings } from '$lib/stores';
-	import { updateUserProfile, createAPIKey, getAPIKey, getSessionUser } from '$lib/apis/auths';
-	import { WEBUI_BASE_URL } from '$lib/constants';
+	import {user, config, settings} from '$lib/stores';
+	import {updateUserProfile, createAPIKey, getAPIKey, getSessionUser} from '$lib/apis/auths';
+	
 
 	import UpdatePassword from './Account/UpdatePassword.svelte';
-	import { getGravatarUrl } from '$lib/apis/utils';
-	import { generateInitialsImage, canvasPixelTest } from '$lib/utils';
-	import { copyToClipboard } from '$lib/utils';
+	
+	import {generateInitialsImage} from '$lib/utils';
+	import {copyToClipboard} from '$lib/utils';
 	import Plus from '$lib/components/icons/Plus.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
-	import User from '$lib/components/icons/User.svelte';
-	import UserProfileImage from './Account/UserProfileImage.svelte';
+import UserProfileImage from './Account/UserProfileImage.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let saveHandler: (...args: unknown[]) => unknown;
 	export let saveSettings: (...args: unknown[]) => unknown;
-
-	let loaded = false;
 
 	let profileImageUrl = '';
 	let name = '';
@@ -39,7 +36,6 @@
 
 	let APIKey = '';
 	let APIKeyCopied = false;
-	let profileImageInputElement: HTMLInputElement;
 
 	const submitHandler = async () => {
 		if (name !== $user?.name) {
@@ -120,9 +116,7 @@
 			});
 		}
 
-		loaded = true;
-	});
-</script>
+	});</script>
 
 <div id="tab-account" class="flex flex-col h-full justify-between text-sm">
 	<div class=" overflow-y-scroll max-h-[28rem] md:max-h-full">
@@ -179,7 +173,7 @@
 									class="w-full text-sm dark:text-gray-300 bg-transparent outline-hidden"
 									bind:value={_gender}
 									aria-label={$i18n.t('Gender')}
-									on:change={(e) => {
+									on:change={(_e) => {
 										console.log(_gender);
 
 										if (_gender === 'custom') {

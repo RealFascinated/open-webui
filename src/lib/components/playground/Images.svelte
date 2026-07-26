@@ -10,7 +10,6 @@
 
 	const i18n = getContext('i18n');
 
-	let loaded = false;
 	let loading = false;
 
 	let prompt = '';
@@ -30,9 +29,9 @@
 	const handleFileUpload = (event: Event) => {
 		const input = event.target as HTMLInputElement;
 		if (input.files) {
-			Array.from(input.files).forEach((file) => {
+			Array.from(input.files).forEach((file: string) => {
 				const reader = new FileReader();
-				reader.onload = (e) => {
+				reader.onload = (e: Event) => {
 					if (e.target?.result) {
 						sourceImages = [...sourceImages, e.target.result as string];
 					}
@@ -46,10 +45,10 @@
 		event.preventDefault();
 		const files = event.dataTransfer?.files;
 		if (files) {
-			Array.from(files).forEach((file) => {
+			Array.from(files).forEach((file: string) => {
 				if (file.type.startsWith('image/')) {
 					const reader = new FileReader();
-					reader.onload = (e) => {
+					reader.onload = (e: Event) => {
 						if (e.target?.result) {
 							sourceImages = [...sourceImages, e.target.result as string];
 						}
@@ -107,7 +106,7 @@
 			a.download = `image-${Date.now()}-${index}.png`;
 			a.click();
 			URL.revokeObjectURL(blobUrl);
-		} catch (error) {
+		} catch (_error) {
 			toast.error($i18n.t('Failed to download image'));
 		}
 	};
@@ -117,9 +116,7 @@
 			await goto('/');
 			return;
 		}
-		loaded = true;
-	});
-</script>
+	});</script>
 
 <div class=" flex flex-col justify-between w-full overflow-y-auto h-full">
 	<div class="mx-auto w-full md:px-0 h-full">

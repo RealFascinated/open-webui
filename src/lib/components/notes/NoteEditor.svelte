@@ -1,16 +1,29 @@
 <script lang="ts">
-	import { getContext, onDestroy, onMount, tick } from 'svelte';
-	import { v4 as uuidv4 } from 'uuid';
+	import {getContext, onDestroy, onMount, tick} from 'svelte';
+	import {v4 as uuidv4} from 'uuid';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
+	import type {Editor} from '@tiptap/core';
+	import type {Node as ProseMirrorNode} from '@tiptap/pm/model';
+	import type {AppConfig} from '$lib/types';
+	import type {
+		NoteChatMessage,
+		NoteContentVersion,
+		NoteDownloadType,
+		NoteFileItem,
+		NoteRecord,
+		NoteSelectedContent
+	} from '$lib/types';
+	import type {Model} from '$lib/stores';
+
 	const i18n = getContext('i18n');
 
-	import { marked } from 'marked';
-	import { toast } from 'svelte-sonner';
+	import {marked} from 'marked';
+	import {toast} from 'svelte-sonner';
 	import equal from 'fast-deep-equal';
 
-	import { goto } from '$app/navigation';
+	import {goto} from '$app/navigation';
 
 	import dayjs from '$lib/dayjs';
 	import calendar from 'dayjs/plugin/calendar';
@@ -21,26 +34,17 @@
 	dayjs.extend(duration);
 	dayjs.extend(relativeTime);
 
-	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
+	import {PaneGroup, Pane} from 'paneforge';
 
-	import { compressImage, copyToClipboard, splitStream, convertHeicToJpeg } from '$lib/utils';
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-	import { getFileById, uploadFile } from '$lib/apis/files';
-	import { chatCompletion, generateOpenAIChatCompletion } from '$lib/apis/openai';
+	import {compressImage, copyToClipboard, splitStream, convertHeicToJpeg} from '$lib/utils';
+	import {getAvailableModelIds} from '$lib/utils/models';
+	import {WEBUI_BASE_URL} from '$lib/constants';
+	import {getFileById, uploadFile} from '$lib/apis/files';
+	import {chatCompletion, generateOpenAIChatCompletion} from '$lib/apis/openai';
 
-	import {
-		config,
-		mobile,
-		models,
-		settings,
-		showSidebar,
-		socket,
-		user,
-		WEBUI_NAME,
-		pinnedNotes
-	} from '$lib/stores';
+	import {config, mobile, models, settings, showSidebar, socket, user, WEBUI_NAME, pinnedNotes} from '$lib/stores';
 
-	import { downloadPdf } from './utils';
+	import {downloadPdf} from './utils';
 
 	import Controls from './NoteEditor/Controls.svelte';
 	import Chat from './NoteEditor/Chat.svelte';
@@ -48,7 +52,45 @@
 	import NotePanel from '$lib/components/notes/NotePanel.svelte';
 	import AccessControlModal from '$lib/components/workspace/common/AccessControlModal.svelte';
 
-	async function loadLocale(locales) {
+	type NoteEditorInstance = Editor & {
+		storage: {
+			files: NoteFileItem[];
+			characterCount: {
+				words: () => number;
+				characters: () => number;
+			};
+		};
+	};
+
+	type RichTextInputInstance = {
+		insertContent: (content: string) => void;
+	};
+
+	type ImageCompressionSettings = {
+		imageCompression?: boolean;
+		imageCompressionSize?: {
+			width?: string | number | null;
+			height?: string | number | null;
+		};
+	};
+
+	type RichTextPasteEvent = CustomEvent<{event: ClipboardEvent}>;
+	type ClipboardCapableWindow = Window & {clipboardData?: DataTransfer | null};
+	type RichTextChangePayload = {html: string; md: string; json?: unknown};
+	type RichTextSelectionPayload = {editor: NoteEditorInstance};
+
+	const toDimensionNumber = (
+		value: string | number | null | undefined
+	): number | undefined => {
+		if (value === null || value === undefined || value === '') return undefined;
+		const num = typeof value === 'number' ? value : Number(value);
+		return Number.isFinite(num) ? num : undefined;
+	};
+
+	const toFileBlob = (value: Blob | Blob[] | File): Blob =>
+		Array.isArray(value) ? value[0] : value;
+
+	async function loadLocale(locales: readonly string[]) {
 		for (const locale of locales) {
 			try {
 				dayjs.locale(locale);
@@ -62,14 +104,7 @@
 	// Assuming $i18n.languages is an array of language codes
 	$: loadLocale($i18n.languages);
 
-	import {
-		deleteNoteById,
-		getNoteById,
-		updateNoteById,
-		updateNoteAccessGrants,
-		toggleNotePinnedStatusById,
-		getPinnedNoteList
-	} from '$lib/apis/notes';
+	import {deleteNoteById, getNoteById, updateNoteById, updateNoteAccessGrants, toggleNotePinnedStatusById, getPinnedNoteList} from '$lib/apis/notes';
 
 	import RichTextInput from '../common/RichTextInput.svelte';
 	import Spinner from '../common/Spinner.svelte';
@@ -77,67 +112,33 @@
 	import VoiceRecording from '../chat/MessageInput/VoiceRecording.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import ChatBubbleOval from '../icons/ChatBubbleOval.svelte';
-
-	import Calendar from '../icons/Calendar.svelte';
-	import Users from '../icons/Users.svelte';
-	import LockClosed from '../icons/LockClosed.svelte';
-
-	import Image from '../common/Image.svelte';
-	import FileItem from '../common/FileItem.svelte';
-	import FilesOverlay from '../chat/MessageInput/FilesOverlay.svelte';
+import LockClosed from '../icons/LockClosed.svelte';
+import FilesOverlay from '../chat/MessageInput/FilesOverlay.svelte';
 	import RecordMenu from './RecordMenu.svelte';
 	import NoteMenu from './Notes/NoteMenu.svelte';
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
 	import Sparkles from '../icons/Sparkles.svelte';
 	import SparklesSolid from '../icons/SparklesSolid.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
-	import Bars3BottomLeft from '../icons/Bars3BottomLeft.svelte';
-	import ArrowUturnLeft from '../icons/ArrowUturnLeft.svelte';
+import ArrowUturnLeft from '../icons/ArrowUturnLeft.svelte';
 	import ArrowUturnRight from '../icons/ArrowUturnRight.svelte';
 	import Sidebar from '../icons/Sidebar.svelte';
-	import ArrowRight from '../icons/ArrowRight.svelte';
-	import Cog6 from '../icons/Cog6.svelte';
-	import AiMenu from './AIMenu.svelte';
+import AiMenu from './AIMenu.svelte';
 	import AdjustmentsHorizontalOutline from '../icons/AdjustmentsHorizontalOutline.svelte';
 
 	export let id: null | string = null;
 
-	let editor = null;
-	let note = null;
+	let editor: NoteEditorInstance | null = null;
+	let note: NoteRecord | null = null;
 
-	const newNote = {
-		title: '',
-		data: {
-			content: {
-				json: null,
-				html: '',
-				md: ''
-			},
-			versions: [],
-			files: null
-		},
-		// pages: [], // TODO: Implement pages for notes to allow users to create multiple pages in a note
-		meta: null,
-		access_grants: []
-	};
-
-	const hasPublicReadGrant = (grants) =>
-		Array.isArray(grants) &&
-		grants.some(
-			(grant) =>
-				grant?.principal_type === 'user' &&
-				grant?.principal_id === '*' &&
-				grant?.permission === 'read'
-		);
-
-	let files = [];
-	let messages = [];
+	let files: NoteFileItem[] = [];
+	let messages: NoteChatMessage[] = [];
 
 	let wordCount = 0;
 	let charCount = 0;
 
-	let versionIdx = null;
-	let selectedModelId = null;
+	let versionIdx: number | null = null;
+	let selectedModelId = '';
 
 	let recording = false;
 	let displayMediaRecord = false;
@@ -145,7 +146,7 @@
 	let showPanel = false;
 	let selectedPanel = 'chat';
 
-	let selectedContent = null;
+	let selectedContent: NoteSelectedContent | null = null;
 
 	let showDeleteConfirm = false;
 	let showAccessControlModal = false;
@@ -162,7 +163,7 @@
 
 	let stopResponseFlag = false;
 
-	let inputElement = null;
+	let inputElement: RichTextInputInstance | null = null;
 
 	// Computed HTML for editor: fall back to markdown if HTML is missing
 	$: editorHtml =
@@ -170,22 +171,24 @@
 		(note?.data?.content?.md ? marked.parse(note.data.content.md) : '');
 
 	const init = async () => {
+		if (!id) return;
+
 		loading = true;
-		const res = await getNoteById(localStorage.token, id).catch((error) => {
+		const res = (await getNoteById(localStorage.token, id).catch((error) => {
 			toast.error(`${error}`);
 			return null;
-		});
+		})) as NoteRecord | null;
 
 		messages = [];
 
 		if (res) {
 			note = res;
-			if (!Array.isArray(note?.access_grants)) {
+			if (!Array.isArray(note.access_grants)) {
 				note.access_grants = [];
 			}
 			files = res.data.files || [];
 
-			if (note?.write_access) {
+			if (note.write_access) {
 				$socket?.emit('join-note', {
 					note_id: id,
 					auth: {
@@ -210,13 +213,15 @@
 		}
 
 		debounceTimeout = setTimeout(async () => {
+			if (!note || !id) return;
+
 			const res = await updateNoteById(localStorage.token, id, {
-				title: note?.title === '' ? $i18n.t('Untitled') : note.title,
+				title: note.title === '' ? $i18n.t('Untitled') : note.title,
 				data: {
 					files: files
 				},
-				access_grants: note?.access_grants ?? []
-			}).catch((e) => {
+				access_grants: note.access_grants ?? []
+			}).catch((e: unknown) => {
 				toast.error(`${e}`);
 			});
 
@@ -230,31 +235,33 @@
 		init();
 	}
 
-	function areContentsEqual(a, b) {
+	function areContentsEqual(a: NoteContentVersion, b: NoteContentVersion) {
 		return equal(a, b);
 	}
 
-	function insertNoteVersion(note) {
-		const current = {
-			json: note.data.content.json,
-			html: note.data.content.html,
-			md: note.data.content.md
+	function insertNoteVersion(targetNote: NoteRecord) {
+		const current: NoteContentVersion = {
+			json: targetNote.data.content.json,
+			html: targetNote.data.content.html,
+			md: targetNote.data.content.md
 		};
-		const lastVersion = note.data.versions?.at(-1);
+		const lastVersion = targetNote.data.versions?.at(-1);
 
 		if (!lastVersion || !areContentsEqual(lastVersion, current)) {
-			note.data.versions = (note.data.versions ?? []).concat(current);
+			targetNote.data.versions = (targetNote.data.versions ?? []).concat(current);
 			return true;
 		}
 		return false;
 	}
 
 	const onEdited = async () => {
-		if (!editor) return;
+		if (!editor || !note) return;
 		editor.commands.setContent(note.data.content.html);
 	};
 
 	const generateTitleHandler = async () => {
+		if (!note) return;
+
 		const content = note.data.content.md;
 		const DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE = `### Task:
 Generate a concise, 3-5 word title with an emoji summarizing the content in the content's primary language.
@@ -289,6 +296,9 @@ ${content}
 			{
 				model: selectedModelId,
 				stream: false,
+				params: {
+					think: false
+				},
 				messages: [
 					{
 						role: 'user',
@@ -335,9 +345,10 @@ ${content}
 			return;
 		}
 
-		const model = $models
-			.filter((model) => model.id === selectedModelId && !(model?.info?.meta?.hidden ?? false))
-			.find((model) => model.id === selectedModelId);
+		const availableModelIds = getAvailableModelIds($models);
+		const model = $models.find(
+			(m) => m.id === selectedModelId && availableModelIds.includes(m.id)
+		);
 
 		if (!model) {
 			selectedModelId = '';
@@ -357,67 +368,13 @@ ${content}
 		console.log('stopResponse', stopResponseFlag);
 	};
 
-	function setContentByVersion(versionIdx) {
-		if (!note.data.versions?.length) return;
-		let idx = versionIdx;
+	const uploadFileHandler = async (file: File) => {
+		if (!note) return null;
 
-		if (idx === null) idx = note.data.versions.length - 1; // latest
-		const v = note.data.versions[idx];
-
-		note.data.content.json = v.json;
-		note.data.content.html = v.html;
-		note.data.content.md = v.md;
-
-		if (versionIdx === null) {
-			const lastVersion = note.data.versions.at(-1);
-			const currentContent = note.data.content;
-
-			if (areContentsEqual(lastVersion, currentContent)) {
-				// remove the last version
-				note.data.versions = note.data.versions.slice(0, -1);
-			}
-		}
-	}
-
-	// Navigation
-	function versionNavigateHandler(direction) {
-		if (!note.data.versions || note.data.versions.length === 0) return;
-
-		if (versionIdx === null) {
-			// Get latest snapshots
-			const lastVersion = note.data.versions.at(-1);
-			const currentContent = note.data.content;
-
-			if (!areContentsEqual(lastVersion, currentContent)) {
-				// If the current content is different from the last version, insert a new version
-				insertNoteVersion(note);
-				versionIdx = note.data.versions.length - 1;
-			} else {
-				versionIdx = note.data.versions.length;
-			}
-		}
-
-		if (direction === 'prev') {
-			if (versionIdx > 0) versionIdx -= 1;
-		} else if (direction === 'next') {
-			if (versionIdx < note.data.versions.length - 1) versionIdx += 1;
-			else versionIdx = null; // Reset to latest
-
-			if (versionIdx === note.data.versions.length - 1) {
-				// If we reach the latest version, reset to null
-				versionIdx = null;
-			}
-		}
-
-		setContentByVersion(versionIdx);
-	}
-
-	const uploadFileHandler = async (file) => {
 		const tempItemId = uuidv4();
-		const fileItem = {
+		const fileItem: NoteFileItem = {
 			type: 'file',
 			file: '',
-			id: null,
 			url: '',
 			name: file.name,
 			collection_name: '',
@@ -465,7 +422,7 @@ ${content}
 				}
 
 				fileItem.status = 'uploaded';
-				fileItem.file = await getFileById(localStorage.token, uploadedFile.id).catch((e) => {
+				fileItem.file = await getFileById(localStorage.token, uploadedFile.id).catch((e: unknown) => {
 					toast.error(`${e}`);
 					return null;
 				});
@@ -490,14 +447,20 @@ ${content}
 			note.data.files = null;
 		}
 
-		editor.storage.files = files;
+		if (editor) {
+			editor.storage.files = files;
+		}
 
 		changeDebounceHandler();
 
 		return fileItem;
 	};
 
-	const compressImageHandler = async (imageUrl, settings = {}, config = {}) => {
+	const compressImageHandler = async (
+		imageUrl: string,
+		settings: ImageCompressionSettings = {},
+		config: Pick<AppConfig, 'file'> = {}
+	) => {
 		// Quick shortcut so we don’t do unnecessary work.
 		const settingsCompression = settings?.imageCompression ?? false;
 		const configWidth = config?.file?.image_compression?.width ?? null;
@@ -508,21 +471,21 @@ ${content}
 			return imageUrl;
 		}
 
-		// Default to null (no compression unless set)
-		let width = null;
-		let height = null;
+		// Default to undefined (no compression unless set)
+		let width: number | undefined = undefined;
+		let height: number | undefined = undefined;
 
 		// If user/settings want compression, pick their preferred size.
 		if (settingsCompression) {
-			width = settings?.imageCompressionSize?.width ?? null;
-			height = settings?.imageCompressionSize?.height ?? null;
+			width = toDimensionNumber(settings?.imageCompressionSize?.width);
+			height = toDimensionNumber(settings?.imageCompressionSize?.height);
 		}
 
 		// Apply config limits as an upper bound if any
-		if (configWidth && (width === null || width > configWidth)) {
+		if (configWidth && (width === undefined || width > configWidth)) {
 			width = configWidth;
 		}
-		if (configHeight && (height === null || height > configHeight)) {
+		if (configHeight && (height === undefined || height > configHeight)) {
 			height = configHeight;
 		}
 
@@ -533,7 +496,18 @@ ${content}
 		return imageUrl;
 	};
 
-	const inputFileHandler = async (file) => {
+	const getNoteFileContent = (file: NoteFileItem): string => {
+		if (typeof file.file === 'object' && file.file !== null) {
+			return file.file.data?.content ?? 'Could not extract content';
+		}
+		return 'Could not extract content';
+	};
+
+	const inputFileHandler = async (file: File) => {
+		if (!note) return null;
+
+		const activeNote = note;
+
 		console.log('Processing file:', {
 			name: file.name,
 			type: file.type,
@@ -557,26 +531,32 @@ ${content}
 			return;
 		}
 
-		if (file['type'].startsWith('image/')) {
+		if (file.type.startsWith('image/')) {
 			const reader = new FileReader();
-			const sourceFile = file['type'] === 'image/heic' ? await convertHeicToJpeg(file) : file;
+			const sourceFile = file.type === 'image/heic' ? await convertHeicToJpeg(file) : file;
 
-			const fileItem = await new Promise<typeof files[number]>((resolve, reject) => {
-				reader.onload = (event) => {
+			const fileItem = await new Promise<NoteFileItem>((resolve, reject) => {
+				reader.onload = (event: ProgressEvent<FileReader>) => {
 					void (async () => {
 						try {
 							let imageUrl = event.target?.result as string;
-							imageUrl = await compressImageHandler(imageUrl, $settings, $config);
+							imageUrl = await compressImageHandler(
+								imageUrl,
+								$settings as ImageCompressionSettings,
+								{file: $config?.file}
+							);
 
 							const fileId = uuidv4();
-							const item = {
+							const item: NoteFileItem = {
 								id: fileId,
 								type: 'image',
 								url: `${imageUrl}`
 							};
 							files = [...files, item];
-							note.data.files = files;
-							editor.storage.files = files;
+							activeNote.data.files = files;
+							if (editor) {
+								editor.storage.files = files;
+							}
 
 							changeDebounceHandler();
 							resolve(item);
@@ -586,7 +566,7 @@ ${content}
 					})();
 				};
 				reader.onerror = () => reject(reader.error);
-				reader.readAsDataURL(sourceFile);
+				reader.readAsDataURL(toFileBlob(sourceFile));
 			});
 
 			return fileItem;
@@ -595,14 +575,9 @@ ${content}
 		}
 	};
 
-	const inputFilesHandler = async (inputFiles) => {
-		console.log('Input files handler called with:', inputFiles);
-		inputFiles.forEach(async (file) => {
-			await inputFileHandler(file);
-		});
-	};
+	const downloadHandler = async (type: NoteDownloadType) => {
+		if (!note) return;
 
-	const downloadHandler = async (type) => {
 		console.log('downloadHandler', type);
 		if (type === 'txt') {
 			const blob = new Blob([note.data.content.md], { type: 'text/plain' });
@@ -619,7 +594,7 @@ ${content}
 		}
 	};
 
-	const deleteNoteHandler = async (id) => {
+	const deleteNoteHandler = async (id: string) => {
 		const res = await deleteNoteById(localStorage.token, id).catch((error) => {
 			toast.error(`${error}`);
 			return null;
@@ -642,7 +617,9 @@ ${content}
 		}
 	};
 
-	const enhanceCompletionHandler = async (model) => {
+	const enhanceCompletionHandler = async (model: Model) => {
+		if (!note) return;
+
 		stopResponseFlag = false;
 		let enhancedContent = {
 			json: null,
@@ -674,7 +651,7 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 						content:
 							`<notes>${note.data.content.md}</notes>` +
 							(files && files.length > 0
-								? `\n<context>${files.map((file) => `${file.name}: ${file?.file?.data?.content ?? 'Could not extract content'}\n`).join('')}</context>`
+								? `\n<context>${files.map((file) => `${file.name}: ${getNoteFileContent(file)}\n`).join('')}</context>`
 								: '')
 					}
 				]
@@ -686,7 +663,7 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 
 		streaming = true;
 
-		if (res && res.ok) {
+		if (res && res.ok && res.body) {
 			const reader = res.body
 				.pipeThrough(new TextDecoderStream())
 				.pipeThrough(splitStream('\n'))
@@ -742,60 +719,14 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 		streaming = false;
 	};
 
-	const onDragOver = (e) => {
-		e.preventDefault();
-
-		if (
-			e.dataTransfer?.types?.includes('text/plain') ||
-			e.dataTransfer?.types?.includes('text/html')
-		) {
-			dragged = false;
-			return;
-		}
-
-		// Check if the dragged item is a file or image
-		if (e.dataTransfer?.types?.includes('Files') && e.dataTransfer?.items) {
-			const items = Array.from(e.dataTransfer.items);
-			const hasFiles = items.some((item) => item.kind === 'file');
-			const hasImages = items.some((item) => item.type.startsWith('image/'));
-
-			if (hasFiles && !hasImages) {
-				dragged = true;
-			} else {
-				dragged = false;
-			}
-		} else {
-			dragged = false;
-		}
-	};
-
-	const onDragLeave = () => {
-		dragged = false;
-	};
-
-	const onDrop = async (e) => {
-		e.preventDefault();
-		console.log(e);
-
-		if (e.dataTransfer?.files) {
-			const inputFiles = Array.from(e.dataTransfer?.files);
-			if (inputFiles && inputFiles.length > 0) {
-				console.log(inputFiles);
-				inputFilesHandler(inputFiles);
-			}
-		}
-
-		dragged = false;
-	};
-
-	const insertHandler = (content) => {
+	const insertHandler = (content: string) => {
+		if (!note) return;
 		insertNoteVersion(note);
 		inputElement?.insertContent(content);
 	};
 
-	const noteEventHandler = async (_note) => {
-		console.log('noteEventHandler', _note);
-		if (_note.id !== id) return;
+	const noteEventHandler = async (_note: NoteRecord) => {
+		if (!note || _note.id !== id) return;
 
 		if (_note.access_grants && _note.access_grants !== note.access_grants) {
 			note.access_grants = _note.access_grants;
@@ -810,12 +741,14 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 			note.title = _note.title;
 		}
 
-		editor.storage.files = files;
+		if (editor) {
+			editor.storage.files = files;
+		}
 		await tick();
 
 		for (const file of files) {
 			if (file.type === 'image' || (file?.content_type ?? '').startsWith('image/')) {
-				const e = new CustomEvent('data', { files: files });
+				const e = new CustomEvent('data', {detail: {files}});
 
 				const img = document.getElementById(`image:${file.id}`);
 				if (img) {
@@ -825,50 +758,68 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 		}
 	};
 
+	const copyLinkHandler = async () => {
+		if (!note) return;
+
+		const baseUrl = window.location.origin;
+		const res = await copyToClipboard(`${baseUrl}/notes/${note.id}`);
+
+		if (res) {
+			toast.success($i18n.t('Copied link to clipboard'));
+		} else {
+			toast.error($i18n.t('Failed to copy link'));
+		}
+	};
+
+	const copyToClipboardHandler = async () => {
+		if (!note) return;
+
+		const res = await copyToClipboard(
+			note.data.content.md,
+			note.data.content.html,
+			true
+		).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+
+		if (res) {
+			toast.success($i18n.t('Copied to clipboard'));
+		}
+	};
+
+	const pinNoteHandler = async () => {
+		if (!note) return;
+
+		await toggleNotePinnedStatusById(localStorage.token, note.id);
+		note = (await getNoteById(localStorage.token, note.id)) as NoteRecord;
+		pinnedNotes.set(await getPinnedNoteList(localStorage.token).catch(() => []));
+	};
+
 	onMount(async () => {
 		await tick();
 
 		if ($settings?.models) {
-			selectedModelId = $settings?.models[0];
+			selectedModelId = $settings.models[0];
 		} else if ($config?.default_models) {
-			selectedModelId = $config?.default_models.split(',')[0];
+			selectedModelId = $config.default_models.split(',')[0];
 		} else {
 			selectedModelId = '';
 		}
 
-		if (selectedModelId) {
-			const model = $models
-				.filter((model) => model.id === selectedModelId && !(model?.info?.meta?.hidden ?? false))
-				.find((model) => model.id === selectedModelId);
-
-			if (!model) {
-				selectedModelId = '';
-			}
+		const availableModelIds = getAvailableModelIds($models);
+		if (selectedModelId && !availableModelIds.includes(selectedModelId)) {
+			selectedModelId = '';
 		}
 
-		if (!selectedModelId) {
-			selectedModelId =
-				$models.filter((model) => !(model?.info?.meta?.hidden ?? false)).at(0)?.id || '';
+		if (!selectedModelId && availableModelIds.length > 0) {
+			selectedModelId = availableModelIds[0];
 		}
-
-		const dropzoneElement = document.getElementById('note-editor');
-
-		// dropzoneElement?.addEventListener('dragover', onDragOver);
-		// dropzoneElement?.addEventListener('drop', onDrop);
-		// dropzoneElement?.addEventListener('dragleave', onDragLeave);
 	});
 
 	onDestroy(() => {
 		console.log('destroy');
 		$socket?.off('note-events', noteEventHandler);
-
-		const dropzoneElement = document.getElementById('note-editor');
-
-		if (dropzoneElement) {
-			// dropzoneElement?.removeEventListener('dragover', onDragOver);
-			// dropzoneElement?.removeEventListener('drop', onDrop);
-			// dropzoneElement?.removeEventListener('dragleave', onDragLeave);
-		}
 	});
 </script>
 
@@ -889,7 +840,7 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 		sharePublic={$user?.permissions?.sharing?.public_notes || $user?.role === 'admin'}
 		shareUsers={($user?.permissions?.access_grants?.allow_users ?? true) || $user?.role === 'admin'}
 		onChange={async () => {
-			if (id) {
+			if (id && note) {
 				try {
 					await updateNoteAccessGrants(localStorage.token, id, note.access_grants ?? []);
 					toast.success($i18n.t('Saved'));
@@ -907,12 +858,14 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 	bind:show={showDeleteConfirm}
 	title={$i18n.t('Delete note?')}
 	on:confirm={() => {
-		deleteNoteHandler(note.id);
+		if (note) {
+			deleteNoteHandler(note.id);
+		}
 		showDeleteConfirm = false;
 	}}
 >
 	<div class=" text-sm text-gray-500">
-		{$i18n.t('This will delete')} <span class="  font-semibold">{note.title}</span>.
+		{$i18n.t('This will delete')} <span class="  font-semibold">{note?.title}</span>.
 	</div>
 </DeleteConfirmDialog>
 
@@ -925,7 +878,7 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 						<Spinner className="size-5" />
 					</div>
 				</div>
-			{:else}
+			{:else if note}
 				<div class=" w-full flex flex-col {loading ? 'opacity-20' : ''}">
 					<div class="shrink-0 w-full flex justify-between items-center px-3.5 mb-1.5">
 						<div class="w-full min-w-0 flex items-center">
@@ -964,7 +917,7 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 								on:focus={() => {
 									titleInputFocused = true;
 								}}
-								on:blur={(e) => {
+								on:blur={(_e) => {
 									// check if target is generate button
 									if (ignoreBlur) {
 										ignoreBlur = false;
@@ -1012,10 +965,10 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 												<button
 													class="self-center p-1 hover:enabled:bg-black/5 dark:hover:enabled:bg-white/5 dark:hover:enabled:text-white hover:enabled:text-black rounded-md transition disabled:cursor-not-allowed disabled:text-gray-500 disabled:hover:text-gray-500"
 													on:click={() => {
-														editor.chain().focus().undo().run();
+														editor?.chain().focus().undo().run();
 														// versionNavigateHandler('prev');
 													}}
-													disabled={!editor.can().undo()}
+													disabled={!editor?.can().undo()}
 												>
 													<ArrowUturnLeft className="size-4" />
 												</button>
@@ -1023,10 +976,10 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 												<button
 													class="self-center p-1 hover:enabled:bg-black/5 dark:hover:enabled:bg-white/5 dark:hover:enabled:text-white hover:enabled:text-black rounded-md transition disabled:cursor-not-allowed disabled:text-gray-500 disabled:hover:text-gray-500"
 													on:click={() => {
-														editor.chain().focus().redo().run();
+														editor?.chain().focus().redo().run();
 														// versionNavigateHandler('next');
 													}}
-													disabled={!editor.can().redo()}
+													disabled={!editor?.can().redo()}
 												>
 													<ArrowUturnRight className="size-4" />
 												</button>
@@ -1073,41 +1026,15 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 
 								<NoteMenu
 									onDownload={(type) => {
-										downloadHandler(type);
+										downloadHandler(type as NoteDownloadType);
 									}}
-									onCopyLink={async () => {
-										const baseUrl = window.location.origin;
-										const res = await copyToClipboard(`${baseUrl}/notes/${note.id}`);
-
-										if (res) {
-											toast.success($i18n.t('Copied link to clipboard'));
-										} else {
-											toast.error($i18n.t('Failed to copy link'));
-										}
-									}}
-									onCopyToClipboard={async () => {
-										const res = await copyToClipboard(
-											note.data.content.md,
-											note.data.content.html,
-											true
-										).catch((error) => {
-											toast.error(`${error}`);
-											return null;
-										});
-
-										if (res) {
-											toast.success($i18n.t('Copied to clipboard'));
-										}
-									}}
+									onCopyLink={copyLinkHandler as never}
+									onCopyToClipboard={copyToClipboardHandler as never}
 									onDelete={() => {
 										showDeleteConfirm = true;
 									}}
-									isPinned={$pinnedNotes.some((n) => n.id === note.id)}
-									onPin={async () => {
-										await toggleNotePinnedStatusById(localStorage.token, note.id);
-										note = await getNoteById(localStorage.token, note.id);
-										pinnedNotes.set(await getPinnedNoteList(localStorage.token).catch(() => []));
-									}}
+									isPinned={$pinnedNotes.some((n) => n.id === note?.id)}
+									onPin={pinNoteHandler as never}
 								>
 									<div class="p-1 bg-transparent hover:bg-white/5 transition rounded-lg">
 										<EllipsisHorizontal className="size-5" />
@@ -1207,21 +1134,22 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 							id={`note-${note.id}`}
 							className="input-prose-sm px-0.5 h-[calc(100%-2rem)]"
 							json={true}
-							bind:value={note.data.content.json}
+							bind:value={note.data.content.json as unknown as string | undefined}
 							html={editorHtml}
 							documentId={`note:${note.id}`}
 							collaboration={true}
-							socket={$socket}
-							user={$user}
+							socket={$socket as never}
+							user={$user as never}
 							dragHandle={true}
 							link={true}
 							image={true}
 							{files}
 							placeholder={$i18n.t('Write something...')}
-							editable={versionIdx === null && !editing && note?.write_access}
-							onSelectionUpdate={({ editor }) => {
-								const { from, to } = editor.state.selection;
-								const selectedText = editor.state.doc.textBetween(from, to, ' ');
+							editable={versionIdx === null && !editing && !!note.write_access}
+							onSelectionUpdate={(payload) => {
+								const {editor: selectionEditor} = payload as unknown as RichTextSelectionPayload;
+								const {from, to} = selectionEditor.state.selection;
+								const selectedText = selectionEditor.state.doc.textBetween(from, to, ' ');
 
 								if (selectedText.length === 0) {
 									selectedContent = null;
@@ -1234,8 +1162,11 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 								}
 							}}
 							onChange={(content) => {
-								note.data.content.html = content.html;
-								note.data.content.md = content.md;
+								if (!note) return;
+
+								const {html, md} = content as unknown as RichTextChangePayload;
+								note.data.content.html = html;
+								note.data.content.md = md;
 
 								if (editor) {
 									wordCount = editor.storage.characterCount.words();
@@ -1243,13 +1174,13 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 								}
 							}}
 							fileHandler={true}
-							onFileDrop={(currentEditor, files, pos) => {
-								files.forEach(async (file) => {
-									const fileItem = await inputFileHandler(file).catch((error) => {
+							onFileDrop={(currentEditor, droppedFiles, pos) => {
+								droppedFiles.forEach(async (file: File) => {
+									const fileItem = await inputFileHandler(file).catch((_error) => {
 										return null;
 									});
 
-									if (fileItem.type === 'image') {
+									if (fileItem?.type === 'image') {
 										// If the file is an image, insert it directly
 										currentEditor
 											.chain()
@@ -1265,9 +1196,11 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 								});
 							}}
 							onFilePaste={() => {}}
-							on:paste={async (e) => {
-								e = e.detail.event || e;
-								const clipboardData = e.clipboardData || window.clipboardData;
+							on:paste={async (e: RichTextPasteEvent) => {
+								const clipEvent = e.detail?.event ?? e;
+								const clipboardData =
+									clipEvent.clipboardData ??
+									(window as ClipboardCapableWindow).clipboardData;
 								console.log('Clipboard data:', clipboardData);
 
 								if (clipboardData && clipboardData.items) {
@@ -1276,11 +1209,13 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 										console.log('Clipboard item:', item);
 										if (item.type.indexOf('image') !== -1) {
 											const blob = item.getAsFile();
+											if (!blob) continue;
+
 											const fileItem = await inputFileHandler(blob);
 
-											if (editor) {
+											if (editor && fileItem) {
 												editor
-													?.chain()
+													.chain()
 													.insertContentAt(editor.state.selection.$anchor.pos, {
 														type: 'image',
 														attrs: {
@@ -1292,8 +1227,10 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 											}
 										} else if (item?.kind === 'file') {
 											const file = item.getAsFile();
-											await inputFileHandler(file);
-											e.preventDefault();
+											if (file) {
+												await inputFileHandler(file);
+											}
+											clipEvent.preventDefault();
 										}
 									}
 								}
@@ -1401,10 +1338,11 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 							input.click();
 
 							input.onchange = async (e) => {
-								const files = e.target.files;
+								const target = e.target as HTMLInputElement;
+								const selectedFiles = target.files;
 
-								if (files && files.length > 0) {
-									await uploadFileHandler(files[0]);
+								if (selectedFiles && selectedFiles.length > 0) {
+									await uploadFileHandler(selectedFiles[0]);
 								}
 							};
 						}}
@@ -1432,14 +1370,15 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 				bind:streaming
 				bind:stopResponseFlag
 				{editor}
-				{inputElement}
-				{selectedContent}
+				selectedContent={selectedContent as never}
 				{files}
 				onInsert={insertHandler}
 				onStop={stopResponseHandler}
 				{onEdited}
 				insertNoteHandler={() => {
-					insertNoteVersion(note);
+					if (note) {
+						insertNoteVersion(note);
+					}
 				}}
 				scrollToBottomHandler={scrollToBottom}
 			/>
@@ -1449,16 +1388,18 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 				bind:selectedModelId
 				bind:files
 				onUpdate={(updatedFiles) => {
-					files = updatedFiles;
+					files = updatedFiles as NoteFileItem[];
+					if (!note) return;
+
 					note.data.files = files.length > 0 ? files : null;
 
 					if (editor) {
 						editor.storage.files = files;
 						const fileIds = new Set(files.map((file) => file.id));
-						const ranges = [];
+						const ranges: [number, number][] = [];
 
-						editor.state.doc.descendants((node, pos) => {
-							const src = node.attrs.src;
+						editor.state.doc.descendants((node: ProseMirrorNode, pos: number) => {
+							const src = node.attrs.src as string | undefined;
 							if (
 								node.type.name === 'image' &&
 								src?.startsWith('data://') &&

@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
-	import { marked } from 'marked';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
+	import {marked} from 'marked';
 	import DOMPurify from 'dompurify';
 
-	import { config, user, models as _models, temporaryChatEnabled } from '$lib/stores';
-	import { onMount, getContext } from 'svelte';
-	import { getChatGreetingKey, type ChatGreetingKey } from '$lib/utils/chatGreeting';
+	import {config, user, models as _models, temporaryChatEnabled} from '$lib/stores';
+	import {onMount, getContext} from 'svelte';
+	import {getChatGreetingKey, type ChatGreetingKey} from '$lib/utils/chatGreeting';
 
-	import { blur, fade } from 'svelte/transition';
+	import {fade} from 'svelte/transition';
 
 	import Suggestions from './Suggestions.svelte';
-	import { sanitizeResponseContent } from '$lib/utils';
+	import {sanitizeResponseContent} from '$lib/utils';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import EyeSlash from '$lib/components/icons/EyeSlash.svelte';
 
@@ -20,7 +20,7 @@
 	export let models = [];
 	export let atSelectedModel;
 
-	export let onSelect = (e) => {};
+	export let onSelect = (_e: Event) => {};
 
 	let mounted = false;
 	let selectedModelIdx = 0;
@@ -35,7 +35,7 @@
 		selectedModelIdx = models.length - 1;
 	}
 
-	$: models = modelIds.map((id) => $_models.find((m) => m.id === id));
+	$: models = modelIds.map((id: string) => $_models.find((m) => m.id === id));
 </script>
 
 {#key mounted}

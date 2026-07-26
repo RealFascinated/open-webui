@@ -1,21 +1,13 @@
-<script>
-	import { onDestroy, tick, getContext } from 'svelte';
+<script lang="ts">
+	import {onDestroy, tick} from 'svelte';
 
 	import Markdown from './Markdown.svelte';
 	import StructuredOutputRenderer from './StructuredOutputRenderer.svelte';
-	import {
-		artifactCode,
-		chatId,
-		mobile,
-		settings,
-		showArtifacts,
-		showControls,
-		showEmbeds
-	} from '$lib/stores';
+	import {artifactCode, chatId, mobile, settings, showArtifacts, showControls, showEmbeds} from '$lib/stores';
 	import FloatingButtons from '../ContentRenderer/FloatingButtons.svelte';
-	import { replaceOutsideCode } from '$lib/utils';
-	import { getOrphanStreamingArtifacts, hasAntArtifactActivity } from '$lib/utils/ant-artifact';
-	import { getAssistantVisibleText } from '$lib/utils/messageRichContent';
+	import {replaceOutsideCode} from '$lib/utils';
+	import {getOrphanStreamingArtifacts, hasAntArtifactActivity} from '$lib/utils/ant-artifact';
+	import {getAssistantVisibleText} from '$lib/utils/messageRichContent';
 	import AntArtifactCard from './Markdown/AntArtifactCard.svelte';
 
 	/**
@@ -166,7 +158,7 @@
 		}
 	);
 
-	const updateButtonPosition = (event) => {
+	const updateButtonPosition = (event: Event) => {
 		const buttonsContainerElement = document.getElementById(`floating-buttons-${id}`);
 		if (
 			!contentContainerElement?.contains(event.target) &&
@@ -233,7 +225,7 @@
 		}
 	};
 
-	const keydownHandler = (e) => {
+	const keydownHandler = (e: Event) => {
 		if (e.key === 'Escape') {
 			closeFloatingButtons();
 		}

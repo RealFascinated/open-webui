@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { toast } from 'svelte-sonner';
 
 	import { goto } from '$app/navigation';
@@ -29,7 +29,7 @@
 		}
 
 		const res = await createNewKnowledge(localStorage.token, name, description, accessGrants).catch(
-			(e) => {
+			(e: Event) => {
 				toast.error(`${e}`);
 			}
 		);

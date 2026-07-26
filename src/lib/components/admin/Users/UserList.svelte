@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-	import { WEBUI_NAME, config, user, showSidebar } from '$lib/stores';
-	import { goto } from '$app/navigation';
-	import { onMount, getContext, onDestroy } from 'svelte';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
+	import {config, user} from '$lib/stores';
+	
+	import {getContext, onDestroy} from 'svelte';
 
 	import dayjs from 'dayjs';
 	import relativeTime from 'dayjs/plugin/relativeTime';
@@ -10,9 +10,9 @@
 	dayjs.extend(relativeTime);
 	dayjs.extend(localizedFormat);
 
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 
-	import { updateUserRole, getUsers, deleteUserById } from '$lib/apis/users';
+	import {getUsers, deleteUserById} from '$lib/apis/users';
 
 	import Pagination from '$lib/components/common/Pagination.svelte';
 	import ChatBubbles from '$lib/components/icons/ChatBubbles.svelte';
@@ -23,14 +23,11 @@
 	import AddUserModal from '$lib/components/admin/Users/UserList/AddUserModal.svelte';
 
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
-	import RoleUpdateConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
-
-	import Badge from '$lib/components/common/Badge.svelte';
+import Badge from '$lib/components/common/Badge.svelte';
 	import Plus from '$lib/components/icons/Plus.svelte';
 	import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
-	import About from '$lib/components/chat/Settings/About.svelte';
-	import Banner from '$lib/components/common/Banner.svelte';
+import Banner from '$lib/components/common/Banner.svelte';
 	import Markdown from '$lib/components/chat/Messages/Markdown.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import AdminListSearchBar from '$lib/components/admin/AdminListSearchBar.svelte';
@@ -42,7 +39,7 @@
 	let page = 1;
 
 	let users = null;
-	let total = null;
+	let total: number | null = null;
 
 	let query = '';
 	let searchDebounceTimer: ReturnType<typeof setTimeout>;
@@ -58,7 +55,7 @@
 	let showEditUserModal = false;
 	let showUserPreviewModal = false;
 
-	const deleteUserHandler = async (id) => {
+	const deleteUserHandler = async (id: string) => {
 		const res = await deleteUserById(localStorage.token, id).catch((error) => {
 			toast.error(`${error}`);
 			return null;
@@ -342,7 +339,7 @@
 				</tr>
 			</thead>
 			<tbody class="">
-				{#each users as user, userIdx (user.id)}
+				{#each users as user, _userIdx (user.id)}
 					<tr class="bg-white dark:bg-gray-900 dark:border-gray-850 text-xs">
 						<td class="px-3 py-1 min-w-[7rem] w-28">
 							<button

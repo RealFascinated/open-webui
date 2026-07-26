@@ -1,0 +1,2 @@
+# Force pydantic 2.13.4 despite gemini-webapi's <2.13 constraint.
+pydantic==2.13.4

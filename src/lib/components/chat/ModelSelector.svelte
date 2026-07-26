@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { models, showSettings, settings, user, mobile, config } from '$lib/stores';
-	import { onMount, tick, getContext } from 'svelte';
-	import { toast } from 'svelte-sonner';
+	import {models, settings, user, config} from '$lib/stores';
+	import {getContext} from 'svelte';
+	import {toast} from 'svelte-sonner';
 	import Selector from './ModelSelector/Selector.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 
-	import { updateUserSettings } from '$lib/apis/users';
+	import {updateUserSettings} from '$lib/apis/users';
 	import equal from 'fast-deep-equal';
-	import { getAvailableModelIds, resolveSelectedModels } from '$lib/utils/models';
+	import {getAvailableModelIds, resolveSelectedModels} from '$lib/utils/models';
 	const i18n = getContext('i18n');
 
-	export let selectedModels = [''];
+	export let selectedModels: string[] = [''];
 	export let disabled = false;
 
 	export let showSetDefault = true;
@@ -27,19 +27,41 @@
 		toast.success($i18n.t('Default model updated'));
 	};
 
-	$: if (selectedModels.length > 0 && $models.length > 0) {
+	$: if ($models.length > 0) {
 		const availableModelIds = getAvailableModelIds($models);
-		const defaultModelIds = $config?.default_models ? $config.default_models.split(',') : [];
-		const _selectedModels = resolveSelectedModels(
-			selectedModels,
-			availableModelIds,
-			defaultModelIds
+		const hasValidSelection = selectedModels.some(
+			(modelId) => modelId && availableModelIds.includes(modelId)
 		);
+		const hasExplicitSelection = selectedModels.some((modelId) => modelId);
+		const shouldResolve =
+			!hasValidSelection && !(hasExplicitSelection && availableModelIds.length === 0);
 
-		if (!equal(_selectedModels, selectedModels)) {
-			selectedModels = _selectedModels;
+		if (shouldResolve) {
+			const defaultModelIds = $settings?.models?.length
+				? $settings.models
+				: $config?.default_models
+					? $config.default_models.split(',')
+					: [];
+			const _selectedModels = resolveSelectedModels(
+				selectedModels,
+				availableModelIds,
+				defaultModelIds
+			);
+
+			if (!equal(_selectedModels, selectedModels)) {
+				selectedModels = _selectedModels;
+			}
 		}
 	}
+
+	const onModelChange = (selectedModelIdx: number, modelId: string) => {
+		if (!modelId || selectedModels[selectedModelIdx] === modelId) {
+			return;
+		}
+
+		selectedModels[selectedModelIdx] = modelId;
+		selectedModels = [...selectedModels];
+	};
 </script>
 
 <div class="flex flex-col w-full items-start">
@@ -55,7 +77,8 @@
 							label: model.name,
 							model: model
 						}))}
-						bind:value={selectedModel}
+						value={selectedModels[selectedModelIdx]}
+					onChange={(modelId) => onModelChange(selectedModelIdx, modelId)}
 					/>
 				</div>
 			</div>

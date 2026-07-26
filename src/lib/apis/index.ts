@@ -84,7 +84,7 @@ export const getModels = async (
 		throw error;
 	}
 
-	let models = res?.data ?? [];
+	const models = res?.data ?? [];
 
 	return models;
 };
@@ -167,8 +167,13 @@ export const chatCompleted = async (token: string, body: ChatCompletedForm) => {
 
 type ChatActionForm = {
 	model: string;
-	messages: string[];
+	messages: Array<Record<string, unknown>>;
 	chat_id: string;
+	session_id?: string;
+	id?: string;
+	event?: unknown;
+	model_item?: unknown;
+	[key: string]: unknown;
 };
 
 export const chatAction = async (token: string, action_id: string, body: ChatActionForm) => {
@@ -1674,9 +1679,13 @@ export interface ModelConfig {
 }
 
 export interface ModelMeta {
-	toolIds: never[];
+	toolIds?: string[];
+	skillIds?: string[];
+	defaultFilterIds?: string[];
+	defaultFeatureIds?: string[];
+	terminalId?: string;
 	description?: string;
-	capabilities?: object;
+	capabilities?: Record<string, unknown>;
 	profile_image_url?: string;
 }
 

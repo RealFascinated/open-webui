@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 import { updateUserSettings } from '$lib/apis/users';
 import { settings } from '$lib/stores';
 
-export const THINKING_EFFORT_OPTIONS = ['low', 'medium', 'high'] as const;
+export const THINKING_EFFORT_OPTIONS = ['low', 'medium', 'high', 'max'] as const;
 export type ThinkingEffort = (typeof THINKING_EFFORT_OPTIONS)[number];
 export const DEFAULT_THINKING_EFFORT: ThinkingEffort = 'medium';
 
@@ -32,8 +32,11 @@ export function getThinkingEffort(resolvedThink: unknown): ThinkingEffort {
 }
 
 export function resolveThinkForRequest(
-	userSettings?: { think?: boolean | string | null; params?: Record<string, unknown> } | null
+	userSettings?: { think?: boolean | string | null; params?: Record<string, unknown> } | null,
+	options?: { voiceMode?: boolean }
 ): boolean | string {
+	if (options?.voiceMode) return false;
+
 	const resolved = getResolvedThink(userSettings);
 	if (resolved === false) return false;
 	if (resolved === true) return DEFAULT_THINKING_EFFORT;

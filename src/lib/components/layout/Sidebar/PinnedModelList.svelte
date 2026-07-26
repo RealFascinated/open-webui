@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 
 	import { chatId, config, mobile, models, showSidebar } from '$lib/stores';
@@ -11,14 +11,14 @@
 
 	onMount(() => {
 		if ($config?.default_pinned_models) {
-			const defaultPinnedModels = $config.default_pinned_models.split(',').filter((id) => id);
-			pinnedModels = defaultPinnedModels.filter((id) => $models.find((model) => model.id === id));
+			const defaultPinnedModels = $config.default_pinned_models.split(',').filter((id: string) => id);
+			pinnedModels = defaultPinnedModels.filter((id: string) => $models.find((model) => model.id === id));
 		}
 	});
 
 	$: if ($config?.default_pinned_models) {
-		const defaultPinnedModels = $config.default_pinned_models.split(',').filter((id) => id);
-		pinnedModels = defaultPinnedModels.filter((id) => $models.find((model) => model.id === id));
+		const defaultPinnedModels = $config.default_pinned_models.split(',').filter((id: string) => id);
+		pinnedModels = defaultPinnedModels.filter((id: string) => $models.find((model) => model.id === id));
 	}
 </script>
 

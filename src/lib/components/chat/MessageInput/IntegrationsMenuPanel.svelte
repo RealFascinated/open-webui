@@ -123,7 +123,7 @@
 			}
 		}
 
-		selectedToolIds = selectedToolIds.filter((id) => Object.keys(tools).includes(id));
+		selectedToolIds = selectedToolIds.filter((id: string) => Object.keys(tools).includes(id));
 
 		if ($_skills === null) {
 			await _skills.set(await getSkills(localStorage.token));
@@ -143,7 +143,7 @@
 				}, {});
 		}
 
-		selectedSkillIds = selectedSkillIds.filter((id) => Object.keys(skills ?? {}).includes(id));
+		selectedSkillIds = selectedSkillIds.filter((id: string) => Object.keys(skills ?? {}).includes(id));
 	};
 </script>
 

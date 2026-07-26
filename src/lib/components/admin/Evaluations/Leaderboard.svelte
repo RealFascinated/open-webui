@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
-	import { models } from '$lib/stores';
-	import { getLeaderboard } from '$lib/apis/evaluations';
+	import {getContext} from 'svelte';
+	import {models} from '$lib/stores';
+	import {getLeaderboard} from '$lib/apis/evaluations';
 	import ModelModal from './LeaderboardModal.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
 	import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 
 	const i18n = getContext('i18n');
 
@@ -45,7 +45,7 @@
 		loading = true;
 		try {
 			const result = await getLeaderboard(localStorage.token, searchQuery);
-			const statsMap = new Map((result?.entries ?? []).map((e) => [e.model_id, e]));
+			const statsMap = new Map((result?.entries ?? []).map((e: Event) => [e.model_id, e]));
 			const modelMap = new Map(($models ?? []).map((m) => [m.id, m]));
 
 			const activeModels = $models

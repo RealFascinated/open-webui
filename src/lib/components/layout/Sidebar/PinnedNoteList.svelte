@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import Sortable from 'sortablejs';
 
 	import { onMount, getContext, tick } from 'svelte';
@@ -38,7 +38,7 @@
 					);
 					dataTransfer.setData('application/x-open-webui-drag', '');
 				},
-				onUpdate: async (event) => {
+				onUpdate: async (event: Event) => {
 					const noteId = event.item.dataset.id;
 					const newIndex = event.newIndex;
 					const current = sortedPinnedNotes.map((n) => n.id);

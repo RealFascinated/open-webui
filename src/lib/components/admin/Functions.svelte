@@ -1,28 +1,16 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { WEBUI_NAME, config, functions as _functions, models, settings, user } from '$lib/stores';
-	import { onMount, getContext, tick, onDestroy } from 'svelte';
+	import {WEBUI_NAME, config, functions as _functions, models, user} from '$lib/stores';
+	import {onMount, getContext, tick, onDestroy} from 'svelte';
 
-	import { goto } from '$app/navigation';
-	import {
-		createNewFunction,
-		deleteFunctionById,
-		exportFunctions,
-		getFunctionById,
-		getFunctionList,
-		getFunctions,
-		loadFunctionByUrl,
-		toggleFunctionById,
-		toggleGlobalById
-	} from '$lib/apis/functions';
-
-	import Download from '../icons/Download.svelte';
-	import Tooltip from '../common/Tooltip.svelte';
+	import {goto} from '$app/navigation';
+	import {createNewFunction, deleteFunctionById, exportFunctions, getFunctionById, getFunctionList, getFunctions, loadFunctionByUrl, toggleFunctionById, toggleGlobalById} from '$lib/apis/functions';
+import Tooltip from '../common/Tooltip.svelte';
 	import ConfirmDialog from '../common/ConfirmDialog.svelte';
-	import { getModels } from '$lib/apis';
+	import {getModels} from '$lib/apis';
 	import FunctionMenu from './Functions/FunctionMenu.svelte';
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
 	import Switch from '../common/Switch.svelte';
@@ -37,7 +25,7 @@
 	import ImportModal from '../ImportModal.svelte';
 	import ViewSelector from '../workspace/common/ViewSelector.svelte';
 	import TagSelector from '../workspace/common/TagSelector.svelte';
-	import { capitalizeFirstLetter } from '$lib/utils';
+	import {capitalizeFirstLetter} from '$lib/utils';
 	import AdminPageHeader from './AdminPageHeader.svelte';
 	import AdminEmptyState from './AdminEmptyState.svelte';
 	import AdminListSearchBar from './AdminListSearchBar.svelte';
@@ -55,7 +43,6 @@
 
 	let query = '';
 	let searchDebounceTimer: ReturnType<typeof setTimeout>;
-	let selectedTag = '';
 	let selectedType = '';
 
 	let showImportModal = false;
@@ -113,7 +100,7 @@
 		const tab = await window.open(`${url}/functions/create`, '_blank');
 
 		// Define the event handler function
-		const messageHandler = (event) => {
+		const messageHandler = (event: Event) => {
 			if (event.origin !== url) return;
 			if (event.data === 'loaded') {
 				tab.postMessage(JSON.stringify(item), '*');
@@ -215,13 +202,13 @@
 		await tick();
 		loaded = true;
 
-		const onKeyDown = (event) => {
+		const onKeyDown = (event: Event) => {
 			if (event.key === 'Shift') {
 				shiftKey = true;
 			}
 		};
 
-		const onKeyUp = (event) => {
+		const onKeyUp = (event: Event) => {
 			if (event.key === 'Shift') {
 				shiftKey = false;
 			}
@@ -542,7 +529,7 @@
 									<Tooltip content={func.is_active ? $i18n.t('Enabled') : $i18n.t('Disabled')}>
 										<Switch
 											bind:state={func.is_active}
-											on:change={async (e) => {
+											on:change={async (_e) => {
 												toggleFunctionById(localStorage.token, func.id);
 												models.set(
 													await getModels(localStorage.token, false,
@@ -641,7 +628,7 @@
 						func = func.function;
 					}
 
-					const res = await createNewFunction(localStorage.token, func).catch((error) => {
+					const _res = await createNewFunction(localStorage.token, func).catch((error) => {
 						toast.error(`${error}`);
 						return null;
 					});

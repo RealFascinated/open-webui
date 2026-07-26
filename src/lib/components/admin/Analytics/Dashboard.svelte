@@ -1,23 +1,17 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
-	import { models } from '$lib/stores';
-	import {
-		getSummary,
-		getModelAnalytics,
-		getUserAnalytics,
-		getDailyStats,
-		getTokenUsage
-	} from '$lib/apis/analytics';
-	import { getGroups } from '$lib/apis/groups';
+	import {onMount, getContext} from 'svelte';
+	import {models} from '$lib/stores';
+	import {getSummary, getModelAnalytics, getUserAnalytics, getDailyStats, getTokenUsage} from '$lib/apis/analytics';
+	import {getGroups} from '$lib/apis/groups';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
 	import ChartLine from './ChartLine.svelte';
 	import AnalyticsModelModal from './AnalyticsModelModal.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
-	import { formatNumber } from '$lib/utils';
-	import { goto } from '$app/navigation';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
+	import {formatNumber} from '$lib/utils';
+	
 
 	const i18n = getContext('i18n');
 

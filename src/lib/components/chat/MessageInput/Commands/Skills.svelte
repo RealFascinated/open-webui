@@ -7,7 +7,7 @@
 	const i18n = getContext('i18n');
 
 	export let query = '';
-	export let onSelect = (e) => {};
+	export let onSelect = (_e: Event) => {};
 
 	let selectedIdx = 0;
 	export let filteredItems = [];

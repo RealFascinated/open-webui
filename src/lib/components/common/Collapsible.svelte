@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { decode } from 'html-entities';
-	import { v4 as uuidv4 } from 'uuid';
+	
+	
 
-	import { getContext } from 'svelte';
+	import {getContext} from 'svelte';
 	const i18n = getContext('i18n');
 
 	import dayjs from '$lib/dayjs';
@@ -29,8 +29,8 @@
 	// Assuming $i18n.languages is an array of language codes
 	$: loadLocale($i18n.languages);
 
-	import { slide } from 'svelte/transition';
-	import { quintOut } from 'svelte/easing';
+	import {slide} from 'svelte/transition';
+	import {quintOut} from 'svelte/easing';
 
 	import ChevronUp from '../icons/ChevronUp.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
@@ -64,7 +64,6 @@
 		onChange(open);
 	};
 
-	const collapsibleId = uuidv4();
 </script>
 
 <div {id} class={className}>

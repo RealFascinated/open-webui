@@ -59,6 +59,8 @@ const SPEED_KEYS = new Set(['prompt_token/s', 'response_token/s', 'prompt_per_se
 
 const HIDDEN_USAGE_KEYS = new Set([
 	'cache_n',
+	'prompt_n',
+	'predicted_n',
 	'prompt_ms',
 	'prompt_per_token_ms',
 	'prompt_per_second',
@@ -71,7 +73,28 @@ const HIDDEN_USAGE_KEYS = new Set([
 	'tokens_evaluated',
 	'cache_read_input_tokens',
 	'cache_creation_input_tokens',
-	'context_breakdown'
+	'context_breakdown',
+	'last_input_tokens',
+	'last_output_tokens',
+	'prompt_cache_hit_tokens',
+	'prompt_cache_miss_tokens',
+	'input_tokens',
+	'output_tokens',
+	'n_ctx',
+	'num_ctx',
+	'context_length',
+	'max_context_length',
+	'max_model_len',
+	'generation_settings',
+	'reasoning_tokens'
+]);
+
+const PERFORMANCE_USAGE_KEYS = new Set([
+	...DURATION_KEYS,
+	...SPEED_KEYS,
+	'approximate_total',
+	'prompt_token/s',
+	'response_token/s'
 ]);
 
 export const formatUsageNumber = (value: number): string => {
@@ -428,6 +451,17 @@ export const getContextUsagePercent = (used: number, max: number | null): number
 	return Math.min(100, Math.round((used / max) * 100));
 };
 
+export const getContextFreeTokens = (used: number, max: number | null): number | null => {
+	if (!max || max <= 0) return null;
+	return Math.max(0, max - used);
+};
+
+export const getContextFreePercent = (used: number, max: number | null): number | null => {
+	const free = getContextFreeTokens(used, max);
+	if (free === null) return null;
+	return Math.max(0, 100 - (getContextUsagePercent(used, max) ?? 0));
+};
+
 export const getLatestConversationUsage = (
 	messages:
 		| Record<
@@ -556,12 +590,29 @@ const CONTEXT_BREAKDOWN_COLORS: Record<string, string> = {
 	knowledge: 'bg-amber-400',
 	tools: 'bg-blue-500',
 	conversation: 'bg-emerald-500',
+	generation: 'bg-orange-400',
+	free: 'bg-gray-200 dark:bg-gray-700',
 	'tools-builtin': 'bg-blue-400',
 	'tools-mcp': 'bg-indigo-400',
 	'tools-user': 'bg-sky-400',
 	'tools-external': 'bg-blue-300',
 	'tools-terminal': 'bg-teal-400'
 };
+
+const TOOL_BREAKDOWN_PARTS: Array<{ id: string; key: keyof NonNullable<ContextBreakdown['tools_detail']> }> =
+	[
+		{ id: 'tools-builtin', key: 'builtin' },
+		{ id: 'tools-mcp', key: 'mcp' },
+		{ id: 'tools-user', key: 'user' },
+		{ id: 'tools-external', key: 'external' },
+		{ id: 'tools-terminal', key: 'terminal' }
+	];
+
+const activeToolBreakdownParts = (breakdown: ContextBreakdown) =>
+	TOOL_BREAKDOWN_PARTS.map((part) => ({
+		id: part.id,
+		value: breakdown.tools_detail?.[part.key] ?? 0
+	})).filter((part) => part.value > 0);
 
 export const getContextBreakdown = (usage: UsageRecord): ContextBreakdown | null => {
 	const raw = usage.context_breakdown;
@@ -575,10 +626,13 @@ export const getContextBreakdown = (usage: UsageRecord): ContextBreakdown | null
 
 export const getContextBreakdownRows = (
 	breakdown: ContextBreakdown,
-	labels: Record<string, string>
+	labels: Record<string, string>,
+	windowSize: number | null = null
 ): ContextBreakdownRow[] => {
-	const total = breakdown.total;
-	const percent = (value: number) => (total > 0 ? Math.round((value / total) * 100) : 0);
+	const denominator =
+		typeof windowSize === 'number' && windowSize > 0 ? windowSize : breakdown.total;
+	const percent = (value: number) =>
+		denominator > 0 ? Math.round((value / denominator) * 1000) / 10 : 0;
 
 	const topLevel: Array<{ id: string; value: number }> = [
 		{ id: 'system', value: breakdown.system },
@@ -594,6 +648,45 @@ export const getContextBreakdownRows = (
 
 	for (const entry of topLevel) {
 		if (entry.value <= 0) continue;
+
+		if (entry.id === 'tools' && breakdown.tools_detail) {
+			const toolParts = activeToolBreakdownParts(breakdown);
+			if (toolParts.length === 1 && toolParts[0].value === entry.value) {
+				const toolKey = toolParts[0].id.replace('tools-', '');
+				rows.push({
+					id: toolParts[0].id,
+					label: labels[`tools_${toolKey}`] ?? labels.tools ?? 'Tools',
+					value: entry.value,
+					percent: percent(entry.value),
+					color: CONTEXT_BREAKDOWN_COLORS[toolParts[0].id] ?? CONTEXT_BREAKDOWN_COLORS.tools
+				});
+				continue;
+			}
+
+			rows.push({
+				id: entry.id,
+				label: labels[entry.id] ?? entry.id,
+				value: entry.value,
+				percent: percent(entry.value),
+				color: CONTEXT_BREAKDOWN_COLORS[entry.id] ?? 'bg-gray-400'
+			});
+
+			if (toolParts.length > 1) {
+				for (const toolEntry of toolParts) {
+					const toolKey = toolEntry.id.replace('tools-', '');
+					rows.push({
+						id: toolEntry.id,
+						label: labels[`tools_${toolKey}`] ?? toolKey,
+						value: toolEntry.value,
+						percent: percent(toolEntry.value),
+						nested: true,
+						color: CONTEXT_BREAKDOWN_COLORS[toolEntry.id] ?? 'bg-blue-300'
+					});
+				}
+			}
+			continue;
+		}
+
 		rows.push({
 			id: entry.id,
 			label: labels[entry.id] ?? entry.id,
@@ -601,36 +694,68 @@ export const getContextBreakdownRows = (
 			percent: percent(entry.value),
 			color: CONTEXT_BREAKDOWN_COLORS[entry.id] ?? 'bg-gray-400'
 		});
-
-		if (entry.id !== 'tools' || !breakdown.tools_detail) continue;
-
-		const toolParts: Array<{ id: string; value: number }> = [
-			{ id: 'tools-builtin', value: breakdown.tools_detail.builtin ?? 0 },
-			{ id: 'tools-mcp', value: breakdown.tools_detail.mcp ?? 0 },
-			{ id: 'tools-user', value: breakdown.tools_detail.user ?? 0 },
-			{ id: 'tools-external', value: breakdown.tools_detail.external ?? 0 },
-			{ id: 'tools-terminal', value: breakdown.tools_detail.terminal ?? 0 }
-		];
-
-		for (const toolEntry of toolParts) {
-			if (toolEntry.value <= 0) continue;
-			const toolKey = toolEntry.id.replace('tools-', '');
-			rows.push({
-				id: toolEntry.id,
-				label: labels[`tools_${toolKey}`] ?? toolKey,
-				value: toolEntry.value,
-				percent: percent(toolEntry.value),
-				nested: true,
-				color: CONTEXT_BREAKDOWN_COLORS[toolEntry.id] ?? 'bg-blue-300'
-			});
-		}
 	}
 
 	return rows;
 };
 
-export const getContextBreakdownBarSegments = (rows: ContextBreakdownRow[]) =>
-	rows.filter((row) => !row.nested);
+export const getContextBreakdownBarSegments = (
+	rows: ContextBreakdownRow[],
+	options?: {
+		windowSize?: number | null;
+		generationTokens?: number;
+		freeTokens?: number | null;
+		freeLabel?: string;
+	}
+) => {
+	const segments = rows.filter((row) => !row.nested);
+	const windowSize = options?.windowSize;
+
+	if (!windowSize || windowSize <= 0) {
+		return segments;
+	}
+
+	const percentOfWindow = (value: number) =>
+		value > 0 ? Math.round((value / windowSize) * 1000) / 10 : 0;
+
+	const generationTokens = options?.generationTokens ?? 0;
+	if (generationTokens > 0) {
+		segments.push({
+			id: 'generation',
+			label: 'generation',
+			value: generationTokens,
+			percent: percentOfWindow(generationTokens),
+			color: CONTEXT_BREAKDOWN_COLORS.generation
+		});
+	}
+
+	const freeTokens = options?.freeTokens;
+	if (typeof freeTokens === 'number' && freeTokens > 0) {
+		segments.push({
+			id: 'free',
+			label: options?.freeLabel ?? 'free',
+			value: freeTokens,
+			percent: percentOfWindow(freeTokens),
+			color: CONTEXT_BREAKDOWN_COLORS.free
+		});
+	}
+
+	return segments;
+};
+
+export const getPerformanceUsageRows = (usage: UsageRecord): UsageDetailRow[] => {
+	const rows: UsageDetailRow[] = [];
+
+	for (const key of PERFORMANCE_USAGE_KEYS) {
+		if (!(key in usage)) continue;
+		const formatted = formatUsageValue(key, usage[key]);
+		if (formatted !== null) {
+			rows.push({ label: formatLabel(key), value: formatted });
+		}
+	}
+
+	return rows;
+};
 
 export const getAdditionalUsageRows = (usage: UsageRecord): UsageDetailRow[] => {
 	const rows: UsageDetailRow[] = [];
@@ -640,6 +765,7 @@ export const getAdditionalUsageRows = (usage: UsageRecord): UsageDetailRow[] => 
 			TOKEN_COUNT_KEYS.has(key) ||
 			DETAIL_KEYS.has(key) ||
 			HIDDEN_USAGE_KEYS.has(key) ||
+			PERFORMANCE_USAGE_KEYS.has(key) ||
 			CONTEXT_WINDOW_KEYS.includes(key as (typeof CONTEXT_WINDOW_KEYS)[number]) ||
 			key === 'reasoning_tokens'
 		) {
@@ -657,4 +783,74 @@ export const getAdditionalUsageRows = (usage: UsageRecord): UsageDetailRow[] => 
 	}
 
 	return rows;
+};
+
+export const getFallbackContextBarSegments = (
+	breakdownRows: ContextBreakdownRow[],
+	contextTokens: number,
+	generationTokens: number
+): ContextBreakdownRow[] => {
+	if (contextTokens <= 0) return [];
+
+	const percentOfContext = (value: number) =>
+		value > 0 ? Math.round((value / contextTokens) * 1000) / 10 : 0;
+
+	const segments = breakdownRows
+		.filter((row) => !row.nested)
+		.map((row) => ({
+			...row,
+			percent: percentOfContext(row.value)
+		}));
+
+	if (segments.length === 0) {
+		const promptTokens = Math.max(0, contextTokens - generationTokens);
+		if (promptTokens > 0) {
+			segments.push({
+				id: 'prompt',
+				label: 'prompt',
+				value: promptTokens,
+				percent: percentOfContext(promptTokens),
+				color: CONTEXT_BREAKDOWN_COLORS.conversation
+			});
+		}
+		if (generationTokens > 0) {
+			segments.push({
+				id: 'generation',
+				label: 'generation',
+				value: generationTokens,
+				percent: percentOfContext(generationTokens),
+				color: CONTEXT_BREAKDOWN_COLORS.generation
+			});
+		}
+		return segments;
+	}
+
+	const accounted = segments.reduce((sum, row) => sum + row.value, 0);
+	const generationInSegments = segments.some((row) => row.id === 'generation');
+
+	if (generationTokens > 0 && !generationInSegments) {
+		segments.push({
+			id: 'generation',
+			label: 'generation',
+			value: generationTokens,
+			percent: percentOfContext(generationTokens),
+			color: CONTEXT_BREAKDOWN_COLORS.generation
+		});
+	}
+
+	if (accounted + generationTokens < contextTokens) {
+		const remainder =
+			contextTokens - accounted - (generationInSegments ? 0 : generationTokens);
+		if (remainder > 0) {
+			segments.push({
+				id: 'other',
+				label: 'other',
+				value: remainder,
+				percent: percentOfContext(remainder),
+				color: 'bg-gray-300 dark:bg-gray-600'
+			});
+		}
+	}
+
+	return segments;
 };

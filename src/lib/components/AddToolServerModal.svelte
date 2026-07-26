@@ -1,24 +1,20 @@
 <script lang="ts">
-	import { v4 as uuidv4 } from 'uuid';
+	
 
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { toast } from 'svelte-sonner';
-	import { getContext, onMount } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {getContext, onMount} from 'svelte';
 	const i18n = getContext('i18n');
 
-	import { settings } from '$lib/stores';
+	import {settings} from '$lib/stores';
 	import Modal from '$lib/components/common/Modal.svelte';
-	import Plus from '$lib/components/icons/Plus.svelte';
-	import Minus from '$lib/components/icons/Minus.svelte';
-	import PencilSolid from '$lib/components/icons/PencilSolid.svelte';
-	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
+import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
-	import Tags from './common/Tags.svelte';
-	import { getToolServerData } from '$lib/apis';
-	import { verifyToolServerConnection, registerOAuthClient } from '$lib/apis/configs';
+import {getToolServerData} from '$lib/apis';
+	import {verifyToolServerConnection, registerOAuthClient} from '$lib/apis/configs';
 	import AccessControlModal from '$lib/components/workspace/common/AccessControlModal.svelte';
 	import LockClosed from '$lib/components/icons/LockClosed.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -104,7 +100,7 @@
 				: {})
 		};
 
-		const res = await registerOAuthClient(localStorage.token, formData, 'mcp').catch((err) => {
+		const res = await registerOAuthClient(localStorage.token, formData, 'mcp').catch((_err) => {
 			toast.error($i18n.t('Registration failed'));
 			return null;
 		});
@@ -148,7 +144,7 @@
 					throw new Error('Headers must be a valid JSON object');
 				}
 				headers = JSON.stringify(_headers, null, 2);
-			} catch (error) {
+			} catch (_error) {
 				toast.error($i18n.t('Headers must be a valid JSON object'));
 				return;
 			}
@@ -158,7 +154,7 @@
 			const res = await getToolServerData(
 				auth_type === 'bearer' ? key : localStorage.token,
 				path.includes('://') ? path : `${url}${path.startsWith('/') ? '' : '/'}${path}`
-			).catch((err) => {
+			).catch((_err) => {
 				toast.error($i18n.t('Connection failed'));
 			});
 
@@ -183,7 +179,7 @@
 					name,
 					description
 				}
-			}).catch((err) => {
+			}).catch((_err) => {
 				toast.error($i18n.t('Connection failed'));
 			});
 
@@ -194,12 +190,12 @@
 		}
 	};
 
-	const importHandler = async (e) => {
+	const importHandler = async (e: Event) => {
 		const file = e.target.files[0];
 		if (!file) return;
 
 		const reader = new FileReader();
-		reader.onload = (event) => {
+		reader.onload = (event: Event) => {
 			const json = event.target.result;
 			console.log('importHandler', json);
 
@@ -239,7 +235,7 @@
 				}
 
 				toast.success($i18n.t('Import successful'));
-			} catch (error) {
+			} catch (_error) {
 				toast.error($i18n.t('Please select a valid JSON file'));
 			}
 		};
@@ -312,7 +308,7 @@
 			try {
 				const specJSON = JSON.parse(spec);
 				spec = JSON.stringify(specJSON, null, 2);
-			} catch (e) {
+			} catch (_e) {
 				toast.error($i18n.t('Please enter a valid JSON spec'));
 				loading = false;
 				return;
@@ -326,7 +322,7 @@
 					throw new Error('Headers must be a valid JSON object');
 				}
 				headers = JSON.stringify(_headers, null, 2);
-			} catch (error) {
+			} catch (_error) {
 				toast.error($i18n.t('Headers must be a valid JSON object'));
 				loading = false;
 				return;

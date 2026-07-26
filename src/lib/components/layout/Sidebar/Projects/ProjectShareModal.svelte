@@ -19,7 +19,6 @@
 	export let project: unknown = null;
 
 	let accessGrants: AccessGrant[] = [];
-	let loading = false;
 
 	// Fetch fresh folder data (with access_grants) when modal opens
 	$: if (show && project?.id) {
@@ -27,7 +26,6 @@
 	}
 
 	const loadAccessGrants = async () => {
-		loading = true;
 		try {
 			const freshProject = await getProjectById(localStorage.token, project.id);
 			if (freshProject) {
@@ -36,8 +34,6 @@
 		} catch (e) {
 			console.error('Failed to load folder access grants', e);
 			accessGrants = project?.access_grants ?? [];
-		} finally {
-			loading = false;
 		}
 	};
 
@@ -51,8 +47,7 @@
 		} catch (e) {
 			console.error('Failed to update folder access', e);
 		}
-	};
-</script>
+	};</script>
 
 <Modal size="sm" bind:show>
 	<div>

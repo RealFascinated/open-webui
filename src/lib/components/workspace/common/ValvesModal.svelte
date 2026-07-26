@@ -1,33 +1,18 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { createEventDispatcher } from 'svelte';
-	import { onMount, getContext } from 'svelte';
-	import { addUser } from '$lib/apis/auths';
+	import {toast} from 'svelte-sonner';
+	import {createEventDispatcher} from 'svelte';
+	import {getContext} from 'svelte';
+	
 
 	import Modal from '../../common/Modal.svelte';
-	import {
-		getFunctionValvesById,
-		getFunctionValvesSpecById,
-		updateFunctionValvesById
-	} from '$lib/apis/functions';
-	import { getToolValvesById, getToolValvesSpecById, updateToolValvesById } from '$lib/apis/tools';
+	import {getFunctionValvesById, getFunctionValvesSpecById, updateFunctionValvesById} from '$lib/apis/functions';
+	import {getToolValvesById, getToolValvesSpecById, updateToolValvesById} from '$lib/apis/tools';
 
-	import {
-		getUserValvesSpecById as getToolUserValvesSpecById,
-		getUserValvesById as getToolUserValvesById,
-		updateUserValvesById as updateToolUserValvesById,
-		getTools
-	} from '$lib/apis/tools';
-	import {
-		getUserValvesSpecById as getFunctionUserValvesSpecById,
-		getUserValvesById as getFunctionUserValvesById,
-		updateUserValvesById as updateFunctionUserValvesById,
-		getFunctions
-	} from '$lib/apis/functions';
+	import {getUserValvesSpecById as getToolUserValvesSpecById, getUserValvesById as getToolUserValvesById, updateUserValvesById as updateToolUserValvesById} from '$lib/apis/tools';
+	import {getUserValvesSpecById as getFunctionUserValvesSpecById, getUserValvesById as getFunctionUserValvesById, updateUserValvesById as updateFunctionUserValvesById} from '$lib/apis/functions';
 
 	import Spinner from '../../common/Spinner.svelte';
-	import Switch from '$lib/components/common/Switch.svelte';
-	import Valves from '$lib/components/common/Valves.svelte';
+import Valves from '$lib/components/common/Valves.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 
 	const i18n = getContext('i18n');
@@ -141,7 +126,7 @@
 			}
 
 			loading = false;
-		} catch (e) {
+		} catch (_e) {
 			toast.error(`Error fetching valves`);
 			show = false;
 		}
@@ -206,7 +191,5 @@
 </Modal>
 
 <style>
-
-
 
 </style>

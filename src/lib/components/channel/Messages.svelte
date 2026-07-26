@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 
 	import dayjs from 'dayjs';
 	import relativeTime from 'dayjs/plugin/relativeTime';
@@ -9,21 +9,15 @@
 	dayjs.extend(relativeTime);
 	dayjs.extend(isToday);
 	dayjs.extend(isYesterday);
-	import { tick, getContext, onMount, createEventDispatcher } from 'svelte';
+	import {tick, getContext} from 'svelte';
 
-	import { settings, user } from '$lib/stores';
+	import {user} from '$lib/stores';
 
 	import Message from './Messages/Message.svelte';
 	import Loader from '../common/Loader.svelte';
 	import Spinner from '../common/Spinner.svelte';
-	import {
-		addReaction,
-		deleteMessage,
-		pinMessage,
-		removeReaction,
-		updateMessage
-	} from '$lib/apis/channels';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {addReaction, deleteMessage, pinMessage, removeReaction, updateMessage} from '$lib/apis/channels';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 
 	const i18n = getContext('i18n');
 
@@ -60,7 +54,7 @@
 	<div>
 		{#if !top}
 			<Loader
-				on:visible={(e) => {
+				on:visible={(_e) => {
 					console.info('visible');
 					if (!messagesLoading) {
 						loadMoreMessages();
@@ -141,7 +135,7 @@
 				onDelete={() => {
 					messages = messages.filter((m) => m.id !== message.id);
 
-					const res = deleteMessage(localStorage.token, message.channel_id, message.id).catch(
+					const _res = deleteMessage(localStorage.token, message.channel_id, message.id).catch(
 						(error) => {
 							toast.error(`${error}`);
 							return null;
@@ -156,7 +150,7 @@
 						return m;
 					});
 
-					const res = updateMessage(localStorage.token, message.channel_id, message.id, {
+					const _res = updateMessage(localStorage.token, message.channel_id, message.id, {
 						content: content
 					}).catch((error) => {
 						toast.error(`${error}`);
@@ -215,7 +209,7 @@
 							return m;
 						});
 
-						const res = removeReaction(
+						const _res = removeReaction(
 							localStorage.token,
 							message.channel_id,
 							message.id,
@@ -245,7 +239,7 @@
 							return m;
 						});
 
-						const res = addReaction(localStorage.token, message.channel_id, message.id, name).catch(
+						const _res = addReaction(localStorage.token, message.channel_id, message.id, name).catch(
 							(error) => {
 								toast.error(`${error}`);
 								return null;

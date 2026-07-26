@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { goto } from '$app/navigation';
-	import { onMount, tick, getContext } from 'svelte';
+	import {toast} from 'svelte-sonner';
+	import {goto} from '$app/navigation';
+	import {onMount, getContext} from 'svelte';
 
 	const i18n = getContext('i18n');
 
-	import { createNewPrompt } from '$lib/apis/prompts';
+	import {createNewPrompt} from '$lib/apis/prompts';
 	import PromptEditor from '$lib/components/workspace/Prompts/PromptEditor.svelte';
 
 	let prompt: {
@@ -31,7 +31,7 @@
 	};
 
 	onMount(async () => {
-		window.addEventListener('message', async (event) => {
+		window.addEventListener('message', async (event: Event) => {
 			console.log(event);
 			if (
 				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'].includes(

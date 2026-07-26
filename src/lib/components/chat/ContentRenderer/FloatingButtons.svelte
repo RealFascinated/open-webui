@@ -8,7 +8,7 @@
 	export let id = '';
 
 	export let actions = [];
-	export let onSetInputText = (text) => {};
+	export let onSetInputText = (_text) => {};
 
 	let floatingInput = false;
 	let selectedAction = null;
@@ -52,7 +52,7 @@
 		// Handle: {{variableId|tool:id="toolId"}} pattern
 		// This regex captures variableId and toolId from {{variableId|tool:id="toolId"}}
 		const varToolPattern = /\{\{(.*?)\|tool:id="([^"]+)"\}\}/g;
-		prompt = prompt.replace(varToolPattern, (match, variableId, toolId) => {
+		prompt = prompt.replace(varToolPattern, (match, variableId, _toolId) => {
 			return variableId; // Replace with just variableId
 		});
 

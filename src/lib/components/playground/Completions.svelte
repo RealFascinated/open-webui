@@ -1,19 +1,18 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
+	
 
-	import { goto } from '$app/navigation';
-	import { onMount, tick, getContext } from 'svelte';
+	import {goto} from '$app/navigation';
+	import {onMount, getContext} from 'svelte';
 
-	import { WEBUI_BASE_URL } from '$lib/constants';
-	import { WEBUI_NAME, config, user, models, settings, showSidebar } from '$lib/stores';
-	import { chatCompletion } from '$lib/apis/openai';
+	import {WEBUI_BASE_URL} from '$lib/constants';
+	import {config, user, models, settings} from '$lib/stores';
+	import {chatCompletion} from '$lib/apis/openai';
 
-	import { splitStream } from '$lib/utils';
+	import {splitStream} from '$lib/utils';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
 	const i18n = getContext('i18n');
 
-	let loaded = false;
 	let text = '';
 
 	let selectedModelId = '';
@@ -116,9 +115,7 @@
 		} else {
 			selectedModelId = '';
 		}
-		loaded = true;
-	});
-</script>
+	});</script>
 
 <div class=" flex flex-col justify-between w-full overflow-y-auto h-full">
 	<div class="mx-auto w-full md:px-0 h-full">

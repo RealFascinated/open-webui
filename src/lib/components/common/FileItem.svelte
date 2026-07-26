@@ -1,13 +1,12 @@
 <script lang="ts">
-	import { createEventDispatcher, getContext } from 'svelte';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {createEventDispatcher, getContext} from 'svelte';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 
-	import { formatFileSize } from '$lib/utils';
-	import { settings } from '$lib/stores';
+	import {formatFileSize} from '$lib/utils';
+	import {settings} from '$lib/stores';
 
 	import FileItemModal from './FileItemModal.svelte';
-	import GarbageBin from '../icons/GarbageBin.svelte';
-	import Spinner from './Spinner.svelte';
+import Spinner from './Spinner.svelte';
 	import Tooltip from './Tooltip.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 
@@ -41,7 +40,7 @@
 	const decodeString = (str: string) => {
 		try {
 			return decodeURIComponent(str);
-		} catch (e) {
+		} catch (_e) {
 			return str;
 		}
 	};

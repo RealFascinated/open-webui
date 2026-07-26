@@ -12,7 +12,7 @@
 
 	const i18n = getContext('i18n');
 
-	export let onSelect = (e) => {};
+	export let onSelect = (_e: Event) => {};
 
 	let loaded = false;
 
@@ -107,7 +107,7 @@
 
 			{#if !allItemsLoaded}
 				<Loader
-					on:visible={(e) => {
+					on:visible={(_e) => {
 						if (!itemsLoading) {
 							loadMoreItems();
 						}

@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { getContext, createEventDispatcher } from 'svelte';
-	const dispatch = createEventDispatcher();
-
+	import {getContext} from 'svelte';
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import ArrowUpCircle from '$lib/components/icons/ArrowUpCircle.svelte';
@@ -10,15 +8,14 @@
 	import NewFolderAlt from '$lib/components/icons/NewFolderAlt.svelte';
 	import ArrowPath from '$lib/components/icons/ArrowPath.svelte';
 	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
-	import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
-	import ArrowUturnLeft from '$lib/components/icons/ArrowUturnLeft.svelte';
+import ArrowUturnLeft from '$lib/components/icons/ArrowUturnLeft.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let onClose: (...args: unknown[]) => unknown = () => {};
 
 	export let onSync: (...args: unknown[]) => unknown = () => {};
-	export let onUpload: (...args: unknown[]) => unknown = (data) => {};
+	export let onUpload: (...args: unknown[]) => unknown = (_data) => {};
 	export let onReset: (...args: unknown[]) => unknown = () => {};
 
 	let show = false;

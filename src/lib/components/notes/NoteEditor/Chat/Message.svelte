@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
+	import {getContext} from 'svelte';
 
 	const i18n = getContext('i18n');
 
@@ -17,7 +17,6 @@
 	export let onEdit;
 	export let onInsert;
 
-	let textAreaElement: HTMLTextAreaElement;
 </script>
 
 <div class="flex flex-col gap-1 group">

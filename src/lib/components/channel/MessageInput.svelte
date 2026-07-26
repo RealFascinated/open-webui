@@ -1,32 +1,24 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import { v4 as uuidv4 } from 'uuid';
+	import {toast} from 'svelte-sonner';
+	import {v4 as uuidv4} from 'uuid';
 
-	import { tick, getContext, onMount } from 'svelte';
+	import {tick, getContext, onMount} from 'svelte';
+	import type {Component} from 'svelte';
 
 	const i18n = getContext('i18n');
 
-	import { config, mobile, settings, socket, user } from '$lib/stores';
-	import {
-		convertHeicToJpeg,
-		compressImage,
-		extractInputVariables,
-		getAge,
-		getCurrentDateTime,
-		getFormattedDate,
-		getFormattedTime,
-		getUserPosition,
-		getUserTimezone,
-		getWeekday,
-		extractCurlyBraceWords
-	} from '$lib/utils';
+	import {config, mobile, settings, type Settings} from '$lib/stores';
+	import type {Handler} from '$lib/types';
+	import type {AppConfig} from '$lib/types/config';
+	import type {ChatFile} from '$lib/types';
+	import {convertHeicToJpeg, compressImage, extractInputVariables, getAge, getCurrentDateTime, getFormattedDate, getFormattedTime, getUserPosition, getUserTimezone, getWeekday, extractCurlyBraceWords} from '$lib/utils';
 
-	import { getSessionUser } from '$lib/apis/auths';
+	import {getSessionUser} from '$lib/apis/auths';
 
-	import { uploadFile } from '$lib/apis/files';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {uploadFile} from '$lib/apis/files';
+	import {WEBUI_API_BASE_URL} from '$lib/constants';
 
-	import { getSuggestionRenderer } from '../common/RichTextInput/suggestions';
+	import {getSuggestionRenderer} from '../common/RichTextInput/suggestions';
 	import CommandSuggestionList from '../chat/MessageInput/CommandSuggestionList.svelte';
 
 	import InputMenu from './MessageInput/InputMenu.svelte';
@@ -41,21 +33,118 @@
 	import Skeleton from '../chat/Messages/Skeleton.svelte';
 	import XMark from '../icons/XMark.svelte';
 
+	type RichTextInputContent = {
+		md: string;
+		html: string;
+		json?: unknown;
+	};
+
+	type RichTextInputHandle = {
+		setText: (text?: string) => void | Promise<void>;
+		setContent: (content: unknown) => void;
+		replaceVariables: (variables: Record<string, unknown>) => void;
+		replaceCommandWithText: (text: string) => void | Promise<void>;
+		insertContent: (content: string) => void | Promise<void>;
+		getWordAtDocPos: () => string;
+		focus: () => void;
+	};
+
+	type InputFileItem = Omit<ChatFile, 'id' | 'type' | 'content_type'> & {
+		type?: string;
+		content_type?: string;
+		file?: unknown;
+		id?: string | null;
+		url?: string;
+		name?: string;
+		collection_name?: string;
+		status?: string;
+		size?: number;
+		error?: string;
+		itemId?: string;
+	};
+
+	type SuggestionCommandEvent = {
+		type: string;
+		data: unknown;
+	};
+
+	type MessageInputSettings = Settings & {
+		showFormattingToolbar?: boolean;
+		imageCompressionInChannels?: boolean;
+		imageCompressionSize?: { width?: string | number | null; height?: string | number | null };
+	};
+
+	type ChannelInfo = {
+		id: string;
+		write_access?: boolean;
+		[key: string]: unknown;
+	};
+
+	type ChannelMessage = {
+		id: string;
+		meta?: { model_name?: string; [key: string]: unknown };
+		user: { name: string; id?: string; [key: string]: unknown };
+		[key: string]: unknown;
+	};
+
+	type TypingUser = {
+		id?: string;
+		name: string;
+		[key: string]: unknown;
+	};
+
+	type ClipboardCapableWindow = Window & {
+		clipboardData?: DataTransfer | null;
+	};
+
+	type LegacyNavigator = Navigator & {
+		msMaxTouchPoints?: number;
+	};
+
+	type RichTextDetailEvent<T extends Event = Event> = CustomEvent<{ event: T }>;
+
+	const toDimensionNumber = (
+		value: string | number | null | undefined
+	): number | undefined => {
+		if (value === null || value === undefined || value === '') return undefined;
+		const num = typeof value === 'number' ? value : Number(value);
+		return Number.isFinite(num) ? num : undefined;
+	};
+
+	const toFileBlob = (value: Blob | Blob[] | File): Blob =>
+		Array.isArray(value) ? value[0] : value;
+
+	const mentionComponent = MentionList as unknown as Component;
+	const suggestionComponent = CommandSuggestionList as unknown as Component;
+
+	const toChatDirection = (
+		direction: string | undefined
+	): 'ltr' | 'rtl' | 'auto' | null | undefined => {
+		if (direction === 'LTR') return 'ltr';
+		if (direction === 'RTL') return 'rtl';
+		if (direction === 'auto') return 'auto';
+		return direction?.toLowerCase() as 'ltr' | 'rtl' | 'auto' | undefined;
+	};
+
+	const getMessageInputSettings = (): MessageInputSettings => $settings as MessageInputSettings;
+
 	export let placeholder = $i18n.t('Type here...');
-	export let chatInputElement;
+	export let chatInputElement: unknown = null;
+
+	const getChatInputHandle = () => chatInputElement as RichTextInputHandle | null;
 
 	export const id = null;
-	export let channel = null;
+	export let channel: ChannelInfo | null = null;
 
-	export let typingUsers = [];
+	export let typingUsers: TypingUser[] = [];
 	export let inputLoading = false;
 
-	export let onSubmit: (...args: unknown[]) => unknown = (e) => {};
-	export let onChange: (...args: unknown[]) => unknown = (e) => {};
-	export let onStop: (...args: unknown[]) => unknown = (e) => {};
+	export let onSubmit: Handler = () => {};
+	export let onChange: Handler = () => {};
+	export let onStop: Handler = () => {};
 
 	export let scrollEnd = true;
-	export let scrollToBottom: (...args: unknown[]) => unknown = () => {};
+	export let scrollToBottom: Handler = () => {};
 
 	export let disabled = false;
 	export let acceptFiles = true;
@@ -64,7 +153,7 @@
 	export let userSuggestions = false;
 	export let channelSuggestions = false;
 
-	export let replyToMessage = null;
+	export let replyToMessage: ChannelMessage | null = null;
 
 	export let typingUsersClassName = 'from-white dark:from-gray-900';
 
@@ -73,15 +162,15 @@
 
 	let recording = false;
 	let content = '';
-	let files = [];
+	let files: InputFileItem[] = [];
 
-	let filesInputElement;
-	let inputFiles;
+	let filesInputElement: HTMLInputElement | null = null;
+	let inputFiles: FileList | null = null;
 
 	let showInputVariablesModal = false;
-	let inputVariablesModalCallback: (variableValues: Record<string, unknown>) => void;
+	let inputVariablesModalCallback = (_variableValues: Record<string, unknown>) => {};
 	let inputVariables: Record<string, unknown> = {};
-	let inputVariableValues = {};
+	let inputVariableValues: Record<string, unknown> = {};
 
 	const inputVariableHandler = async (text: string): Promise<string> => {
 		inputVariables = extractInputVariables(text);
@@ -105,7 +194,7 @@
 
 	const textVariableHandler = async (text: string) => {
 		if (text.includes('{{CLIPBOARD}}')) {
-			const clipboardText = await navigator.clipboard.readText().catch((err) => {
+			const clipboardText = await navigator.clipboard.readText().catch((_err) => {
 				toast.error($i18n.t('Failed to read clipboard contents'));
 				return '{{CLIPBOARD}}';
 			});
@@ -133,7 +222,7 @@
 			let location;
 			try {
 				location = await getUserPosition();
-			} catch (error) {
+			} catch (_error) {
 				toast.error($i18n.t('Location access not allowed'));
 				location = 'LOCATION_UNKNOWN';
 			}
@@ -228,8 +317,8 @@
 		const chatInput = document.getElementById('chat-input');
 
 		if (chatInput) {
-			chatInputElement.replaceVariables(variables);
-			chatInputElement.focus();
+			getChatInputHandle()?.replaceVariables(variables);
+			getChatInputHandle()?.focus();
 		}
 	};
 
@@ -241,8 +330,8 @@
 				text = await textVariableHandler(text || '');
 			}
 
-			chatInputElement?.setText(text);
-			chatInputElement?.focus();
+			getChatInputHandle()?.setText(text);
+			getChatInputHandle()?.focus();
 
 			if (text !== '') {
 				text = await inputVariableHandler(text);
@@ -258,17 +347,17 @@
 		let word = '';
 
 		if (chatInput) {
-			word = chatInputElement?.getWordAtDocPos();
+			word = getChatInputHandle()?.getWordAtDocPos() ?? '';
 		}
 
 		return word;
 	};
 
-	const replaceCommandWithText = (text) => {
+	const replaceCommandWithText = (text: string) => {
 		const chatInput = document.getElementById('chat-input');
 		if (!chatInput) return;
 
-		chatInputElement?.replaceCommandWithText(text);
+		getChatInputHandle()?.replaceCommandWithText(text);
 	};
 
 	const insertTextAtCursor = async (text: string) => {
@@ -280,7 +369,7 @@
 		if (command) {
 			replaceCommandWithText(text);
 		} else {
-			chatInputElement?.insertContent(text);
+			getChatInputHandle()?.insertContent(text);
 		}
 
 		await tick();
@@ -297,10 +386,10 @@
 			chatInput.focus();
 			chatInput.dispatchEvent(new Event('input'));
 
-			const words = extractCurlyBraceWords(prompt);
+			const words = extractCurlyBraceWords(content);
 
 			if (words.length > 0) {
-				const word = words.at(0);
+				const _word = words.at(0);
 				await tick();
 			} else {
 				chatInput.scrollTop = chatInput.scrollHeight;
@@ -312,13 +401,13 @@
 
 	export let showCommands = false;
 	$: showCommands = ['/'].includes(command?.charAt(0));
-	let suggestions = null;
+	let suggestions: Record<string, unknown>[] | null = null;
 
 	const screenCaptureHandler = async () => {
 		try {
 			// Request screen media
 			const mediaStream = await navigator.mediaDevices.getDisplayMedia({
-				video: { cursor: 'never' },
+				video: true,
 				audio: false
 			});
 			// Once the user selects a screen, temporarily create a video element
@@ -332,6 +421,7 @@
 			canvas.height = video.videoHeight;
 			// Grab a single frame from the video stream using the canvas
 			const context = canvas.getContext('2d');
+			if (!context) return;
 			context.drawImage(video, 0, 0, canvas.width, canvas.height);
 			// Stop all video tracks (stop screen sharing) after capturing the image
 			mediaStream.getTracks().forEach((track) => track.stop());
@@ -352,8 +442,8 @@
 		}
 	};
 
-	const inputFilesHandler = async (inputFiles) => {
-		inputFiles.forEach(async (file) => {
+	const inputFilesHandler = async (inputFiles: File[]) => {
+		inputFiles.forEach(async (file: File) => {
 			console.info('Processing file:', {
 				name: file.name,
 				type: file.type,
@@ -377,13 +467,18 @@
 				return;
 			}
 
-			if (file['type'].startsWith('image/')) {
-				const compressImageHandler = async (imageUrl, settings = {}, config = {}) => {
+			if (file.type.startsWith('image/')) {
+				const compressImageHandler = async (
+					imageUrl: string,
+					inputSettings: MessageInputSettings = getMessageInputSettings(),
+					inputConfig: AppConfig | undefined = $config
+				) => {
 					// Quick shortcut so we don’t do unnecessary work.
 					const settingsCompression =
-						(settings?.imageCompression && settings?.imageCompressionInChannels) ?? false;
-					const configWidth = config?.file?.image_compression?.width ?? null;
-					const configHeight = config?.file?.image_compression?.height ?? null;
+						(inputSettings?.imageCompression && inputSettings?.imageCompressionInChannels) ??
+						false;
+					const configWidth = inputConfig?.file?.image_compression?.width ?? null;
+					const configHeight = inputConfig?.file?.image_compression?.height ?? null;
 
 					// If neither settings nor config wants compression, return original URL.
 					if (!settingsCompression && !configWidth && !configHeight) {
@@ -391,20 +486,20 @@
 					}
 
 					// Default to null (no compression unless set)
-					let width = null;
-					let height = null;
+					let width: number | undefined;
+					let height: number | undefined;
 
 					// If user/settings want compression, pick their preferred size.
 					if (settingsCompression) {
-						width = settings?.imageCompressionSize?.width ?? null;
-						height = settings?.imageCompressionSize?.height ?? null;
+						width = toDimensionNumber(inputSettings?.imageCompressionSize?.width);
+						height = toDimensionNumber(inputSettings?.imageCompressionSize?.height);
 					}
 
 					// Apply config limits as an upper bound if any
-					if (configWidth && (width === null || width > configWidth)) {
+					if (configWidth != null && (width == null || width > configWidth)) {
 						width = configWidth;
 					}
-					if (configHeight && (height === null || height > configHeight)) {
+					if (configHeight != null && (height == null || height > configHeight)) {
 						height = configHeight;
 					}
 
@@ -417,11 +512,14 @@
 
 				let reader = new FileReader();
 
-				reader.onload = async (event) => {
-					let imageUrl = event.target.result;
+				reader.onload = async (event: ProgressEvent<FileReader>) => {
+					const result = event.target?.result;
+					if (typeof result !== 'string') return;
+
+					let imageUrl: string = result;
 
 					// Compress the image if settings or config require it
-					imageUrl = await compressImageHandler(imageUrl, $settings, $config);
+					imageUrl = await compressImageHandler(imageUrl, getMessageInputSettings(), $config);
 
 					const blob = await (await fetch(imageUrl)).blob();
 					const compressedFile = new File([blob], file.name, { type: file.type });
@@ -429,16 +527,20 @@
 					uploadFileHandler(compressedFile, false);
 				};
 
-				reader.readAsDataURL(file['type'] === 'image/heic' ? await convertHeicToJpeg(file) : file);
+				reader.readAsDataURL(
+					file.type === 'image/heic'
+						? toFileBlob(await convertHeicToJpeg(file))
+						: file
+				);
 			} else {
 				uploadFileHandler(file);
 			}
 		});
 	};
 
-	const uploadFileHandler = async (file, process = true) => {
+	const uploadFileHandler = async (file: File, process = true) => {
 		const tempItemId = uuidv4();
-		const fileItem = {
+		const fileItem: InputFileItem = {
 			type: 'file',
 			file: '',
 			id: null,
@@ -462,7 +564,7 @@
 			// During the file upload, file content is automatically extracted.
 			// If the file is an audio file, provide the language for STT.
 			let metadata = {
-				channel_id: channel.id,
+				channel_id: channel?.id,
 				// If the file is an audio file, provide the language for STT.
 				...((file.type.startsWith('audio/') || file.type.startsWith('video/')) &&
 				$settings?.audio?.stt?.language
@@ -555,11 +657,11 @@
 		files = [];
 
 		if (chatInputElement) {
-			chatInputElement?.setText('');
+			getChatInputHandle()?.setText('');
 
 			await tick();
 
-			chatInputElement.focus();
+			getChatInputHandle()?.focus();
 		}
 	};
 
@@ -567,11 +669,39 @@
 		onChange();
 	}
 
+	const handleSuggestionSelect = (e: SuggestionCommandEvent) => {
+		const { type, data } = e;
+
+		if (type === 'model') {
+			console.log('Selected model:', data);
+		}
+
+		document.getElementById('chat-input')?.focus();
+	};
+
+	const handleSuggestionUpload = (e: SuggestionCommandEvent) => {
+		const { type, data } = e;
+
+		if (type === 'file') {
+			const fileData = data as InputFileItem;
+			if (files.find((f) => f.id === fileData.id)) {
+				return;
+			}
+			files = [
+				...files,
+				{
+					...fileData,
+					status: 'processed'
+				}
+			];
+		}
+	};
+
 	onMount(() => {
 		suggestions = [
 			{
 				char: '@',
-				render: getSuggestionRenderer(MentionList, {
+				render: getSuggestionRenderer(mentionComponent, {
 					i18n,
 					triggerChar: '@',
 					modelSuggestions: true,
@@ -582,7 +712,7 @@
 				? [
 						{
 							char: '#',
-							render: getSuggestionRenderer(MentionList, {
+							render: getSuggestionRenderer(mentionComponent, {
 								i18n,
 								triggerChar: '#',
 								channelSuggestions
@@ -592,49 +722,41 @@
 				: []),
 			{
 				char: '/',
-				render: getSuggestionRenderer(CommandSuggestionList, {
+				render: getSuggestionRenderer(suggestionComponent, {
 					i18n,
-					onSelect: (e) => {
-						const { type, data } = e;
-
-						if (type === 'model') {
-							console.log('Selected model:', data);
-						}
-
-						document.getElementById('chat-input')?.focus();
-					},
-
+					onSelect: handleSuggestionSelect,
 					insertTextHandler: insertTextAtCursor,
-					onUpload: (e) => {
-						const { type, data } = e;
-
-						if (type === 'file') {
-							if (files.find((f) => f.id === data.id)) {
-								return;
-							}
-							files = [
-								...files,
-								{
-									...data,
-									status: 'processed'
-								}
-							];
-						}
-					}
+					onUpload: handleSuggestionUpload
 				})
 			},
 			{
 				char: ':',
 				allowSpaces: false,
-				command: ({ editor, range, props }) => {
+				command: ({
+					editor,
+					range,
+					props
+				}: {
+					editor: {
+						chain: () => {
+							focus: () => {
+								deleteRange: (range: unknown) => {
+									insertContent: (emoji: string) => { run: () => void };
+								};
+							};
+						};
+					};
+					range: unknown;
+					props: { id: string };
+				}) => {
 					// Convert the Unicode hex codepoint (e.g. "1F44B") to the actual emoji character (👋)
 					const codepoint = props.id;
 					const emoji = String.fromCodePoint(parseInt(codepoint, 16));
 					editor.chain().focus().deleteRange(range).insertContent(emoji).run();
 				},
-				render: getSuggestionRenderer(CommandSuggestionList, {
+				render: getSuggestionRenderer(suggestionComponent, {
 					i18n,
-					onSelect: (e) => {
+					onSelect: (_e: SuggestionCommandEvent) => {
 						document.getElementById('chat-input')?.focus();
 					},
 
@@ -646,9 +768,7 @@
 		loaded = true;
 
 		window.setTimeout(() => {
-			if (chatInputElement) {
-				chatInputElement.focus();
-			}
+			getChatInputHandle()?.focus();
 		}, 100);
 
 		window.addEventListener('keydown', handleKeyDown);
@@ -699,7 +819,9 @@
 					toast.error($i18n.t(`File not found.`));
 				}
 
-				filesInputElement.value = '';
+				if (filesInputElement) {
+					filesInputElement.value = '';
+				}
 			}}
 		/>
 	{/if}
@@ -707,7 +829,7 @@
 	<InputVariablesModal
 		bind:show={showInputVariablesModal}
 		variables={inputVariables}
-		onSave={inputVariablesModalCallback}
+		onSave={inputVariablesModalCallback as unknown as (_e: Event) => void}
 	/>
 
 	<div class="bg-transparent">
@@ -776,12 +898,10 @@
 
 							await tick();
 
-							if (chatInputElement) {
-								chatInputElement.focus();
-							}
+							getChatInputHandle()?.focus();
 						}}
 						onConfirm={async (data) => {
-							const { text, filename } = data;
+							const { text, _filename } = data;
 							recording = false;
 
 							await tick();
@@ -789,9 +909,7 @@
 
 							await tick();
 
-							if (chatInputElement) {
-								chatInputElement.focus();
-							}
+							getChatInputHandle()?.focus();
 						}}
 					/>
 				{:else}
@@ -804,7 +922,7 @@
 						<div
 							id="message-input-container"
 							class="flex-1 flex flex-col relative w-full shadow-lg rounded-3xl border border-gray-50 dark:border-gray-850/30 hover:border-gray-100 focus-within:border-gray-100 hover:dark:border-gray-800 focus-within:dark:border-gray-800 transition px-1 bg-white/90 dark:bg-gray-400/5 dark:text-gray-100"
-							dir={$settings?.chatDirection ?? 'auto'}
+							dir={toChatDirection($settings?.chatDirection)}
 						>
 							{#if replyToMessage !== null}
 								<div class="px-3 pt-3 text-left w-full flex flex-col z-10">
@@ -837,9 +955,9 @@
 									{#each files as file, fileIdx}
 										{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
 											{@const fileUrl =
-												file.url.startsWith('data') || file.url.startsWith('http')
+												file.url?.startsWith('data') || file.url?.startsWith('http')
 													? file.url
-													: `${WEBUI_API_BASE_URL}/files/${file.url}${file?.content_type ? '/content' : ''}`}
+													: `${WEBUI_API_BASE_URL}/files/${file.url ?? ''}${file?.content_type ? '/content' : ''}`}
 											<div class=" relative group">
 												<div class="relative">
 													<Image
@@ -873,10 +991,10 @@
 											</div>
 										{:else}
 											<FileItem
-												item={file}
-												name={file.name}
-												type={file.type}
-												size={file?.size}
+												item={file as never}
+												name={file.name ?? ''}
+												type={file.type ?? 'file'}
+												size={file.size ?? 0}
 												small={true}
 												loading={file.status === 'uploading'}
 												dismissible={true}
@@ -898,7 +1016,8 @@
 								<div
 									class="scrollbar-hidden rtl:text-right ltr:text-left bg-transparent dark:text-gray-100 outline-hidden w-full pt-2.5 pb-[5px] px-1 resize-none h-fit max-h-96 overflow-auto"
 								>
-									{#key $settings?.richTextInput && $settings?.showFormattingToolbar}
+									{#key $settings?.richTextInput ?? true}
+										{#key getMessageInputSettings().showFormattingToolbar ?? false}
 										<RichTextInput
 											id="chat-input"
 											bind:this={chatInputElement}
@@ -907,25 +1026,23 @@
 											editable={!disabled}
 											{placeholder}
 											richText={$settings?.richTextInput ?? true}
-											showFormattingToolbar={$settings?.showFormattingToolbar ?? false}
+											showFormattingToolbar={getMessageInputSettings().showFormattingToolbar ?? false}
 											shiftEnter={!($settings?.ctrlEnterToSend ?? false) &&
 												!$mobile &&
 												!(
 													'ontouchstart' in window ||
 													navigator.maxTouchPoints > 0 ||
-													navigator.msMaxTouchPoints > 0
+													((navigator as LegacyNavigator).msMaxTouchPoints ?? 0) > 0
 												)}
 											largeTextAsFile={$settings?.largeTextAsFile ?? false}
 											floatingMenuPlacement={'top-start'}
-											{suggestions}
-											onChange={(e) => {
-												const { md } = e;
-												content = md;
+											suggestions={suggestions as never}
+											onChange={((change: RichTextInputContent) => {
+												content = change.md;
 												command = getCommand();
-											}}
-											on:keydown={async (e) => {
-												e = e.detail.event;
-												const isCtrlPressed = e.ctrlKey || e.metaKey; // metaKey is for Cmd key on Mac
+											}) as never}
+											on:keydown={async (e: RichTextDetailEvent<KeyboardEvent>) => {
+												const event = e.detail.event;
 
 												const suggestionsContainerElement =
 													document.getElementById('suggestions-container');
@@ -936,48 +1053,51 @@
 														!(
 															'ontouchstart' in window ||
 															navigator.maxTouchPoints > 0 ||
-															navigator.msMaxTouchPoints > 0
+															((navigator as LegacyNavigator).msMaxTouchPoints ?? 0) > 0
 														)
 													) {
 														// Prevent Enter key from creating a new line
 														// Uses keyCode '13' for Enter key for chinese/japanese keyboards
-														if (e.keyCode === 13 && !e.shiftKey) {
-															e.preventDefault();
+														if (event.keyCode === 13 && !event.shiftKey) {
+															event.preventDefault();
 														}
 
 														// Submit the content when Enter key is pressed
 														if (
 															(content !== '' || files.length > 0) &&
-															e.keyCode === 13 &&
-															!e.shiftKey
+															event.keyCode === 13 &&
+															!event.shiftKey
 														) {
 															submitHandler();
 														}
 													}
 												}
 
-												if (e.key === 'Escape') {
+												if (event.key === 'Escape') {
 													console.info('Escape');
 													replyToMessage = null;
 												}
 											}}
-											on:paste={async (e) => {
-												e = e.detail.event;
-												console.log(e);
+											on:paste={async (e: RichTextDetailEvent<ClipboardEvent>) => {
+												const event = e.detail.event;
+												console.log(event);
 
-												const clipboardData = e.clipboardData || window.clipboardData;
+												const clipboardData =
+													event.clipboardData ||
+													(window as ClipboardCapableWindow).clipboardData;
 
 												if (clipboardData && clipboardData.items) {
 													for (const item of clipboardData.items) {
 														const file = item.getAsFile();
 														if (file) {
 															await inputFilesHandler([file]);
-															e.preventDefault();
+															event.preventDefault();
 														}
 													}
 												}
 											}}
 										/>
+										{/key}
 									{/key}
 								</div>
 							</div>
@@ -989,7 +1109,7 @@
 											<InputMenu
 												{screenCaptureHandler}
 												uploadFilesHandler={() => {
-													filesInputElement.click();
+													filesInputElement?.click();
 												}}
 											>
 												<button

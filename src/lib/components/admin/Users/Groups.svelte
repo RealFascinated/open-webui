@@ -1,17 +1,15 @@
 <script>
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 	import dayjs from 'dayjs';
 	import relativeTime from 'dayjs/plugin/relativeTime';
 	dayjs.extend(relativeTime);
 
-	import { onMount, getContext } from 'svelte';
-	import { goto } from '$app/navigation';
+	import {onMount, getContext} from 'svelte';
+	import {goto} from '$app/navigation';
 
-	import { WEBUI_NAME, config, user, showSidebar, knowledge } from '$lib/stores';
-	import { WEBUI_BASE_URL } from '$lib/constants';
-
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import Plus from '$lib/components/icons/Plus.svelte';
+	import {user} from '$lib/stores';
+	
+import Plus from '$lib/components/icons/Plus.svelte';
 	import UsersSolid from '$lib/components/icons/UsersSolid.svelte';
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
@@ -22,12 +20,8 @@
 	import Check from '$lib/components/icons/Check.svelte';
 	import Select from '$lib/components/common/Select.svelte';
 	import AdminEmptyState from '$lib/components/admin/AdminEmptyState.svelte';
-	import { createNewGroup, getGroups } from '$lib/apis/groups';
-	import {
-		getUserDefaultPermissions,
-		getAllUsers,
-		updateUserDefaultPermissions
-	} from '$lib/apis/users';
+	import {createNewGroup, getGroups} from '$lib/apis/groups';
+	import {getUserDefaultPermissions, updateUserDefaultPermissions} from '$lib/apis/users';
 
 	const i18n = getContext('i18n');
 

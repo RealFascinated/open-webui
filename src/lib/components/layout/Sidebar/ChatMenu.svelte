@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getContext, tick } from 'svelte';
+	import {getContext, tick} from 'svelte';
 
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
@@ -9,21 +9,16 @@
 	import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
 	import Pencil from '$lib/components/icons/Pencil.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import Tags from '$lib/components/chat/Tags.svelte';
-	import Share from '$lib/components/icons/Share.svelte';
+import Share from '$lib/components/icons/Share.svelte';
 	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
 	import DocumentDuplicate from '$lib/components/icons/DocumentDuplicate.svelte';
 	import Bookmark from '$lib/components/icons/Bookmark.svelte';
 	import BookmarkSlash from '$lib/components/icons/BookmarkSlash.svelte';
-	import {
-		getChatById,
-		getChatPinnedStatusById,
-		toggleChatPinnedStatusById
-	} from '$lib/apis/chats';
-	import { chats, projects, settings, theme, user } from '$lib/stores';
-	import { createMessagesList } from '$lib/utils';
-	import { getOutputText } from '$lib/components/chat/Messages/structuredOutput';
-	import { downloadChatAsPDF } from '$lib/apis/utils';
+	import {getChatById, getChatPinnedStatusById, toggleChatPinnedStatusById} from '$lib/apis/chats';
+	import {projects, settings, user} from '$lib/stores';
+	import {createMessagesList} from '$lib/utils';
+	import {getOutputText} from '$lib/components/chat/Messages/structuredOutput';
+	
 	import Download from '$lib/components/icons/Download.svelte';
 	import Folder from '$lib/components/icons/Folder.svelte';
 	import Messages from '$lib/components/chat/Messages.svelte';
@@ -44,7 +39,7 @@
 	let show = false;
 	let pinned = false;
 
-	let chat = null;
+	let chat: import('$lib/types/chat').ChatRecord | null = null;
 	let showFullMessages = false;
 
 	export let onPinChange: () => void = () => {};
@@ -61,7 +56,7 @@
 	const getChatAsText = async (chat) => {
 		const history = chat.chat.history;
 		const messages = createMessagesList(history, history.currentId);
-		const chatText = messages.reduce((a, message, i, arr) => {
+		const chatText = messages.reduce((a, message, _i, _arr) => {
 			const content = getOutputText(message.output) || message.content || '';
 			return `${a}### ${message.role.toUpperCase()}\n${content}\n\n`;
 		}, '');
@@ -138,7 +133,7 @@
 
 					// Convert page height in mm to px on canvas scale for cropping
 					// Get canvas DPI scale:
-					const pxPerMM = canvas.width / virtualWidth; // width in px / width in px?
+					const _pxPerMM = canvas.width / virtualWidth; // width in px / width in px?
 					// Since 1 page width is 210 mm, but canvas width is 800 px at scale 2
 					// Assume 1 mm = px / (pageWidthMM scaled)
 					// Actually better: Calculate scale factor from px/mm:
@@ -216,7 +211,6 @@
 			const pageWidth = doc.internal.pageSize.getWidth();
 			const pageHeight = doc.internal.pageSize.getHeight();
 			const usableWidth = pageWidth - left - right;
-			const usableHeight = pageHeight - top - bottom;
 
 			// Font size and line height
 			const fontSize = 8;

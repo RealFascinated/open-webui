@@ -15,6 +15,7 @@
 	import CurrencyCard from './CurrencyCard.svelte';
 	import MapCard from './MapCard.svelte';
 	import SportsCard from './SportsCard.svelte';
+	import RichCardSource from './RichCardSource.svelte';
 
 	const i18n = getContext<Writable<i18nType>>('i18n');
 
@@ -22,14 +23,13 @@
 	export let assistantText = '';
 	export let isLastMessage = false;
 	export let showQuestionOnOptions = true;
+	export let toolSourcePrefix = '';
+	export let autoScroll = true;
 
 	$: mediaFiles =
-		message.files?.filter((file) => ['image', 'file'].includes(file.type ?? '')) ?? [];
+		message.files?.filter((file: string) => ['image', 'file'].includes(file.type ?? '')) ?? [];
 	$: hasMedia = mediaFiles.length > 0;
 	$: hasEmbeds = Boolean(message.embeds?.length);
-	$: hasCards = Boolean(
-		message.weather || message.currency || message.map || message.sports || message.options
-	);
 	$: richItemCount =
 		(hasMedia ? 1 : 0) +
 		(hasEmbeds ? 1 : 0) +
@@ -45,14 +45,22 @@
 
 	let hasScrolledIntoView = false;
 
+	const isNearBottom = () => {
+		const container = document.getElementById('messages-container');
+		if (!container) return true;
+
+		return container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
+	};
+
 	const scrollIntoViewIfNeeded = async () => {
-		if (!isLastMessage || hasScrolledIntoView) return;
+		if (!isLastMessage || hasScrolledIntoView || !autoScroll) return;
+		if (!isNearBottom()) return;
 
 		await tick();
 		setTimeout(() => {
 			const element = document.getElementById(`${message.id}-rich-results`);
 			if (!element) return;
-			element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 			hasScrolledIntoView = true;
 		}, 100);
 	};
@@ -64,6 +72,9 @@
 	$: if (isLastMessage && richItemCount > 0) {
 		scrollIntoViewIfNeeded();
 	}
+
+	const getToolSourceId = (toolName: string) =>
+		toolSourcePrefix ? `${toolSourcePrefix}-${toolName}` : '';
 </script>
 
 <div
@@ -117,22 +128,27 @@
 	{/if}
 
 	{#if message.weather}
+		<RichCardSource toolName="weather_fetch" sourceId={getToolSourceId('weather_fetch')} />
 		<WeatherCard weather={message.weather} />
 	{/if}
 
 	{#if message.currency}
+		<RichCardSource toolName="currency_convert" sourceId={getToolSourceId('currency_convert')} />
 		<CurrencyCard currency={message.currency} disabled={!isLastMessage} />
 	{/if}
 
 	{#if message.map}
+		<RichCardSource toolName="map_display" sourceId={getToolSourceId('map_display')} />
 		<MapCard map={message.map} />
 	{/if}
 
 	{#if message.sports}
+		<RichCardSource toolName="sports_scores" sourceId={getToolSourceId('sports_scores')} />
 		<SportsCard sports={message.sports} />
 	{/if}
 
 	{#if message.options}
+		<RichCardSource toolName="present_options" sourceId={getToolSourceId('present_options')} />
 		<OptionsCard
 			options={message.options}
 			disabled={!isLastMessage}

@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { getContext, onMount } from 'svelte';
-	import { config, knowledge, settings, user } from '$lib/stores';
+	import {getContext, onMount} from 'svelte';
+	import {config, settings, user} from '$lib/stores';
 
 	import KnowledgeSelector from './Knowledge/KnowledgeSelector.svelte';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 
-	import { getKnowledgeBases } from '$lib/apis/knowledge';
-	import { uploadFile } from '$lib/apis/files';
+	
+	import {uploadFile} from '$lib/apis/files';
 
-	import { toast } from 'svelte-sonner';
-	import { v4 as uuidv4 } from 'uuid';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {toast} from 'svelte-sonner';
+	import {v4 as uuidv4} from 'uuid';
+	
 
 	export let selectedItems = [];
 	const i18n = getContext('i18n');
@@ -18,7 +18,7 @@
 	let loaded = false;
 
 	let filesInputElement = null;
-	let inputFiles = null;
+	let inputFiles: File[] | undefined = null;
 
 	$: if (selectedItems === null) {
 		selectedItems = [];
@@ -99,7 +99,7 @@
 	const inputFilesHandler = async (inputFiles) => {
 		console.log('Input files handler called with:', inputFiles);
 
-		inputFiles.forEach(async (file) => {
+		inputFiles.forEach(async (file: string) => {
 			console.log('Processing file:', {
 				name: file.name,
 				type: file.type,
@@ -181,7 +181,7 @@
 							? `Legacy${file.type ? ` ${file.type}` : ''}`
 							: (file?.type ?? 'collection')}
 						dismissible
-						on:dismiss={(e) => {
+						on:dismiss={(_e) => {
 							selectedItems = selectedItems.filter((_, idx) => idx !== fileIdx);
 						}}
 					/>

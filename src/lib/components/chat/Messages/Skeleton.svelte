@@ -1,38 +1,41 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
+
+	const i18n = getContext('i18n');
+
 	export let size = 'md';
+	export let labelled = false;
 </script>
 
-<span
-	class="relative flex {size === 'md'
-		? 'size-3 my-2'
-		: size === 'xs'
-			? 'size-1.5 my-1'
-			: 'size-2 my-1'} mx-1"
->
-	<span
-		class="absolute inline-flex h-full w-full animate-pulse rounded-full bg-gray-700 dark:bg-gray-200 opacity-75"
-	></span>
-	<span
-		class="relative inline-flex {size === 'md'
-			? 'size-3'
-			: size === 'xs'
-				? 'size-1.5'
-				: 'size-2'} rounded-full bg-black dark:bg-white animate-size"
-	></span>
-</span>
+<div class="flex flex-col gap-2 py-1" role="status" aria-live="polite">
+	{#if labelled}
+		<div class="text-sm text-gray-400 dark:text-gray-500 shimmer">
+			{$i18n.t('Waiting for response...')}
+		</div>
+	{/if}
+
+	<div class="flex flex-col gap-1.5">
+		<div
+			class="{size === 'md'
+				? 'h-2'
+				: size === 'xs'
+					? 'h-1'
+					: 'h-1.5'} w-3/4 rounded-full bg-gray-100 dark:bg-gray-800 animate-pulse"
+		></div>
+		<div
+			class="{size === 'md'
+				? 'h-2'
+				: size === 'xs'
+					? 'h-1'
+					: 'h-1.5'} w-1/2 rounded-full bg-gray-100 dark:bg-gray-800 animate-pulse"
+		></div>
+	</div>
+</div>
 
 <style>
-	@keyframes size {
-		0%,
-		100% {
-			transform: scale(1);
+	@media (prefers-reduced-motion: reduce) {
+		:global(.animate-pulse) {
+			animation: none !important;
 		}
-		50% {
-			transform: scale(1.25);
-		}
-	}
-
-	.animate-size {
-		animation: size 1.5s ease-in-out infinite;
 	}
 </style>

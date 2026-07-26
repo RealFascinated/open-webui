@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	getHiddenRichToolNames,
+	hasActiveStatusHistory,
 	isQuestionInMessage,
+	shouldShowMessageResponseSkeleton,
 	shouldShowRichContent,
 	shouldShowResponseSkeleton
 } from './messageRichContent';
@@ -32,7 +34,7 @@ describe('messageRichContent', () => {
 		).toBe(true);
 	});
 
-	it('hides matching tool chrome only when rich content is visible', () => {
+	it('returns compact tool names only when rich content is visible', () => {
 		const message = {
 			weather: { location: 'London' },
 			files: [{ type: 'image', url: '/image.png' }]
@@ -69,6 +71,33 @@ describe('messageRichContent', () => {
 				content: '',
 				output: [{ type: 'reasoning', content: [{ type: 'text', text: 'Thinking...' }] }]
 			})
+		).toBe(false);
+	});
+
+	it('keeps skeleton visible after completed status updates while waiting for text', () => {
+		expect(
+			shouldShowMessageResponseSkeleton({
+				done: false,
+				content: '',
+				statusHistory: [{ action: 'sources_retrieved', count: 1, done: true } as never]
+			})
+		).toBe(true);
+	});
+
+	it('hides skeleton while an in-progress status update is active', () => {
+		expect(
+			shouldShowMessageResponseSkeleton({
+				done: false,
+				content: '',
+				statusHistory: [{ action: 'sources_retrieved', done: false } as never]
+			})
+		).toBe(false);
+
+		expect(
+			hasActiveStatusHistory([{ action: 'sources_retrieved', done: false }], false)
+		).toBe(true);
+		expect(
+			hasActiveStatusHistory([{ action: 'sources_retrieved', count: 1, done: true }], false)
 		).toBe(false);
 	});
 });

@@ -13,7 +13,7 @@
 		};
 	};
 
-	const i18n = getContext('i18n') as unknown;
+	const i18n = getContext('i18n');
 
 	export let filters: Filter[] = [];
 	export let selectedFilterIds: string[] = [];

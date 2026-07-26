@@ -1,31 +1,25 @@
 <script lang="ts">
 	import DOMPurify from 'dompurify';
-	import { marked } from 'marked';
+	import {marked} from 'marked';
 
-	import { toast } from 'svelte-sonner';
+	import {toast} from 'svelte-sonner';
 
-	import { onMount, getContext, tick } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
+	import {onMount, getContext, tick} from 'svelte';
+	import {goto} from '$app/navigation';
+	import {page} from '$app/stores';
 
-	import { getBackendConfig } from '$lib/apis';
-	import {
-		ldapUserSignIn,
-		getSessionUser,
-		userSignIn,
-		userSignUp,
-		updateUserTimezone
-	} from '$lib/apis/auths';
+	import {getBackendConfig} from '$lib/apis';
+	import {ldapUserSignIn, getSessionUser, userSignIn, userSignUp, updateUserTimezone} from '$lib/apis/auths';
 
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-	import { WEBUI_NAME, config, user, socket } from '$lib/stores';
+	import {WEBUI_BASE_URL} from '$lib/constants';
+	import {WEBUI_NAME, config, user, socket} from '$lib/stores';
 
-	import { generateInitialsImage, canvasPixelTest, getUserTimezone } from '$lib/utils';
+	import {generateInitialsImage, getUserTimezone} from '$lib/utils';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import OnBoarding from '$lib/components/OnBoarding.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
-	import { redirect } from '@sveltejs/kit';
+	
 
 	const i18n = getContext('i18n');
 

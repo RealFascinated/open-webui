@@ -1,17 +1,15 @@
 <script lang="ts">
-	import { onMount, tick, getContext } from 'svelte';
-
-	import Textarea from '$lib/components/common/Textarea.svelte';
-	import { toast } from 'svelte-sonner';
+	import {onMount, tick, getContext} from 'svelte';
+import {toast} from 'svelte-sonner';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import LockClosed from '$lib/components/icons/LockClosed.svelte';
 	import ChevronLeft from '$lib/components/icons/ChevronLeft.svelte';
 	import AccessControlModal from '../common/AccessControlModal.svelte';
-	import { user } from '$lib/stores';
-	import { slugify, parseFrontmatter, formatSkillName } from '$lib/utils';
+	import {user} from '$lib/stores';
+	import {slugify, parseFrontmatter, formatSkillName} from '$lib/utils';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import { updateSkillAccessGrants } from '$lib/apis/skills';
-	import { goto } from '$app/navigation';
+	import {updateSkillAccessGrants} from '$lib/apis/skills';
+	import {goto} from '$app/navigation';
 
 	export let onSubmit: (...args: unknown[]) => unknown;
 	export let edit = false;
